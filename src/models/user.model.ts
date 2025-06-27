@@ -7,25 +7,22 @@ const userSchema: Schema = new Schema<IUser>(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, select: 0, required: true },
-    username: { type: String, required: true, unique: true },
-    phone: { type: String },
-    credit: { type: Number, default: null },
+    phoneNum: { type: String },
+    whatsappNum: { type: Number, default: null },
     role: {
       type: String,
       default: 'user',
-      enum: ['user', 'admin', 'driver'],
+      enum: ['user', 'admin'],
     },
     avatar: {
-      public_id: { type: String, default: '' },
       url: { type: String, default: '' },
     },
+    wishlist: [{ type: mongoose.Types.ObjectId, ref: 'wishlist' }],
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: '' },
     },
     password_reset_token: { type: String, default: '' },
-    fine: { type: Number, default: 0 },
-    refreshToken: { type: String, default: '' },
   },
   { timestamps: true }
 )
@@ -43,16 +40,6 @@ userSchema.pre('save', async function (next) {
 
   next()
 })
-
-// //post middleware /hook
-// userSchema.post('save', function (doc, next) {
-//     doc.password = '';
-//     if (doc.verificationInfo) {
-//         doc.verificationInfo.OTP = '';
-//     }
-//     doc.secureFolderPin = '';
-//     next();
-// });
 
 userSchema.statics.isUserExistsByEmail = async function (email: string) {
   return await User.findOne({ email }).select('+password +secureFolderPin')
