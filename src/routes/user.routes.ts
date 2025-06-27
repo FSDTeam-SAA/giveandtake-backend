@@ -15,7 +15,7 @@ router.post('/user/register', register)
 router.post('/user/login', login)
 router.post('/user/verify', verifyEmail)
 router.post('/user/forget', forgetPassword),
-  router.post('/user/reset-password', resetPassword)
+router.post('/user/reset-password', resetPassword)
 router.post('/user/change-password', protect, changePassword)
 
 export default router
