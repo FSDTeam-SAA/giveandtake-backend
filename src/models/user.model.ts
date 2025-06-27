@@ -6,18 +6,19 @@ const userSchema: Schema = new Schema<IUser>(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
-    password: { type: String, select: 0, required: true },
     phoneNum: { type: String },
-    whatsappNum: { type: Number, default: null },
+    password: { type: String, select: 0, required: true },
     role: {
       type: String,
-      default: 'user',
-      enum: ['user', 'admin'],
+      enum: ['candidate', 'ricruiter', 'admin'],
+      default: 'candidate',
     },
     avatar: {
       url: { type: String, default: '' },
     },
-    wishlist: [{ type: mongoose.Types.ObjectId, ref: 'wishlist' }],
+    address: {
+      type: String,
+    },
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: '' },

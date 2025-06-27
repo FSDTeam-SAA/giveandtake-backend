@@ -11,11 +11,11 @@ import { protect } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-router.post('/users/register', register)
-router.post('/users/login', login)
-router.post('/users/verify', verifyEmail)
-router.post('/users/forget', forgetPassword),
-  router.post('/users/reset-password', resetPassword)
-router.post('/users/change-password', protect, changePassword)
+router.post('/user/register', register)
+router.post('/user/login', login)
+router.post('/user/verify', verifyEmail)
+router.post('/user/forget', forgetPassword),
+  router.post('/user/reset-password', resetPassword)
+router.post('/user/change-password', protect, changePassword)
 
 export default router

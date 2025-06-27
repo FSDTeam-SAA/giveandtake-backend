@@ -10,7 +10,7 @@ import { JwtPayload } from 'jsonwebtoken'
 import mongoose from 'mongoose'
 
 export const register = catchAsync(async (req, res) => {
-  const { name, email, password, phoneNum } = req.body
+  const { name, email, password, address, phoneNum } = req.body
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, 'Please fill in all fields')
   }
@@ -30,6 +30,7 @@ export const register = catchAsync(async (req, res) => {
     email,
     password,
     phoneNum,
+    address,
     verificationInfo: { token: otptoken },
   })
   await sendEmail(user.email, 'Registerd Account', `Your OTP is ${otp}`)

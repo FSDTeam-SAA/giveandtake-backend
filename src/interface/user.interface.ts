@@ -8,9 +8,9 @@ export interface IUser {
   phoneNum: string
   password: string
   whatsappNum?: string
-  wishlist: string[]
+  address?: string
   avatar?: string
-  role: 'admin' | 'user'
+  role: 'admin' | 'candidate' | 'ricruiter'
   verificationInfo: {
     verified: boolean
     token: string
