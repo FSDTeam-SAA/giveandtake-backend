@@ -1,7 +1,7 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IExperience extends Document {
-  userId: string
+  userId: Types.ObjectId
   employer: string
   jobTitle: string
   firstName: string
@@ -13,7 +13,7 @@ export interface IExperience extends Document {
   jobDescription: string
   careerField: string
   careerSubfield: string
-  resumeId: string
+  resumeId: Types.ObjectId
 }
 
 export interface ExperienceModel extends Model<IExperience> {}
