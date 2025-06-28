@@ -1,8 +1,8 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IMessageRoom extends Document {
-  userId: string
-  recruiterId: string // or companyId, ref: 'User'
+  userId: Types.ObjectId
+  recruiterId: Types.ObjectId 
   lastMessage: string
 }
 

@@ -1,11 +1,11 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export type PaymentStatus = 'complete' | 'pending' | 'failed'
 
 export interface IPaymentInfo extends Document {
-  userId: string
+  userId: Types.ObjectId
   amount: number
-  planId: string
+  planId: Types.ObjectId
   paymentStatus: PaymentStatus
   season: string
   transactionId: string
