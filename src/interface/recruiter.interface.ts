@@ -1,4 +1,4 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IRecruiter extends Document {
   companyName: string
@@ -6,7 +6,7 @@ export interface IRecruiter extends Document {
   logo: string
   companyDetails: string
   companyWebsite: string
-  userId: string
+  userId: Types.ObjectId
 }
 
 export interface RecruiterModel extends Model<IRecruiter> {}

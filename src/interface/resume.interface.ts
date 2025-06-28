@@ -1,4 +1,4 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IResumeFile {
   filename: string
@@ -7,7 +7,7 @@ export interface IResumeFile {
 }
 
 export interface IResume extends Document {
-  userId: string
+  userId: Types.ObjectId
   file: IResumeFile[]
   uploadDate: Date
   skills: string[]
