@@ -1,4 +1,4 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IMessageFile {
   filename: string
@@ -7,10 +7,10 @@ export interface IMessageFile {
 }
 
 export interface IMessage extends Document {
-  userId: string
+  userId: Types.ObjectId
   message: string
   file: IMessageFile[]
-  roomId: string
+  roomId: Types.ObjectId
 }
 
 export interface MessageModel extends Model<IMessage> {}
