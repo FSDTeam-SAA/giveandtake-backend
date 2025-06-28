@@ -1,8 +1,8 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export interface IBookmarkedJob extends Document {
-  userId: string
-  jobId: string // referenced ObjectId from Job
+  userId: Types.ObjectId
+  jobId: Types.ObjectId
 }
 
 export interface BookmarkedJobModel extends Model<IBookmarkedJob> {}
