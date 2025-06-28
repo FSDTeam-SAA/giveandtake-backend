@@ -1,4 +1,4 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export type ResumeType = 'candidate' | 'recruiter' | 'admin'
 
@@ -8,7 +8,7 @@ export interface IResumeLink {
 }
 
 export interface ICreateResume extends Document {
-  userId: string
+  userId: Types.ObjectId
   type: ResumeType
   videoFile: string
   photo: string
@@ -27,8 +27,8 @@ export interface ICreateResume extends Document {
   jobType: string
   yearOfExperience: number
   professionalSummary: string
-  experienceId: string[] // references to Experience documents
-  educationId: string[] // references to Education documents
+  experienceId: Types.ObjectId[]
+  educationId: Types.ObjectId[] 
 }
 
 export interface CreateResumeModel extends Model<ICreateResume> {}
