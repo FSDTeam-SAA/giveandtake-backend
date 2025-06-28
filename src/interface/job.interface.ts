@@ -1,4 +1,4 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Types } from 'mongoose'
 
 export type JobStatus = 'active' | 'deactive'
 
@@ -28,7 +28,7 @@ export interface IJob extends Document {
   experience: number
   deadline: Date
   status: JobStatus
-  jobCategoryId: string
+  jobCategoryId: Types.ObjectId
   compensation: string
   applicationRequirement: IApplicationRequirement[]
   customQuestion: ICustomQuestion[]
