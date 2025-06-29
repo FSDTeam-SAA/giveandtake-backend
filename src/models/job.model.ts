@@ -27,13 +27,6 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     customQuestion: [
       {
         question: { type: String },
-        type: {
-          type: String,
-          enum: ['text', 'multipleChoice', 'boolean'],
-          default: 'text',
-        },
-        options: [{ type: String }],
-        required: { type: Boolean, default: false },
       },
     ],
   },

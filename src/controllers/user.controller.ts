@@ -7,7 +7,10 @@ import { sendEmail } from '../utils/sendEmail'
 import { User } from '../models/user.model'
 import sendResponse from '../utils/sendResponse'
 import { JwtPayload } from 'jsonwebtoken'
-import mongoose from 'mongoose'
+import {
+  getPaginationParams,
+  buildMetaPagination,
+} from '../utils/pagination'
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum } = req.body
