@@ -14,7 +14,7 @@ app.use('/api/v1', userRoutes)
 
 app.use('/api/v1', jobRoutes)
 
-app.use('/api/v1', jobCategoryRoutes)
+app.use('/api/v1/category', jobCategoryRoutes)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)

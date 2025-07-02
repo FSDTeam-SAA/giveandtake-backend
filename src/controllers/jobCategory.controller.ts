@@ -41,3 +41,85 @@ export const createJobCategory = catchAsync(
     })
   }
 )
+
+// get all categorys
+export const getAllCategorys = catchAsync(
+  async (req: Request, res: Response) => {
+    const category = await JobCategory.find().sort({ createdAt: -1 })
+    console.log('first')
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Job category fetched successfully',
+      data: category,
+    })
+  }
+)
+
+// updateJobCategory
+export const updateJobCategory = catchAsync(
+  async (req: Request, res: Response) => {
+    const { id } = req.params
+    const { name } = req.body
+
+    const category = await JobCategory.findById(id)
+    if (!category) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Job category not found')
+    }
+
+    let newIcon = category.categoryIcon
+
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.path)
+      if (!result) {
+        throw new AppError(
+          httpStatus.INTERNAL_SERVER_ERROR,
+          'Failed to upload image'
+        )
+      }
+      await deleteFromCloudinary(category.categoryIcon)
+
+      newIcon = result.secure_url
+    }
+
+    category.name = name
+    category.categoryIcon = newIcon
+    await category.save()
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Job category updated successfully',
+      data: category,
+    })
+  }
+)
+
+
+// delete category
+export const deleteJobCategory = catchAsync(
+  async (req: Request, res: Response) => {
+    const { id } = req.params
+
+    const category = await JobCategory.findById(id)
+    if (!category) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Category not found')
+    }
+
+    // Delete icon from Cloudinary
+    const publicId = category.categoryIcon?.split('/').pop()?.split('.')[0]
+    if (publicId) {
+      await deleteFromCloudinary(publicId)
+    }
+
+    await category.deleteOne()
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Category deleted successfully',
+      data: null,
+    })
+  }
+)
