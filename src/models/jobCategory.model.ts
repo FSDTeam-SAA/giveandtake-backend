@@ -7,7 +7,7 @@ import {
 const jobCategorySchema: Schema<IJobCategory> = new Schema<IJobCategory>(
   {
     name: { type: String, required: true },
-    categoryIcon: { type: String, required: true }, // URL or icon class
+    categoryIcon: { type: String },
   },
   { timestamps: true }
 )

@@ -12,7 +12,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     const decoded = await jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;
     // console.log(decoded)
     const user = await User.findById(decoded._id)
-    if (user && await User.isOTPVerified(user._id)) {
+    if (user && await User.isOTPVerified(user._id.toString())) {
       req.user = user;
     }
     next();
@@ -28,9 +28,9 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction): void =
   next();
 };
 
-export const isDriver = (req: Request, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== "driver") {
-    throw new AppError(403, "Access denied. You are not an driver.");
+export const isRicruiter = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.user?.role !== 'ricruiter') {
+    throw new AppError(403, 'Access denied. You are not an ricruiter.')
   }
   next();
 };

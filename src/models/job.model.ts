@@ -20,8 +20,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     compensation: { type: String },
     applicationRequirement: [
       {
-        label: { type: String },
-        value: { type: String },
+        requirement: { type: String },
       },
     ],
     customQuestion: [
