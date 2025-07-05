@@ -19,11 +19,11 @@ const experienceSchema: Schema<IExperience> = new Schema<IExperience>(
     jobDescription: { type: String },
     careerField: { type: String },
     careerSubfield: { type: String },
-    resumeId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'CreateResume',
-      required: true,
-    },
+    // resumeId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: 'CreateResume',
+    //   required: true,
+    // },
   },
   { timestamps: true }
 )
