@@ -1,9 +1,9 @@
-import { Document, Model } from 'mongoose'
+import { Document, Model, Schema, Types } from 'mongoose'
 
 export type AccountType = 'candidat' | 'reqruter' | 'admin'
 
 export interface IRecruiterAccount extends Document {
-  userId: string
+  userId: Schema.Types.ObjectId
   type: AccountType
   videoFile: string
   bio: string
