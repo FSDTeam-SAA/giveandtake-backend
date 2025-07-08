@@ -9,12 +9,12 @@ export interface IUser {
   password: string
   whatsappNum?: string
   address?: string
-  securityQuestions?: [
+  securityQuestions?: 
     {
       question: string
       answer: string
-    }
-  ]
+    } []
+  
   avatar?: string
   role: 'admin' | 'candidate' | 'ricruiter'
   verificationInfo: {
