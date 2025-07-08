@@ -1,6 +1,7 @@
 import express from 'express'
 import { globalErrorHandler } from './middlewares/globalErrorHandler'
 import { notFound } from './middlewares/notFound'
+import cors from 'cors'
 
 import userRoutes from './routes/user.routes'
 import jobRoutes from './routes/job.route'
@@ -10,6 +11,14 @@ import exprienceRoutes from './routes/exprience.route'
 import contactUsRoutes from './routes/contactUs.route'
 
 const app = express()
+
+app.use(
+  cors({
+    origin: '*', //  frontend origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  })
+)
 
 app.use(express.json())
 
