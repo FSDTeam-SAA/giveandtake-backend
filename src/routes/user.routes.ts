@@ -9,6 +9,7 @@ import {
   getDefaultSecurityQuestions,
   submitSecurityAnswers,
   securityResetPassword,
+  verifySecurityAnswers,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -26,6 +27,7 @@ router.post('/user/change-password', protect, changePassword)
  **********************/
 router.get('/default-security-questions', getDefaultSecurityQuestions)
 router.post('/security-answers', submitSecurityAnswers)
+router.post('/verify-security-answers', verifySecurityAnswers)
 router.post('/security-answers/reset-password', securityResetPassword)
 
 
