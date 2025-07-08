@@ -6,11 +6,11 @@ import { createToken, verifyToken } from '../utils/authToken'
 import { sendEmail } from '../utils/sendEmail'
 import { User } from '../models/user.model'
 import sendResponse from '../utils/sendResponse'
+import { defaultSecurityQuestions } from '../constants/defaultSecurityQuestions'
 import { JwtPayload } from 'jsonwebtoken'
-import {
-  getPaginationParams,
-  buildMetaPagination,
-} from '../utils/pagination'
+import { Request, Response } from 'express'
+
+import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum } = req.body
@@ -164,7 +164,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
-    success: true,                                    
+    success: true,
     message: 'OTP sent to your email',
     data: '',
   })
@@ -227,3 +227,136 @@ export const changePassword = catchAsync(async (req, res) => {
     data: '',
   })
 })
+
+/**************************************
+ * Set SECURITY QUESTIONS AND ANSWERS *
+ **************************************/
+export const setSecurityQuestions = catchAsync(async (req, res) => {
+  const { email, securityQuestions } = req.body
+
+  if (!email || typeof email !== 'string') {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Email is required and must be a string'
+    )
+  }
+
+  if (
+    !Array.isArray(securityQuestions) ||
+    securityQuestions.some(
+      (q) =>
+        !q.question ||
+        typeof q.question !== 'string' ||
+        !q.answer ||
+        typeof q.answer !== 'string'
+    )
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Invalid security questions format'
+    )
+  }
+
+  const user = await User.findOne({ email })
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  user.securityQuestions = securityQuestions
+  await user.save()
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: 'Security questions saved successfully',
+  })
+})
+
+/**********************************
+ * GET DEFAULT SECURITY QUESTIONS *
+ **********************************/
+export const getDefaultSecurityQuestions = catchAsync(async (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Default security questions fetched successfully',
+    date: defaultSecurityQuestions,
+  })
+})
+
+/***************************
+ * SUBMIT SECURITY ANSWERS *
+ ***************************/
+export const submitSecurityAnswers = catchAsync(
+  async (req: Request, res: Response) => {
+    const { email, securityQuestions } = req.body
+    // console.log("securityQuestions", securityQuestions)
+
+    if (!email || !Array.isArray(securityQuestions)) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid input')
+    }
+
+    const user = await User.findOne({ email })
+    // console.log("first", user)
+    if (!user) throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+
+    // Overwrite existing questions
+    user.securityQuestions = securityQuestions
+    await user.save()
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Security questions saved',
+    })
+  }
+)
+
+/***************************
+ * VERIFY SECURITY ANSWERS *
+ ***************************/
+export const verifySecurityAnswers = catchAsync(
+  async (req: Request, res: Response) => {
+    const { email, answers } = req.body
+
+    if (!email || !Array.isArray(answers)) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid input')
+    }
+
+    const user = await User.findOne({ email }).select('securityQuestions')
+
+    if (user?.securityQuestions?.length !== answers.length) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Number of answers does not match the number of security questions')
+    }
+
+    if (!user || user.securityQuestions.length <= 0) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Security questions not found')
+    }
+
+    const matched = user.securityQuestions?.every((q, i) => {
+      return q.answer.trim().toLowerCase() === answers[i]?.trim().toLowerCase()
+    })
+
+    if (!matched) {
+      throw new AppError(
+        httpStatus.UNAUTHORIZED,
+        'Security answers do not match'
+      )
+    }
+
+    const resetToken = createToken(
+      { email },
+      process.env.JWT_ACCESS_SECRET as string,
+      process.env.JWT_ACCESS_EXPIRES_IN as string
+    )
+    user.verificationInfo.resetToken = resetToken
+    await user.save()
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Answers verified. You can now reset your password.',
+      data: { resetToken },
+    })
+  }
+)
+

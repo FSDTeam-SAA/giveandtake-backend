@@ -19,9 +19,17 @@ const userSchema: Schema = new Schema<IUser>(
     address: {
       type: String,
     },
+    securityQuestions: [
+      {
+        question: { type: String, default: '' },
+        answer: { type: String, default: '' },
+      },
+    ],
+
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: '' },
+      resetToken: { type: String, default: '' },
     },
     password_reset_token: { type: String, default: '' },
   },
