@@ -8,6 +8,7 @@ import {
   changePassword,
   getDefaultSecurityQuestions,
   submitSecurityAnswers,
+  securityResetPassword,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -25,6 +26,7 @@ router.post('/user/change-password', protect, changePassword)
  **********************/
 router.get('/default-security-questions', getDefaultSecurityQuestions)
 router.post('/security-answers', submitSecurityAnswers)
+router.post('/security-answers/reset-password', securityResetPassword)
 
 
 export default router

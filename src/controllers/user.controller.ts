@@ -326,7 +326,8 @@ export const verifySecurityAnswers = catchAsync(
     if (user?.securityQuestions?.length !== answers.length) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
-        'Number of answers does not match the number of security questions')
+        'Number of answers does not match the number of security questions'
+      )
     }
 
     if (!user || user.securityQuestions.length <= 0) {
@@ -360,3 +361,41 @@ export const verifySecurityAnswers = catchAsync(
   }
 )
 
+/**********************************************
+ * RESET PASSWORD USING THE SECURITY PASSWORD *
+ **********************************************/
+export const securityResetPassword = catchAsync(
+  async (req: Request, res: Response) => {
+    const { token } = req.query
+    const { newPassword } = req.body
+
+    if (!token || typeof token !== 'string') {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Reset token is required')
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      throw new AppError(httpStatus.BAD_REQUEST, 'New password is required')
+    }
+
+    const user = await User.findOne({
+      'verificationInfo.resetToken': token,
+    }).select('+password')
+
+    if (!user) {
+      throw new AppError(
+        httpStatus.UNAUTHORIZED,
+        'Invalid or expired reset token'
+      )
+    }
+
+    // Set new password (bcrypt will hash in pre-save hook)
+    user.password = newPassword
+    user.verificationInfo.resetToken = '' // clear token
+    await user.save()
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Password has been reset successfully',
+    })
+  }
+)
