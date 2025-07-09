@@ -5,15 +5,14 @@ import {
   updateRecruiterAccount,
   deleteRecruiterAccount,
 } from '../controllers/recruiterAccount.controller'
-import { protect } from '../middlewares/auth.middleware'
+// import { protect } from '../middlewares/auth.middleware'
 import { upload } from '../middlewares/multer.middleware'
 
 const router = express.Router()
 
-// router.post('/recruiter-account', protect, createRecruiterAccount)
 router.post(
   '/recruiter-account',
-  protect,
+  //   protect,
   upload.fields([
     { name: 'videoFile', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
@@ -21,10 +20,14 @@ router.post(
   createRecruiterAccount
 )
 
-router.get('/recruiter-account/:userId', protect, getRecruiterAccountByUserId)
+router.get(
+  '/recruiter-account/:userId',
+  // protect,
+  getRecruiterAccountByUserId
+)
 router.patch(
   '/recruiter-account/:userId',
-  protect,
+  //   protect,
   upload.fields([
     { name: 'videoFile', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
@@ -32,6 +35,10 @@ router.patch(
   updateRecruiterAccount
 )
 
-router.delete('/recruiter-account/:userId', protect, deleteRecruiterAccount)
+router.delete(
+  '/recruiter-account/:userId',
+  // protect,
+  deleteRecruiterAccount
+)
 
 export default router
