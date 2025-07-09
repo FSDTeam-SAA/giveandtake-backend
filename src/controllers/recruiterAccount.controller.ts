@@ -4,31 +4,54 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
+import { uploadToCloudinary } from '../utils/cloudinary'
 
-// CREATE Recruiter Account
+/****************************
+ * CREATE RECRUITER ACCOUNT *
+ ****************************/
 export const createRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
     const { userId, ...rest } = req.body
 
-    const existingAccount = await RecruiterAccount.findOne({ userId })
-    if (existingAccount) {
+    const existing = await RecruiterAccount.findOne({ userId })
+    if (existing) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'Account already exists for this user'
       )
     }
 
-    const account = await RecruiterAccount.create({ userId, ...rest })
+    let videoUrl = ''
+    let photoUrl = ''
+
+    // @ts-ignore
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] }
+
+    if (files?.videoFile?.[0]) {
+      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
+      if (uploaded) videoUrl = uploaded.secure_url
+    }
+
+    if (files?.photo?.[0]) {
+      const uploaded = await uploadToCloudinary(files.photo[0].path)
+      if (uploaded) photoUrl = uploaded.secure_url
+    }
+
+    const recruiterAccount = await RecruiterAccount.create({
+      userId,
+      videoFile: videoUrl,
+      photo: photoUrl,
+      ...rest,
+    })
 
     sendResponse(res, {
       statusCode: httpStatus.CREATED,
       success: true,
       message: 'Recruiter account created successfully',
-      data: account,
+      data: recruiterAccount,
     })
   }
 )
-
 // GET Recruiter Account by User ID
 export const getRecruiterAccountByUserId = catchAsync(
   async (req: Request, res: Response) => {

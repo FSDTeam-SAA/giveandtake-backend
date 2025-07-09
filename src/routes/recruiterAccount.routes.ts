@@ -6,10 +6,21 @@ import {
   deleteRecruiterAccount,
 } from '../controllers/recruiterAccount.controller'
 import { protect } from '../middlewares/auth.middleware'
+import { upload } from '../middlewares/multer.middleware';
 
 const router = express.Router()
 
-router.post('/recruiter-account', protect, createRecruiterAccount)
+// router.post('/recruiter-account', protect, createRecruiterAccount)
+router.post(
+  '/recruiter-account',
+  protect,
+  upload.fields([
+    { name: 'videoFile', maxCount: 1 },
+    { name: 'photo', maxCount: 1 },
+  ]),
+  createRecruiterAccount
+)
+
 router.get('/recruiter-account/:userId', protect, getRecruiterAccountByUserId)
 router.patch('/recruiter-account/:userId', protect, updateRecruiterAccount)
 router.delete('/recruiter-account/:userId', protect, deleteRecruiterAccount)
