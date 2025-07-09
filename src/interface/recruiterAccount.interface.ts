@@ -30,13 +30,6 @@ export interface IRecruiterAccount extends Document {
   programName: string
   programDate: string
   awardDescription: string
-  
-  // companyCity: string
-  // companyCountry: string
-  // companyLogo: string
-  // careerField: string
-  // careerSubField: string
-  // summary: string
 }
 
 export interface RecruiterAccountModel extends Model<IRecruiterAccount> {}
