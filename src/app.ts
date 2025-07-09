@@ -9,6 +9,7 @@ import jobCategoryRoutes from './routes/jobCategory.routes'
 import subscriptionPlanRoutes from './routes/subscriptionPlan.route'
 import exprienceRoutes from './routes/exprience.route'
 import contactUsRoutes from './routes/contactUs.route'
+import recruiterAccoumntRoutes from './routes/recruiterAccount.routes'
 
 const app = express()
 
@@ -33,6 +34,13 @@ app.use('/api/v1/subscription', subscriptionPlanRoutes)
 app.use('/api/v1/experiences', exprienceRoutes)
 
 app.use('/api/v1/contact', contactUsRoutes)
+
+/**************************
+ * APIS FOR RECRUITER APP *
+ **************************/
+app.use('/api/v1/recruiter', recruiterAccoumntRoutes)
+
+
 
 app.use(notFound as never)
 app.use(globalErrorHandler)

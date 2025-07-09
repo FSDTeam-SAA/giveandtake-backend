@@ -52,7 +52,10 @@ export const createRecruiterAccount = catchAsync(
     })
   }
 )
-// GET Recruiter Account by User ID
+
+/************************************
+ * GET RECRUITER ACCOUNT BY USER ID *
+ ************************************/
 export const getRecruiterAccountByUserId = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
@@ -72,21 +75,46 @@ export const getRecruiterAccountByUserId = catchAsync(
   }
 )
 
-// UPDATE Recruiter Account
+/****************************
+ * UPDATE RECRUITER ACCOUNT *
+ ****************************/
 export const updateRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
-    const updates = req.body
+    const updates = { ...req.body }
+
+    // @ts-ignore
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] }
+
+    const existingAccount = await RecruiterAccount.findOne({ userId })
+
+    if (!existingAccount) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
+    }
+
+    // Handle new video upload
+    if (files?.videoFile?.[0]) {
+      const uploadedVideo = await uploadToCloudinary(files.videoFile[0].path)
+      if (uploadedVideo?.secure_url) {
+        updates.videoFile = uploadedVideo.secure_url
+        // Optional: delete old video from Cloudinary if storing public_id
+      }
+    }
+
+    // Handle new photo upload
+    if (files?.photo?.[0]) {
+      const uploadedPhoto = await uploadToCloudinary(files.photo[0].path)
+      if (uploadedPhoto?.secure_url) {
+        updates.photo = uploadedPhoto.secure_url
+        // Optional: delete old photo from Cloudinary if storing public_id
+      }
+    }
 
     const updatedAccount = await RecruiterAccount.findOneAndUpdate(
       { userId },
       updates,
       { new: true, runValidators: true }
     )
-
-    if (!updatedAccount) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
-    }
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
@@ -97,7 +125,9 @@ export const updateRecruiterAccount = catchAsync(
   }
 )
 
-// DELETE Recruiter Account
+/*******************************
+ * * DELETE RECRUITER ACCOUNT *
+ *******************************/
 export const deleteRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
