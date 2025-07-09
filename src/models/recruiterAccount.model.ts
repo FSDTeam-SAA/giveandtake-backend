@@ -28,18 +28,33 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       city: { type: String },
       zipCode: { type: String },
       emailAddress: { type: String },
+      phoneNumber: { type: String },
       location: { type: String },
-
-      companyName: { type: String },
-      companyWebsite: { type: String },
-      companyCountry: { type: String },
-      companyCity: { type: String },
+      
+      upworkUrl: { type: String },
+      linkedIn: { type: String },
+      xLink: { type: String },
+      OtherLink: { type: String },
+      
+      companyId: { type: String },
       roleAtCompany: { type: String },
-      companyLogo: { type: String },
 
-      careerField: { type: String },
-      careerSubField: { type: String },
-      summary: { type: String },
+      awardTitle: { type: String },
+      programName : { type: String },
+      programDate : { type: String },
+      awardDescription : { type: String },
+
+      
+
+      
+      // companyWebsite: { type: String },
+      // companyLogo: { type: String },
+      // companyCountry: { type: String },
+      // companyCity: { type: String },
+      // careerField: { type: String },
+      // careerSubField: { type: String },
+      // summary: { type: String },
+
     },
     { timestamps: true }
   )

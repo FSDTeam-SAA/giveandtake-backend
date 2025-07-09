@@ -17,17 +17,26 @@ export interface IRecruiterAccount extends Document {
   zipCode: string
   emailAddress: string
   location: string
-
+  phoneNumber: string
   companyName: string
   companyWebsite: string
-  companyCountry: string
-  companyCity: string
+  linkedIn: string
+  xLink: string
+  upworkUrl: string
+  OtherLink: string
+  companyId: string
   roleAtCompany: string
-  companyLogo: string
-
-  careerField: string
-  careerSubField: string
-  summary: string
+  awardTitle: string
+  programName: string
+  programDate: string
+  awardDescription: string
+  
+  // companyCity: string
+  // companyCountry: string
+  // companyLogo: string
+  // careerField: string
+  // careerSubField: string
+  // summary: string
 }
 
 export interface RecruiterAccountModel extends Model<IRecruiterAccount> {}
