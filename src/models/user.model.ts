@@ -10,7 +10,7 @@ const userSchema: Schema = new Schema<IUser>(
     password: { type: String, select: 0, required: true },
     role: {
       type: String,
-      enum: ['candidate', 'ricruiter', 'admin'],
+      enum: ['candidate', 'ricruiter', 'company', 'admin'],
       default: 'candidate',
     },
     avatar: {
@@ -18,7 +18,7 @@ const userSchema: Schema = new Schema<IUser>(
     },
     address: {
       type: String,
-    },
+    },  
     securityQuestions: [
       {
         question: { type: String, default: '' },

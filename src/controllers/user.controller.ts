@@ -263,7 +263,7 @@ export const setSecurityQuestions = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
 
-  user.securityQuestions = securityQuestions
+  
   await user.save()
 
   res.status(httpStatus.OK).json({
