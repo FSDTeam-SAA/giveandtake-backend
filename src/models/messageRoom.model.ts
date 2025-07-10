@@ -9,13 +9,16 @@ const messageRoomSchema: Schema<IMessageRoom> = new Schema<IMessageRoom>(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
     },
     recruiterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
     },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    messsageAccepted: { type: Boolean, default: false },
     lastMessage: {
       type: String,
       default: '',
