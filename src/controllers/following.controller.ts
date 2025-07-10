@@ -11,6 +11,7 @@ import sendResponse from '../utils/sendResponse'
 export const followEntity = catchAsync(async (req: Request, res: Response) => {
   const { recruiterId, companyId } = req.body
   const userId = req.user?._id
+  //   console.log("first", userId)
 
   if (!recruiterId && !companyId) {
     throw new AppError(

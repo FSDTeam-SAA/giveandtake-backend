@@ -44,7 +44,7 @@ app.use('/api/v1/recruiter', recruiterAccoumntRoutes)
 /*****************************
  * APIS FOR FOLLOWING SYSTEM *
  *****************************/
-app.use('/api/v1/follow', followingRoutes)
+app.use('/api/v1/following', followingRoutes)
 
 
 app.use(notFound as never)

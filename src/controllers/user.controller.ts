@@ -13,7 +13,7 @@ import { Request, Response } from 'express'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 
 export const register = catchAsync(async (req, res) => {
-  const { name, email, password, address, phoneNum } = req.body
+  const { name, email, password, address, phoneNum, role } = req.body
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, 'Please fill in all fields')
   }
@@ -34,6 +34,7 @@ export const register = catchAsync(async (req, res) => {
     password,
     phoneNum,
     address,
+    role,
     verificationInfo: { token: otptoken },
   })
   await sendEmail(user.email, 'Registerd Account', `Your OTP is ${otp}`)
