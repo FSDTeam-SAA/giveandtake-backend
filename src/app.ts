@@ -11,6 +11,8 @@ import exprienceRoutes from './routes/exprience.route'
 import contactUsRoutes from './routes/contactUs.route'
 import recruiterAccoumntRoutes from './routes/recruiterAccount.routes'
 import followingRoutes from './routes/following.route'
+import messageRoomesRoutes from './routes/messageRoom.route'
+
 
 const app = express()
 
@@ -45,6 +47,11 @@ app.use('/api/v1/recruiter', recruiterAccoumntRoutes)
  * APIS FOR FOLLOWING SYSTEM *
  *****************************/
 app.use('/api/v1/following', followingRoutes)
+
+/****************************
+ * APIS FOR MESSAGING ROOMS *
+ ****************************/
+app.use('/api/v1/message-room', messageRoomesRoutes)
 
 
 app.use(notFound as never)
