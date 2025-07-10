@@ -10,22 +10,22 @@ import httpStatus from 'http-status'
  ***********************/
 export const createMessageRoom = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, recruiterId } = req.body
+    const { userId, recruiterId, companyId } = req.body
 
-    if (!userId || !recruiterId) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'Both userId and recruiterId are required'
-      )
-    }
+    // if (!userId || !recruiterId) {
+    //   throw new AppError(
+    //     httpStatus.BAD_REQUEST,
+    //     'Both userId and recruiterId are required'
+    //   )
+    // }
 
-    const exists = await MessageRoom.findOne({ userId, recruiterId })
+    const exists = await MessageRoom.findOne({ userId, recruiterId, companyId })
 
     if (exists) {
       throw new AppError(httpStatus.CONFLICT, 'Message room already exists')
     }
 
-    const room = await MessageRoom.create({ userId, recruiterId })
+    const room = await MessageRoom.create({ userId, recruiterId, companyId })
 
     res.status(httpStatus.CREATED).json({
       success: true,
@@ -56,8 +56,10 @@ export const getMessageRooms = catchAsync(
         filter = { userId }
         break
       case 'ricruiter':
-      case 'company': // Assuming company recruiters are still under User model
         filter = { recruiterId: userId }
+        break
+      case 'company':
+        filter = { companyId: userId }
         break
       default:
         throw new AppError(httpStatus.BAD_REQUEST, 'Invalid type')
@@ -66,6 +68,7 @@ export const getMessageRooms = catchAsync(
     const rooms = await MessageRoom.find(filter)
       .populate('userId', 'name email role')
       .populate('recruiterId', 'name email role')
+      .populate('companyId', 'name email role')
 
     res.status(httpStatus.OK).json({
       success: true,
