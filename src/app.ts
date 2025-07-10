@@ -10,6 +10,7 @@ import subscriptionPlanRoutes from './routes/subscriptionPlan.route'
 import exprienceRoutes from './routes/exprience.route'
 import contactUsRoutes from './routes/contactUs.route'
 import recruiterAccoumntRoutes from './routes/recruiterAccount.routes'
+import followingRoutes from './routes/following.route'
 
 const app = express()
 
@@ -40,6 +41,10 @@ app.use('/api/v1/contact', contactUsRoutes)
  **************************/
 app.use('/api/v1/recruiter', recruiterAccoumntRoutes)
 
+/*****************************
+ * APIS FOR FOLLOWING SYSTEM *
+ *****************************/
+app.use('/api/v1/follow', followingRoutes)
 
 
 app.use(notFound as never)
