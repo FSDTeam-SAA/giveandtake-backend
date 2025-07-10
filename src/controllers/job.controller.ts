@@ -6,7 +6,9 @@ import { Job } from '../models/job.model'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 
-// Create a job
+/*******************
+ * // CREATE A JOB *
+ *******************/
 export const createJob = catchAsync(async (req: Request, res: Response) => {
     const { title,description, location,companyName,salaryRange,shift, jobType, company,  } = req.body
     if (!title || !location || !jobType || !company || !shift) {
@@ -32,7 +34,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-// Get all jobs with filters and pagination
+/********************************************
+ * GET ALL JOBS WITH FILTERS AND PAGINATION *
+ ********************************************/
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const { title, location } = req.query
 
@@ -55,7 +59,10 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-// Update a job
+/*******************
+ * // UPDATE A JOB *
+ *******************/
+
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
   const updated = await Job.findByIdAndUpdate(id, req.body, { new: true })
@@ -70,7 +77,10 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-// Delete a job
+/*******************
+ * // DELETE A JOB *
+ *******************/
+
 export const deleteJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
   const deleted = await Job.findByIdAndDelete(id)
@@ -86,8 +96,10 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
 })
 
 
-// get single job
-// Get single job by ID
+/***************************
+ *    // GET SINGLE JOB    *
+ * // GET SINGLE JOB BY ID *
+ ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params
     const job = await Job.findById(id)
