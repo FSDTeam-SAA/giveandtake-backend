@@ -13,6 +13,8 @@ import recruiterAccoumntRoutes from './routes/recruiterAccount.routes'
 import followingRoutes from './routes/following.route'
 import messageRoomesRoutes from './routes/messageRoom.route'
 import messageRoutes from './routes/message.route'
+import appliedJobsRoutes from './routes/appliedJob.route'
+
 
 const app = express()
 
@@ -57,6 +59,11 @@ app.use('/api/v1/message-room', messageRoomesRoutes)
  * APIS FOR MESSAGING SYSTEM *
  *****************************/
 app.use('/api/v1/message', messageRoutes)
+
+/*************************
+ * APIS FOR APPLIED JOBS *
+ *************************/
+app.use('/api/v1/applied-jobs', appliedJobsRoutes)
 
 
 
