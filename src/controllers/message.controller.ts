@@ -5,10 +5,12 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import mongoose from 'mongoose'
 import { io } from '../server'
+import { uploadToCloudinary } from '../utils/cloudinary' // Adjust path
 
 /***************
  * CREATE MESSAGE
  ***************/
+
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const { message, roomId, userId } = req.body
   const files = req.files as Express.Multer.File[]
@@ -17,16 +19,26 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
   }
 
-  const fileData = files?.map((file) => ({
-    filename: file.filename,
-    url: `/uploads/${file.filename}`,
-  }))
+  // Upload all files to Cloudinary
+  const fileData = await Promise.all(
+    files.map(async (file) => {
+      const result = await uploadToCloudinary(file.path)
+      if (result) {
+        return {
+          filename: file.originalname,
+          url: result.secure_url,
+          public_id: result.public_id, // save this if you want to support deletion
+          uploadedAt: new Date(),
+        }
+      }
+    })
+  )
 
   const newMessage = await Message.create({
     message,
     roomId,
     userId,
-    file: fileData,
+    file: fileData.filter(Boolean), // remove nulls
   })
 
   io.to(roomId).emit('newMessage', newMessage)
@@ -37,6 +49,7 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     data: newMessage,
   })
 })
+
 
 /***************
  * GET MESSAGES BY ROOM (Paginated)
