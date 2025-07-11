@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Message Upload Tester</title>
+</head>
+<body>
+  <h1>Test Message Upload</h1>
+
+  <form id="messageForm">
+    <label>User ID:</label><br />
+    <input type="text" name="userId" id="userId" required /><br /><br />
+
+    <label>Room ID:</label><br />
+    <input type="text" name="roomId" id="roomId" required /><br /><br />
+
+    <label>Message:</label><br />
+    <textarea name="message" id="message" rows="4" required></textarea><br /><br />
+
+    <label>Files:</label><br />
+    <input type="file" name="files" id="files" multiple /><br /><br />
+
+    <button type="submit">Send Message</button>
+  </form>
+
+  <div id="response" style="margin-top: 20px; color: green;"></div>
+
+  <script>
+    document.getElementById('messageForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData();
+      formData.append('userId', document.getElementById('userId').value);
+      formData.append('roomId', document.getElementById('roomId').value);
+      formData.append('message', document.getElementById('message').value);
+
+      const files = document.getElementById('files').files;
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      try {
+        const res = await fetch('http://localhost:5000/api/messages', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+        document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById('response').textContent = 'Error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

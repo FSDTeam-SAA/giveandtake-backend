@@ -4,6 +4,7 @@ import { connectDB } from './config/db'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
+import { setupMessageSocket } from './sockets/message.socket'
 
 dotenv.config()
 
@@ -17,6 +18,8 @@ export const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
 })
+
+setupMessageSocket(io)
 
 connectDB().then(() => {
   // app.listen(PORT, () => {
