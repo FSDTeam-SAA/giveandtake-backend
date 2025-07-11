@@ -9,8 +9,8 @@ import {
 const router = express.Router()
 
 router.post('/create-message-room', createMessageRoom)
-router.get('/get-messagerooms', getMessageRooms)
-router.delete('/deleteMessageRoom/:roomId', deleteMessageRoom)
-router.patch('/:roomId/accept', acceptMessageRoom)
+router.get('/get-message-rooms', getMessageRooms)
+router.delete('/delete-message-room/:roomId', deleteMessageRoom)
+router.patch('/:roomid/accept', acceptMessageRoom)
 
 export default router
