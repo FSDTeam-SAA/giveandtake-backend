@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
-import { PaymentInfo } from '../models/paymentInfo.model'
+import { paymentInfo } from '../models/paymentInfo.model'
 import catchAsync from '../utils/catchAsync'
 import {SubscriptionPlan} from '../models/subscriptionPlan.model'
 import {User} from '../models/user.model'
@@ -24,9 +24,9 @@ const validateJsonBody = (
   next()
 }
 
-// paypal
-// controllers/payment.controller.ts
-
+/****************************
+ * PAYPAL CREATEPAYPALORDER *
+ ****************************/
 export const createPaypalOrder = async (req: Request, res: Response) => {
   try {
     const { amount } = req.body
@@ -61,6 +61,9 @@ const mapPaypalStatusToEnum = (
   }
 }
 
+/****************************
+ * PAYPAL CAPTUREPAYPALPAYMENT *
+ ****************************/
 export const capturePaypalPayment = async (req: Request, res: Response) => {
   try {
     const { orderId, userId, bookingId, seasonId } = req.body
@@ -68,7 +71,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 
     const captureDetails = capture.purchase_units[0].payments.captures[0]
 
-    const newPayment = await PaymentInfo.create({
+    const newPayment = await paymentInfo.create({
       userId,
       bookingId,
       price: captureDetails.amount.value,
