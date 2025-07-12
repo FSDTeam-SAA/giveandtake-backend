@@ -29,14 +29,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
  * GET ALL BLOGS (OPTIONAL FILTER BY USERID) *
  *********************************************/
 export const getAllBlogs = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.query
-  const filter: any = {}
-
-  if (userId) {
-    filter.userId = userId
-  }
-
-  const blogs = await Blog.find(filter).sort({ createdAt: -1 })
+  const blogs = await Blog.find().sort({ createdAt: -1 })
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

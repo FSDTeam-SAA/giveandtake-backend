@@ -18,6 +18,7 @@ import notificationRoutes from './routes/notification.route'
 import paymentRoutes from './routes/payment.route'
 import adminDashboardRoutes from './routes/adminDashboard.routes'
 import bookmarkRoutes from './routes/bookmark.routes'
+import blogRoutes from './routes/blog.route'
 
 
 const app = express()
@@ -92,6 +93,10 @@ app.use('/api/v1/admin', adminDashboardRoutes)
  ********************/
 app.use('/api/v1/bookmarks', bookmarkRoutes)
 
+/******************
+ * APIS FOR BLOGS *
+ ******************/
+app.use('/api/v1/blogs', blogRoutes)
 
 
 app.use(notFound as never)
