@@ -7,7 +7,7 @@ export interface IPaymentInfo extends Document {
   amount: number
   planId: Types.ObjectId
   paymentStatus: PaymentStatus
-  season: string
+  seasonId: string
   transactionId: string
   paymentMethod: string
 }

@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express'
 import { paymentInfo } from '../models/paymentInfo.model'
 import catchAsync from '../utils/catchAsync'
-import {SubscriptionPlan} from '../models/subscriptionPlan.model'
-import {User} from '../models/user.model'
+import { SubscriptionPlan } from '../models/subscriptionPlan.model'
+import { User } from '../models/user.model'
 import { createOrder, captureOrder } from '../services/paypal.service'
-
-
 
 // JSON validation middleware
 const validateJsonBody = (
@@ -66,15 +64,15 @@ const mapPaypalStatusToEnum = (
  ****************************/
 export const capturePaypalPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId, userId, bookingId, seasonId } = req.body
+    const { orderId, userId, planId, seasonId } = req.body
     const capture = await captureOrder(orderId)
 
     const captureDetails = capture.purchase_units[0].payments.captures[0]
 
     const newPayment = await paymentInfo.create({
       userId,
-      bookingId,
-      price: captureDetails.amount.value,
+      planId,
+      amount: captureDetails.amount.value,
       paymentStatus: mapPaypalStatusToEnum(captureDetails.status),
       transactionId: captureDetails.id,
       paymentMethod: 'PayPal',
@@ -89,4 +87,3 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Payment capture failed', error })
   }
 }
-

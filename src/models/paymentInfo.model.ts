@@ -22,9 +22,9 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       enum: ['complete', 'pending', 'failed'],
       default: 'pending',
     },
-    season: { type: String }, // e.g., "June 2025", or any billing cycle ID
+    seasonId: { type: String }, 
     transactionId: { type: String, required: true },
-    paymentMethod: { type: String }, // e.g., "PayPal", "Stripe", "Bkash"
+    paymentMethod: { type: String }, 
   },
   { timestamps: true }
 )
