@@ -4,7 +4,9 @@ import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 
-/** Get all notifications by user */
+/*********************************
+ * GET ALL NOTIFICATIONS BY USER *
+ *********************************/
 export const getUserNotifications = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
@@ -21,7 +23,9 @@ export const getUserNotifications = catchAsync(
   }
 )
 
-/** Mark all notifications as read */
+/**********************************
+ * MARK ALL NOTIFICATIONS AS READ *
+ **********************************/
 export const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params
 
@@ -36,3 +40,17 @@ export const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
     modifiedCount: result.modifiedCount,
   })
 })
+
+
+
+/**
+ import { createNotification } from '../services/notification.service'
+
+await createNotification({
+  to: user._id,
+  message: 'You have a new message',
+  type: 'message',
+  id: message._id,
+})
+
+ */

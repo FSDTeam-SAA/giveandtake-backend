@@ -68,7 +68,7 @@ app.use('/api/v1/applied-jobs', appliedJobsRoutes)
 /********************************
  * APIS FOR NOTIFICATION SYSTEM *
  ********************************/
-app.use('/api/v1/notification', notificationRoutes)
+app.use('/api/v1/notifications', notificationRoutes)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)

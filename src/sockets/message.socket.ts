@@ -8,12 +8,16 @@ export const setupMessageSocket = (io: Server) => {
       socket.join(roomId)
     })
 
+    socket.on('joinNotification', (userId) => {
+      socket.join(userId)
+    })
+
     socket.on('leaveRoom', (roomId) => {
       socket.leave(roomId)
     })
 
     socket.on('disconnect', () => {
-      console.log('User disconnected:', socket.id)
+      console.log('User disconnected :', socket.id)
     })
   })
 }
