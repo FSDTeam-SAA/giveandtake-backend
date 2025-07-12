@@ -8,7 +8,9 @@ export const initNotificationSocket = (socketIO: Server) => {
   io = socketIO
 }
 
-// Create and emit notification
+/********************************
+ * CREATE AND EMIT NOTIFICATION *
+ ********************************/
 export const createNotification = async ({
   to,
   message,
