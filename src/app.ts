@@ -17,6 +17,7 @@ import appliedJobsRoutes from './routes/appliedJob.route'
 import notificationRoutes from './routes/notification.route'
 import paymentRoutes from './routes/payment.route'
 import adminDashboardRoutes from './routes/adminDashboard.routes'
+import bookmarkRoutes from './routes/bookmark.routes'
 
 
 const app = express()
@@ -82,6 +83,11 @@ app.use('/api/v1/payments', paymentRoutes)
  * APIS FOR ADMIN DASHBOARD *
  ****************************/
 app.use('/api/v1/admin', adminDashboardRoutes)
+
+/********************
+ * APIS FOR BOOKING *
+ ********************/
+app.use('/api/v1/bookmark', bookmarkRoutes)
 
 
 
