@@ -42,6 +42,9 @@ app.use('/api/v1/subscription', subscriptionPlanRoutes)
 
 app.use('/api/v1/experiences', exprienceRoutes)
 
+/********************
+ * APIS FOR CONTACT *
+ ********************/
 app.use('/api/v1/contact', contactUsRoutes)
 
 /**************************
@@ -87,7 +90,7 @@ app.use('/api/v1/admin', adminDashboardRoutes)
 /********************
  * APIS FOR BOOKING *
  ********************/
-app.use('/api/v1/bookmark', bookmarkRoutes)
+app.use('/api/v1/bookmarks', bookmarkRoutes)
 
 
 
