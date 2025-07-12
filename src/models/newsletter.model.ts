@@ -12,3 +12,4 @@ export const Newsletter = mongoose.model<INewsletter, NewsletterModel>(
   'Newsletter',
   newsletterSchema
 )
+
