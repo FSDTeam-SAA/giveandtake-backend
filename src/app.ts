@@ -15,6 +15,9 @@ import messageRoomesRoutes from './routes/messageRoom.route'
 import messageRoutes from './routes/message.route'
 import appliedJobsRoutes from './routes/appliedJob.route'
 import notificationRoutes from './routes/notification.route'
+import paymentRoutes from './routes/payment.route'
+import adminDashboardRoutes from './routes/adminDashboard.routes'
+
 
 const app = express()
 
@@ -69,6 +72,18 @@ app.use('/api/v1/applied-jobs', appliedJobsRoutes)
  * APIS FOR NOTIFICATION SYSTEM *
  ********************************/
 app.use('/api/v1/notifications', notificationRoutes)
+
+/*********************
+ * APIS FOR PAYMENTS *
+ *********************/
+app.use('/api/v1/payments', paymentRoutes)
+
+/****************************
+ * APIS FOR ADMIN DASHBOARD *
+ ****************************/
+app.use('/api/v1/admin', adminDashboardRoutes)
+
+
 
 app.use(notFound as never)
 app.use(globalErrorHandler)
