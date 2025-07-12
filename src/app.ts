@@ -14,7 +14,7 @@ import followingRoutes from './routes/following.route'
 import messageRoomesRoutes from './routes/messageRoom.route'
 import messageRoutes from './routes/message.route'
 import appliedJobsRoutes from './routes/appliedJob.route'
-
+import notificationRoutes from './routes/notification.route'
 
 const app = express()
 
@@ -65,7 +65,10 @@ app.use('/api/v1/message', messageRoutes)
  *************************/
 app.use('/api/v1/applied-jobs', appliedJobsRoutes)
 
-
+/********************************
+ * APIS FOR NOTIFICATION SYSTEM *
+ ********************************/
+app.use('/api/v1/notification', notificationRoutes)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)
