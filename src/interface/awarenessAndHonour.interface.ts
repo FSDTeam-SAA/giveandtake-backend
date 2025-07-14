@@ -1,0 +1,9 @@
+import mongoose, { Document } from 'mongoose'
+
+export interface IAwarenessAndHonour extends Document {
+  userId: mongoose.Types.ObjectId
+  title: string
+  programeName: string
+  programeDate: Date
+  description: string
+}
