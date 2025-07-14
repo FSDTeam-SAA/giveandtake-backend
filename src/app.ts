@@ -19,7 +19,7 @@ import paymentRoutes from './routes/payment.route'
 import adminDashboardRoutes from './routes/adminDashboard.routes'
 import bookmarkRoutes from './routes/bookmark.routes'
 import blogRoutes from './routes/blog.route'
-
+import awardAndHonorRoutes from './routes/awardAndHonor.route'
 
 const app = express()
 
@@ -98,6 +98,10 @@ app.use('/api/v1/bookmarks', bookmarkRoutes)
  ******************/
 app.use('/api/v1/blogs', blogRoutes)
 
+/******************************
+ * APIS FOR AWARDS AND HONORS *
+ ******************************/
+app.use('/api/v1/awards', awardAndHonorRoutes)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)
