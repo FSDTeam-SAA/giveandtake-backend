@@ -2,16 +2,16 @@ import { Request, Response } from 'express'
 import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
-import { AwarenessAndHonour } from '../models/awarenessAndHonour.model'
+import { AwarenessAndHonor } from '../models/awardsAndHonor.model'
 import sendResponse from '../utils/sendResponse'
 
 /******************************
- * CREATE AWARNESS AND HONOUR *
+ * CREATE AWARNESS AND Honor *
  ******************************/
-export const createAwarenessAndHonour = catchAsync(
+export const createAwardAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const data = req.body
-    const result = await AwarenessAndHonour.create(data)
+    const result = await AwarenessAndHonor.create(data)
 
     sendResponse(res, {
       statusCode: httpStatus.CREATED,
@@ -27,7 +27,7 @@ export const createAwarenessAndHonour = catchAsync(
  ******************/
 export const getByUserId = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params
-  const result = await AwarenessAndHonour.find({ userId })
+  const result = await AwarenessAndHonor.find({ userId })
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -38,14 +38,14 @@ export const getByUserId = catchAsync(async (req: Request, res: Response) => {
 })
 
 /*******************************
- * UPDATE AWARENESS AND HONOUR *
+ * UPDATE AWARENESS AND Honor *
  *******************************/
-export const updateAwarenessAndHonour = catchAsync(
+export const updateAwardsAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
     const updates = req.body
 
-    const result = await AwarenessAndHonour.findByIdAndUpdate(id, updates, {
+    const result = await AwarenessAndHonor.findByIdAndUpdate(id, updates, {
       new: true,
     })
 
@@ -63,13 +63,13 @@ export const updateAwarenessAndHonour = catchAsync(
 )
 
 /*******************************
- * DELETE AWARENESS AND HONOUR *
+ * DELETE AWARENESS AND Honor *
  *******************************/
-export const deleteAwarenessAndHonour = catchAsync(
+export const deleteAwardsAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
 
-    const result = await AwarenessAndHonour.findByIdAndDelete(id)
+    const result = await AwarenessAndHonor.findByIdAndDelete(id)
 
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'Entry not found')

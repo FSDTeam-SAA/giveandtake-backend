@@ -1,6 +1,6 @@
 import mongoose, { Document } from 'mongoose'
 
-export interface IAwarenessAndHonour extends Document {
+export interface IAwarenessAndHonor extends Document {
   userId: mongoose.Types.ObjectId
   title: string
   programeName: string

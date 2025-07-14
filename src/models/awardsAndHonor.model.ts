@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
-import { IAwarenessAndHonour } from '../interface/awardsAndHonour.interface'
+import { IAwarenessAndHonor } from '../interface/awardsAndHonor.interface'
 
-const awarenessAndHonourSchema: Schema<IAwarenessAndHonour> = new Schema(
+const awarenessAndHonorSchema: Schema<IAwarenessAndHonor> = new Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -30,7 +30,7 @@ const awarenessAndHonourSchema: Schema<IAwarenessAndHonour> = new Schema(
   { timestamps: true }
 )
 
-export const AwarenessAndHonour: Model<IAwarenessAndHonour> = mongoose.model(
-  'AwarenessAndHonour',
-  awarenessAndHonourSchema
+export const AwarenessAndHonor: Model<IAwarenessAndHonor> = mongoose.model(
+  'AwarenessAndHonor',
+  awarenessAndHonorSchema
 )
