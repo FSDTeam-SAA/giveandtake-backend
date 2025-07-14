@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
-import { IAwarenessAndHonour } from '../interface/awarenessAndHonour.interface'
+import { IAwarenessAndHonour } from '../interface/awardsAndHonour.interface'
 
 const awarenessAndHonourSchema: Schema<IAwarenessAndHonour> = new Schema(
   {
