@@ -18,6 +18,7 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
     },
     videoFile: { type: String },
     photo: { type: String },
+    aboutUs: { type: String },
     title: { type: String },
     firstName: { type: String },
     lastName: { type: String },
@@ -25,7 +26,9 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
     country: { type: String },
     city: { type: String },
     zipCode: { type: String },
+
     email: { type: String },
+    phoneNumber: { type: String },
     location: { type: String },
     sLink: [
       {
@@ -34,10 +37,11 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       },
     ],
     skills: [{ type: String }],
-    skillProficiency: { type: String },
-    jobType: { type: String },
-    yearOfExperience: { type: Number },
-    professionalSummary: { type: String },
+
+    // skillProficiency: { type: String },
+    // jobType: { type: String },
+    // yearOfExperience: { type: Number },
+    // professionalSummary: { type: String },
     experienceId: [
       {
         type: mongoose.Schema.Types.ObjectId,

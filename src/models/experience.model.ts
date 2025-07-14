@@ -10,20 +10,15 @@ const experienceSchema: Schema<IExperience> = new Schema<IExperience>(
     },
     employer: { type: String, required: true },
     jobTitle: { type: String, required: true },
-    firstName: { type: String },
     startDate: { type: Date, required: true },
     endDate: { type: Date },
     country: { type: String },
     city: { type: String },
     zip: { type: String },
     jobDescription: { type: String },
+    jobCategory: { type: String },
     careerField: { type: String },
     careerSubfield: { type: String },
-    // resumeId: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: 'CreateResume',
-    //   required: true,
-    // },
   },
   { timestamps: true }
 )

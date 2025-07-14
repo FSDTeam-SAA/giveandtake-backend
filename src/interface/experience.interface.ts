@@ -11,6 +11,7 @@ export interface IExperience extends Document {
   city: string
   zip: string
   jobDescription: string
+  jobCategory: string
   careerField: string
   careerSubfield: string
   resumeId: Types.ObjectId
