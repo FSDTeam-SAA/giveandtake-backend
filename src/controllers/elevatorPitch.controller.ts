@@ -5,10 +5,12 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import catchAsync from '../utils/catchAsync'
 import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary'
+import { paymentInfo } from '../models/paymentInfo.model'
+
 
 /*************************
  * CREATE ELEVATOR PITCH *
- *************************/
+ *************************/ 
 // export const createResume = catchAsync(async (req, res) => {
 //   const { userId } = req.query
 
