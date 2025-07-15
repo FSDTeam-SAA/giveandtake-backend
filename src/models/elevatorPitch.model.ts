@@ -1,17 +1,24 @@
 import mongoose, { Schema, Document } from 'mongoose'
-import { IElevatorPitch } from '../interface/elevatorPitch.model'
 
+interface IElevatorPitch extends Document {
+  userId: mongoose.Types.ObjectId
+  video: {
+    url: string
+    publicId: string
+  }
+}
 
-const elevatorPitchSchema: Schema<IElevatorPitch> = new Schema(
+const elevatorPitchSchema = new Schema<IElevatorPitch>(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+      unique: true,
     },
     video: {
-      type: String,
-      required: true,
+      url: String,
+      publicId: String,
     },
   },
   { timestamps: true }
