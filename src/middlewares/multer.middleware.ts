@@ -30,3 +30,9 @@ export const upload = multer({
     cb(new Error('Only images (jpeg, jpg, png) are allowed'))
   },
 })
+
+
+export const resumeUpload = upload.fields([
+  { name: 'videoFile', maxCount: 1 },
+  { name: 'photo', maxCount: 1 },
+])

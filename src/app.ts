@@ -20,6 +20,7 @@ import adminDashboardRoutes from './routes/adminDashboard.routes'
 import bookmarkRoutes from './routes/bookmark.routes'
 import blogRoutes from './routes/blog.route'
 import awardAndHonorRoutes from './routes/awardAndHonor.route'
+import createresumeRoute from './routes/createResume.routes'
 
 const app = express()
 
@@ -102,6 +103,11 @@ app.use('/api/v1/blogs', blogRoutes)
  * APIS FOR AWARDS AND HONORS *
  ******************************/
 app.use('/api/v1/awards', awardAndHonorRoutes)
+
+/****************************
+ * APIS FOR CREATE RESUME *
+ ****************************/
+app.use('/api/v1/create-resume', createresumeRoute)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)
