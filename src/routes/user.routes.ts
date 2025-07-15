@@ -10,6 +10,7 @@ import {
   submitSecurityAnswers,
   securityResetPassword,
   verifySecurityAnswers,
+  deactivateUser,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -21,6 +22,8 @@ router.post('/user/verify', verifyEmail)
 router.post('/user/forget', forgetPassword),
 router.post('/user/reset-password', resetPassword)
 router.post('/user/change-password', protect, changePassword)
+router.patch('/user/deactivate', protect, deactivateUser)
+
 
 /**********************
  * SECURITY QUESTIONS *

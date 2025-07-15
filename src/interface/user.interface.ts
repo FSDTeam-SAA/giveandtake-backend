@@ -23,6 +23,8 @@ export interface IUser {
     resetToken: string
   }
   password_reset_token: string
+  deactivate: boolean
+  dateOfdeactivate: Date
 }
 
 export interface UserModel extends Model<IUser> {

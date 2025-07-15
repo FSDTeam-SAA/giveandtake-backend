@@ -5,6 +5,8 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import { setupMessageSocket } from './sockets/message.socket'
+import cron from 'node-cron'
+import { deleteOldDeactivatedUsers } from './jobs/deleteOldDeactivatedUsers'
 
 dotenv.config()
 
@@ -17,6 +19,12 @@ export const io = new Server(httpServer, {
     origin: '*',
     methods: ['GET', 'POST'],
   },
+})
+
+// Runs every day at midnight
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running user deletion job...')
+  await deleteOldDeactivatedUsers()
 })
 
 setupMessageSocket(io)

@@ -401,4 +401,23 @@ export const securityResetPassword = catchAsync(
   }
 )
 
+/***************************
+ * DEACTIVATE USER ACCOUNT *
+ ***************************/
+export const deactivateUser = catchAsync(async (req, res) => {
+  const userId = req.user?._id
 
+  const user = await User.findById(userId)
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+
+  user.deactivate = true
+  user.dateOfdeactivate = new Date()
+  await user.save()
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Account deactivated. Your data will be deleted in 30 days.',
+    data: null,
+  })
+})
