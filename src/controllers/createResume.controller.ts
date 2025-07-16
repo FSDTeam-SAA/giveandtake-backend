@@ -6,6 +6,8 @@ import { CreateResume } from '../models/createResume.model'
 import { Experience } from '../models/experience.model'
 import { Education } from '../models/education.model'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
+import { ElevatorPitch } from '../models/elevatorPitch.model' 
+import sendResponse from '../utils/sendResponse'
 
 /********************
  * CREATE RESUME *
@@ -41,3 +43,30 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     },
   })
 })
+
+
+/*********************
+ * GET A USER RESUME *
+ *********************/
+export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
+    const userId  = req.user?._id
+
+    const resume = await CreateResume.findOne({ userId })
+    const experiences = await Experience.find({ userId })
+    const education = await Education.find({ userId })
+    const awardsAndHonors = await AwardsAndHonor.find({ userId })
+    const elevatorPitch = await ElevatorPitch.find({ userId })
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Resume fetched successfully',
+      data: {
+        resume,
+        experiences,
+        education,
+        awardsAndHonors,
+        elevatorPitch,
+      },
+    })
+  })
