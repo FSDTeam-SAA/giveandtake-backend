@@ -70,3 +70,12 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
       },
     })
   })
+
+
+/*******************
+ * UPDATE A RESUME *
+ *******************/
+export const updateResume = catchAsync(async (req: Request, res: Response) => {
+    const { userId } = req.user?._id
+    // const 
+})
