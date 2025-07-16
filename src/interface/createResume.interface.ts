@@ -29,8 +29,8 @@ export interface ICreateResume extends Document {
   jobType: string
   yearOfExperience: number
   professionalSummary: string
-  experienceId: Types.ObjectId[]
-  educationId: Types.ObjectId[]
+  // experienceId: Types.ObjectId[]
+  // educationId: Types.ObjectId[]
 }
 
 export interface CreateResumeModel extends Model<ICreateResume> {}

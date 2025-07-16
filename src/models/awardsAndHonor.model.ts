@@ -30,7 +30,7 @@ const awarenessAndHonorSchema: Schema<IAwarenessAndHonor> = new Schema(
   { timestamps: true }
 )
 
-export const AwarenessAndHonor: Model<IAwarenessAndHonor> = mongoose.model(
+export const AwardsAndHonor: Model<IAwarenessAndHonor> = mongoose.model(
   'AwarenessAndHonor',
   awarenessAndHonorSchema
 )
