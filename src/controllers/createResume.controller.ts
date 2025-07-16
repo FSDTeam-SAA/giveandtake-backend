@@ -6,7 +6,7 @@ import { CreateResume } from '../models/createResume.model'
 import { Experience } from '../models/experience.model'
 import { Education } from '../models/education.model'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
-import { ElevatorPitch } from '../models/elevatorPitch.model' 
+import { ElevatorPitch } from '../models/elevatorPitch.model'
 import sendResponse from '../utils/sendResponse'
 
 /********************
@@ -44,38 +44,97 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-
 /*********************
  * GET A USER RESUME *
  *********************/
 export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
-    const userId  = req.user?._id
+  const userId = req.user?._id
 
-    const resume = await CreateResume.findOne({ userId })
-    const experiences = await Experience.find({ userId })
-    const education = await Education.find({ userId })
-    const awardsAndHonors = await AwardsAndHonor.find({ userId })
-    const elevatorPitch = await ElevatorPitch.find({ userId })
+  const resume = await CreateResume.findOne({ userId })
+  const experiences = await Experience.find({ userId })
+  const education = await Education.find({ userId })
+  const awardsAndHonors = await AwardsAndHonor.find({ userId })
+  const elevatorPitch = await ElevatorPitch.find({ userId })
 
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: 'Resume fetched successfully',
-      data: {
-        resume,
-        experiences,
-        education,
-        awardsAndHonors,
-        elevatorPitch,
-      },
-    })
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Resume fetched successfully',
+    data: {
+      resume,
+      experiences,
+      education,
+      awardsAndHonors,
+      elevatorPitch,
+    },
   })
-
+})
 
 /*******************
  * UPDATE A RESUME *
  *******************/
 export const updateResume = catchAsync(async (req: Request, res: Response) => {
-    const { userId } = req.user?._id
-    // const 
+  const userId = req.user?._id
+  const { resume, experiences, educationList, awardsAndHonors } = req.body
+
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+
+  const updatedResume = await CreateResume.findOneAndUpdate(
+    { userId },
+    resume,
+    { new: true, upsert: true }
+  )
+
+  // Delete old experiences, education, honors
+  await Experience.deleteMany({ userId })
+  await Education.deleteMany({ userId })
+  await AwardsAndHonor.deleteMany({ userId })
+
+  // Insert updated ones
+  const updatedExperiences = await Experience.insertMany(
+    experiences.map((exp: any) => ({ ...exp, userId }))
+  )
+
+  const updatedEducation = await Education.insertMany(
+    educationList.map((edu: any) => ({ ...edu, userId }))
+  )
+
+  const updatedAwards = await AwardsAndHonor.insertMany(
+    awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
+  )
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Resume updated successfully',
+    data: {
+      resume: updatedResume,
+      experiences: updatedExperiences,
+      education: updatedEducation,
+      awardsAndHonors: updatedAwards,
+    },
+  })
+})
+
+/*******************
+ * DELETE A RESUME *
+ *******************/
+export const deleteResume = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?._id
+
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+
+  await Promise.all([
+    CreateResume.deleteOne({ userId }),
+    Experience.deleteMany({ userId }),
+    Education.deleteMany({ userId }),
+    AwardsAndHonor.deleteMany({ userId }),
+    ElevatorPitch.deleteMany({ userId }),
+  ])
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Resume and all related data deleted successfully',
+  })
 })
