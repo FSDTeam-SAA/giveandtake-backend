@@ -136,5 +136,6 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Resume and all related data deleted successfully',
+    data: null,
   })
 })
