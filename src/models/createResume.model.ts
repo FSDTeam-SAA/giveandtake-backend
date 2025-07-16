@@ -37,10 +37,11 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       },
     ],
     skills: [{ type: String }],
-    
   },
   { timestamps: true }
 )
+
+createResumeSchema.index({ title: 'text', country: 'text', skills: 1 })
 
 export const CreateResume = mongoose.model<ICreateResume, CreateResumeModel>(
   'CreateResume',
