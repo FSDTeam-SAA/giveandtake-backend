@@ -5,6 +5,8 @@ import AppError from '../errors/AppError'
 import { Job } from '../models/job.model'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
+import { CreateResume } from '../models/createResume.model'
+
 
 /*******************
  * // CREATE A JOB *
@@ -116,3 +118,73 @@ export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
     })
   })
   
+
+export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user
+
+  if (!userId) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'userId is required' })
+  }
+
+  const resume = await CreateResume.findOne({ userId }).lean()
+
+  if (!resume) {
+    return res.status(404).json({ success: false, message: 'Resume not found' })
+  }
+
+  const { title, country, skills = [] } = resume
+
+  const matchConditions = []
+
+  // 1. Match resume.title with job.title using case-insensitive partial match
+  if (title) {
+    matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
+  }
+
+  // 2. Match resume.country with job.location using case-insensitive partial match
+  if (country) {
+    matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
+  }
+
+  // 3. Match skills with responsibilities
+  if (skills.length > 0) {
+    matchConditions.push({ responsibilities: { $in: skills } })
+  }
+
+  // Run query to find relevant jobs
+  const jobs = await Job.find({ $or: matchConditions, status: 'active' })
+    .limit(50)
+    .lean()
+
+  const exactMatches: any[] = []
+  const partialMatches: any[] = []
+
+  jobs.forEach((job) => {
+    let matchCount = 0
+    if (title && job.title?.toLowerCase().includes(title.toLowerCase()))
+      matchCount++
+    if (country && job.location?.toLowerCase().includes(country.toLowerCase()))
+      matchCount++
+    if (
+      skills.length > 0 &&
+      job.responsibilities?.some((r: string) => skills.includes(r))
+    )
+      matchCount++
+
+    if (matchCount >= 2) {
+      exactMatches.push(job)
+    } else {
+      partialMatches.push(job)
+    }
+  })
+
+  res.status(200).json({
+    success: true,
+    data: {
+      exactMatches,
+      partialMatches,
+    },
+  })
+})

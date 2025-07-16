@@ -37,18 +37,7 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       },
     ],
     skills: [{ type: String }],
-    // experienceId: [
-    //   {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: 'Experience',
-    //   },
-    // ],
-    // educationId: [
-    //   {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: 'Education',
-    //   },
-    // ],
+    
   },
   { timestamps: true }
 )
