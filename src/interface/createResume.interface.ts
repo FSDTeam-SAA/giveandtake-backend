@@ -29,6 +29,7 @@ export interface ICreateResume extends Document {
   jobType: string
   yearOfExperience: number
   professionalSummary: string
+  jobCategoryId: string
   // experienceId: Types.ObjectId[]
   // educationId: Types.ObjectId[]
 }

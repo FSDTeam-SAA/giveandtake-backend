@@ -7,15 +7,23 @@ import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
 
-
 /*******************
  * // CREATE A JOB *
  *******************/
 export const createJob = catchAsync(async (req: Request, res: Response) => {
-    const { title,description, location,companyName,salaryRange,shift, jobType, company,  } = req.body
-    if (!title || !location || !jobType || !company || !shift) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
-    }
+  const {
+    title,
+    description,
+    location,
+    companyName,
+    salaryRange,
+    shift,
+    jobType,
+    company,
+  } = req.body
+  if (!title || !location || !jobType || !company || !shift) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
+  }
 
   const job = await Job.create({
     title,
@@ -57,7 +65,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Jobs fetched successfully',
-    data: {meta,jobs},
+    data: { meta, jobs },
   })
 })
 
@@ -97,91 +105,175 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-
 /***************************
  *    // GET SINGLE JOB    *
  * // GET SINGLE JOB BY ID *
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params
-    const job = await Job.findById(id)
-  
-    if (!job) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
-    }
-  
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: 'Job retrieved successfully',
-      data: job,
-    })
+  const { id } = req.params
+  const job = await Job.findById(id)
+
+  if (!job) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Job retrieved successfully',
+    data: job,
   })
-  
+})
+
+/************************
+ * JOB RECOMMEND SYSTEM *
+ ************************/
+// export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
+//   const { userId } = req.query
+//   // const userid = "686fa88ad7e1a2ad8c1c0ae3"
+
+//   if (!userId) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'userId is required')
+//   }
+
+//   const resume = await CreateResume.findOne({ userId }).lean()
+
+//   if (!resume) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
+//   }
+
+//   const { title, country, skills = [] } = resume
+
+//   const matchConditions = []
+
+//   // 1. Match resume.title with job.title using case-insensitive partial match
+//   if (title) {
+//     matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
+//   }
+
+//   // 2. Match resume.country with job.location using case-insensitive partial match
+//   if (country) {
+//     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
+//   }
+
+//   // 3. Match skills with responsibilities
+//   if (skills.length > 0) {
+//     matchConditions.push({ responsibilities: { $in: skills } })
+//   }
+
+//   // Run query to find relevant jobs
+//   console.log('first')
+//   const jobs = await Job.find({ $or: matchConditions, status: 'active' })
+//     .limit(50)
+//     .lean()
+
+//   console.log('first')
+
+//   const exactMatches: any[] = []
+//   const partialMatches: any[] = []
+
+//   jobs.forEach((job) => {
+//     let matchCount = 0
+//     if (title && job.title?.toLowerCase().includes(title.toLowerCase()))
+//       matchCount++
+//     if (country && job.location?.toLowerCase().includes(country.toLowerCase()))
+//       matchCount++
+//     if (
+//       skills.length > 0 &&
+//       job.responsibilities?.some((r: string) => skills.includes(r))
+//     )
+//       matchCount++
+
+//     if (matchCount >= 2) {
+//       exactMatches.push(job)
+//     } else {
+//       partialMatches.push(job)
+//     }
+//   })
+
+//   res.status(200).json({
+//     success: true,
+//     data: {
+//       exactMatches,
+//       partialMatches,
+//     },
+//   })
+// })
 
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user
+  const { userId } = req.query
 
   if (!userId) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'userId is required' })
+    throw new AppError(httpStatus.BAD_REQUEST, 'userId is required')
   }
 
   const resume = await CreateResume.findOne({ userId }).lean()
 
   if (!resume) {
-    return res.status(404).json({ success: false, message: 'Resume not found' })
+    throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
   }
 
-  const { title, country, skills = [] } = resume
+  const { title, country, skills = [], jobCategoryId } = resume
 
   const matchConditions = []
 
-  // 1. Match resume.title with job.title using case-insensitive partial match
-  if (title) {
-    matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
-  }
-
-  // 2. Match resume.country with job.location using case-insensitive partial match
-  if (country) {
+  if (title) matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
+  if (country)
     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
-  }
-
-  // 3. Match skills with responsibilities
-  if (skills.length > 0) {
+  if (skills.length > 0)
     matchConditions.push({ responsibilities: { $in: skills } })
-  }
+  if (jobCategoryId as string) matchConditions.push({ jobCategoryId })
 
-  // Run query to find relevant jobs
   const jobs = await Job.find({ $or: matchConditions, status: 'active' })
     .limit(50)
     .lean()
 
-  const exactMatches: any[] = []
-  const partialMatches: any[] = []
+  const exactMatches = [] as any[]
+  const partialMatches = [] as any[]
 
   jobs.forEach((job) => {
-    let matchCount = 0
+    let score = 0
+
     if (title && job.title?.toLowerCase().includes(title.toLowerCase()))
-      matchCount++
+      score += 3
     if (country && job.location?.toLowerCase().includes(country.toLowerCase()))
-      matchCount++
+      score += 2
     if (
       skills.length > 0 &&
       job.responsibilities?.some((r: string) => skills.includes(r))
     )
-      matchCount++
+      score += 1
 
-    if (matchCount >= 2) {
-      exactMatches.push(job)
+    if (score >= 5) {
+      exactMatches.push({ job, score })
     } else {
-      partialMatches.push(job)
+      partialMatches.push({ job, score })
     }
   })
 
-  res.status(200).json({
+  // Sort by score (highest first)
+  exactMatches.sort((a, b) => b.score - a.score)
+  partialMatches.sort((a, b) => b.score - a.score)
+
+  if (exactMatches.length === 0 && partialMatches.length === 0) {
+    const fallbackJobs = await Job.find({ status: 'active' }).limit(5)
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'No exact or partial matches found.',
+      data: {
+        exactMatches,
+        partialMatches,
+        fallbackJobs,
+      },
+    })
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
     success: true,
+    message: 'Recommended jobs fetched successfully',
     data: {
       exactMatches,
       partialMatches,

@@ -19,6 +19,9 @@ router.delete('/jobs/:id', deleteJob)
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
-router.get('/recommend', recommendJobs)
+router.get('/jobs/recommend', 
+// (req, res) => {console.log("first")}  
+  recommendJobs
+)
 
 export default router

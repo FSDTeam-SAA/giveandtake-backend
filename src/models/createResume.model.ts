@@ -26,7 +26,7 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
     country: { type: String },
     city: { type: String },
     zipCode: { type: String },
-
+    jobCategoryId: { type: String },
     email: { type: String },
     phoneNumber: { type: String },
     location: { type: String },
