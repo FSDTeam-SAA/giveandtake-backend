@@ -6,10 +6,12 @@ import {
   deleteResume,
 } from '../controllers/createResume.controller'
 import { protect } from '../middlewares/auth.middleware'
+import { upload } from '../middlewares/multer.middleware'
+
 
 const router = express.Router()
 
-router.post('/create-resume', createResume)
+router.post('/create-resume',upload.single('photo'), createResume)
 router.get('/get-resume', protect, resumeOfaUser)
 router.patch('/resume/update', protect, updateResume)
 router.delete('/resume/delete', protect, deleteResume)

@@ -8,6 +8,7 @@ import { Education } from '../models/education.model'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import sendResponse from '../utils/sendResponse'
+import { uploadToCloudinary } from '../utils/cloudinary'
 
 /********************
  * CREATE RESUME *
@@ -18,7 +19,20 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
-  const resumeDoc = await CreateResume.create({ ...resume, userId })
+  // check if file was uplaod
+  let uploadFileUrl = null
+  if (req.file) {
+    const cloudinaryResult = await uploadToCloudinary(req.file.path)
+    if (cloudinaryResult) {
+      uploadFileUrl = cloudinaryResult.secure_url
+    }
+  }
+
+  const resumeDoc = await CreateResume.create({
+    ...resume,
+    userId,
+    photo: uploadFileUrl,
+  })
 
   const exparienceDocs = await Experience.insertMany(
     experiences.map((exp: any) => ({ ...exp, userId }))
