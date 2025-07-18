@@ -12,16 +12,13 @@ const router = express.Router()
 
 router.post('/jobs', createJob)
 router.get('/jobs', getAllJobs)
-router.get('/:id', getSingleJob)
+router.get('/jobs/:id', getSingleJob)
 router.patch('/jobs/:id', updateJob)
 router.delete('/jobs/:id', deleteJob)
 
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
-router.get('/jobs/recommend', 
-// (req, res) => {console.log("first")}  
-  recommendJobs
-)
+router.get('/jobs/recommend', recommendJobs)
 
 export default router

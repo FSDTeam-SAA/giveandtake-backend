@@ -1,5 +1,4 @@
-import mongoose from "mongoose"
-
+import mongoose from 'mongoose'
 
 export interface IAppliedJob extends Document {
   jobId: mongoose.Types.ObjectId
