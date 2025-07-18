@@ -4,6 +4,7 @@ import mongoose from 'mongoose'
 import { AppliedJob } from '../models/appliedJob.model'
 import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
+import { buildMetaPagination, getPaginationParams } from '../utils/pagination';
 
 /***************
  * CREATE Application
@@ -52,10 +53,33 @@ export const getApplicationsByJob = catchAsync(
 /***************
  * GET Applications by User ID (with optional query)
  ***************/
+// export const getApplicationsByUser = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { userId } = req.params
+//     const { status } = req.query
+
+//     if (!mongoose.Types.ObjectId.isValid(userId)) {
+//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid User ID')
+//     }
+
+//     const filter: any = { userId }
+//     if (status) filter.status = status
+
+//     const applications = await AppliedJob.find(filter).populate('jobId')
+
+//     res.status(httpStatus.OK).json({
+//       success: true,
+//       message: 'Applications fetched by user',
+//       data: applications,
+//     })
+//   }
+// )
+
 export const getApplicationsByUser = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
     const { status } = req.query
+    const { page, limit, skip } = getPaginationParams(req.query)
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid User ID')
@@ -64,15 +88,24 @@ export const getApplicationsByUser = catchAsync(
     const filter: any = { userId }
     if (status) filter.status = status
 
-    const applications = await AppliedJob.find(filter).populate('jobId')
+    const totalItems = await AppliedJob.countDocuments(filter)
+
+    const applications = await AppliedJob.find(filter)
+      .populate('jobId')
+      .skip(skip)
+      .limit(limit)
+
+    const meta = buildMetaPagination(totalItems, page, limit)
 
     res.status(httpStatus.OK).json({
       success: true,
       message: 'Applications fetched by user',
+      meta,
       data: applications,
     })
   }
 )
+
 
 /***************
  * UPDATE Application Status
