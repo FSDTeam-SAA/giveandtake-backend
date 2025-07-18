@@ -87,35 +87,136 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
 /*******************
  * UPDATE A RESUME *
  *******************/
+// export const updateResume = catchAsync(async (req: Request, res: Response) => {
+//   const userId = req.user?._id
+//   const { resume, experiences, educationList, awardsAndHonors } = req.body
+
+//   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+
+//     if (req.file) {
+//       const cloudinaryResult = await uploadToCloudinary(req.file.path)
+
+//       if(cloudinaryResult) {
+//         resume.photo = cloudinaryResult.secure_url
+//       }
+//     }
+
+//   const updatedResume = await CreateResume.findOneAndUpdate(
+//     { userId },
+//     {...resume, userId},
+//     { new: true, upsert: true }
+//   )
+
+// // delete old documents
+//   await Promise.all([
+//     Experience.deleteMany({ userId }),
+//     Education.deleteMany({ userId }),
+//     AwardsAndHonor.deleteMany({ userId }),
+//   ])
+
+//   // insert new related documents
+//   const [updatedExperiences, updatedEducation, updatedAwards] =
+//     await Promise.all([
+//       experiences.length
+//         ? Experience.insertMany(
+//             experiences.map((exp: any) => ({ ...exp, userId }))
+//           )
+//         : [],
+//       educationList.length
+//         ? Education.insertMany(
+//             educationList.map((edu: any) => ({ ...edu, userId }))
+//           )
+//         : [],
+//       awardsAndHonors.length
+//         ? AwardsAndHonor.insertMany(
+//             awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
+//           )
+//         : [],
+//     ])
+
+//   // Delete old experiences, education, honors
+//   await Experience.deleteMany({ userId })
+//   await Education.deleteMany({ userId })
+//   await AwardsAndHonor.deleteMany({ userId })
+
+//   // Insert updated ones
+//   const updatedExperiences = await Experience.insertMany(
+//     experiences.map((exp: any) => ({ ...exp, userId }))
+//   )
+
+//   const updatedEducation = await Education.insertMany(
+//     educationList.map((edu: any) => ({ ...edu, userId }))
+//   )
+
+//   const updatedAwards = await AwardsAndHonor.insertMany(
+//     awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
+//   )
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.OK,
+//     success: true,
+//     message: 'Resume updated successfully',
+//     data: {
+//       resume: updatedResume,
+//       experiences: updatedExperiences,
+//       education: updatedEducation,
+//       awardsAndHonors: updatedAwards,
+//     },
+//   })
+// })
+
 export const updateResume = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id
-  const { resume, experiences, educationList, awardsAndHonors } = req.body
+  const {
+    resume,
+    experiences = [],
+    educationList = [],
+    awardsAndHonors = [],
+  } = req.body
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
+  // Upload new photo if provided
+  if (req.file) {
+    const cloudinaryResult = await uploadToCloudinary(req.file.path)
+    if (cloudinaryResult) {
+      resume.photo = cloudinaryResult.secure_url
+    }
+  }
+
+  // Update or create the main resume document
   const updatedResume = await CreateResume.findOneAndUpdate(
     { userId },
-    resume,
+    { ...resume, userId },
     { new: true, upsert: true }
   )
 
-  // Delete old experiences, education, honors
-  await Experience.deleteMany({ userId })
-  await Education.deleteMany({ userId })
-  await AwardsAndHonor.deleteMany({ userId })
+  // Delete old related documents
+  await Promise.all([
+    Experience.deleteMany({ userId }),
+    Education.deleteMany({ userId }),
+    AwardsAndHonor.deleteMany({ userId }),
+  ])
 
-  // Insert updated ones
-  const updatedExperiences = await Experience.insertMany(
-    experiences.map((exp: any) => ({ ...exp, userId }))
-  )
-
-  const updatedEducation = await Education.insertMany(
-    educationList.map((edu: any) => ({ ...edu, userId }))
-  )
-
-  const updatedAwards = await AwardsAndHonor.insertMany(
-    awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
-  )
+  // Insert new related documents
+  const [updatedExperiences, updatedEducation, updatedAwards] =
+    await Promise.all([
+      experiences.length
+        ? Experience.insertMany(
+            experiences.map((exp: any) => ({ ...exp, userId }))
+          )
+        : Promise.resolve([]),
+      educationList.length
+        ? Education.insertMany(
+            educationList.map((edu: any) => ({ ...edu, userId }))
+          )
+        : Promise.resolve([]),
+      awardsAndHonors.length
+        ? AwardsAndHonor.insertMany(
+            awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
+          )
+        : Promise.resolve([]),
+    ])
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
