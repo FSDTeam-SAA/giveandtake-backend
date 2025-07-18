@@ -8,12 +8,12 @@ const educationSchema: Schema<IEducation> = new Schema<IEducation>(
       ref: 'User',
       required: true,
     },
-    instituteName: { type: String, required: true },
-    city: { type: String, required: true },
-    state: { type: String, required: true },
-    degree: { type: String, required: true },
-    fieldOfStudy: { type: String, required: true },
-    graduationDate: { type: Date, required: true },
+    instituteName: { type: String },
+    city: { type: String },
+    state: { type: String },
+    degree: { type: String },
+    fieldOfStudy: { type: String },
+    graduationDate: { type: Date },
   },
   { timestamps: true }
 )

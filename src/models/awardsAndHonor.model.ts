@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
-import { IAwarenessAndHonor } from '../interface/awardsAndHonor.interface'
+import { IAwarenessAndHonor } from '../interface/awardsAndHonour.interface'
 
 const awarenessAndHonorSchema: Schema<IAwarenessAndHonor> = new Schema(
   {
@@ -10,21 +10,19 @@ const awarenessAndHonorSchema: Schema<IAwarenessAndHonor> = new Schema(
     },
     title: {
       type: String,
-      required: true,
+
       trim: true,
     },
     programeName: {
       type: String,
-      required: true,
+
       trim: true,
     },
     programeDate: {
       type: Date,
-      required: true,
     },
     description: {
       type: String,
-      required: true,
     },
   },
   { timestamps: true }

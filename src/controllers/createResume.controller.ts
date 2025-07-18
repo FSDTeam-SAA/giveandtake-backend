@@ -9,30 +9,42 @@ import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
+import path from 'path'
 
 /********************
  * CREATE RESUME *
  ********************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
-  const { userId, resume, experiences, educationList, awardsAndHonors } =
-    req.body
+  // const { userId, resume, experiences, educationList, awardsAndHonors } =
+  //   req.body
+
+  const {userId} = req.body
+
+  const resume = JSON.parse(req.body.resume || '{}')
+  const experiences = JSON.parse(req.body.experiences || '[]')
+  const educationList = JSON.parse(req.body.educationList || '[]')
+  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]')
+
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
   // check if file was uplaod
   let uploadFileUrl = null
   if (req.file) {
+    console.log('first')
     const cloudinaryResult = await uploadToCloudinary(req.file.path)
     if (cloudinaryResult) {
       uploadFileUrl = cloudinaryResult.secure_url
+      console.log('second')
     }
   }
-
+  console.log('theard ')
   const resumeDoc = await CreateResume.create({
     ...resume,
     userId,
     photo: uploadFileUrl,
   })
+  console.log(4)
 
   const exparienceDocs = await Experience.insertMany(
     experiences.map((exp: any) => ({ ...exp, userId }))
@@ -45,7 +57,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const awarenessDocs = await AwardsAndHonor.insertMany(
     awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
   )
-
+  console.log('4')
   res.status(httpStatus.CREATED).json({
     success: true,
     message: 'Resume created successfully',

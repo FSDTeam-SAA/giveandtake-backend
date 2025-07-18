@@ -36,7 +36,9 @@ app.use(
 app.use(express.json())
 
 app.use('/api/v1', userRoutes)
-
+/*****************
+ * APIS FOR JOBS *
+ *****************/
 app.use('/api/v1', jobRoutes)
 
 app.use('/api/v1/category', jobCategoryRoutes)
