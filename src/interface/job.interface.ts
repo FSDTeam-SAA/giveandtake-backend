@@ -28,6 +28,7 @@ export interface IJob extends Document {
   experience: number
   deadline: Date
   status: JobStatus
+  arcrivedJob: boolean
   jobCategoryId: Types.ObjectId
   compensation: string
   applicationRequirement: IApplicationRequirement[]

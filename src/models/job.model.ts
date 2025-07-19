@@ -18,6 +18,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     status: { type: String, enum: ['active', 'deactive'], default: 'active' },
     jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCategory' },
     compensation: { type: String },
+    arcrivedJob: { type: Boolean, default: false },
     applicationRequirement: [
       {
         requirement: { type: String },

@@ -57,7 +57,13 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const { page, limit, skip } = getPaginationParams(req.query)
 
   const totalJobs = await Job.countDocuments(filter)
-  const jobs = await Job.find(filter).skip(skip).limit(limit)
+  console.log("first")
+  const jobs = await Job.find({ ...filter, arcrivedJob: false })
+    .skip(skip)
+    .limit(limit)
+    .sort({ createdAt: -1 })
+
+    console.log(2,jobs)
 
   const meta = buildMetaPagination(totalJobs, page, limit)
 
