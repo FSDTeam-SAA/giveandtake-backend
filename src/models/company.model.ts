@@ -3,6 +3,7 @@ import { ICompany, CompanyModel } from '../interface/company.interface'
 
 const companySchema: Schema<ICompany> = new Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     clogo: { type: String },
     aboutUs: { type: String },
     cname: { type: String, required: true },
@@ -14,8 +15,7 @@ const companySchema: Schema<ICompany> = new Schema(
     links: [{ type: String }],
     industry: { type: String },
     service: [{ type: String }],
-    employees: { type: Number },
-    userId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   {
     timestamps: true,

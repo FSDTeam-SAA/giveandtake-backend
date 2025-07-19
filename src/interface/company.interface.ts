@@ -1,6 +1,7 @@
 import { Document, Model, Types } from 'mongoose'
 
 export interface ICompany extends Document {
+  userId?: number
   clogo?: string
   aboutUs?: string
   cname: string
@@ -12,8 +13,7 @@ export interface ICompany extends Document {
   links?: string[]
   industry?: string
   service?: string[]
-  employees?: number
-  userId: Types.ObjectId[] // references to User
+  employeesId: Types.ObjectId[] // references to User
 }
 
 export type CompanyModel = Model<ICompany>
