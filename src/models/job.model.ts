@@ -3,6 +3,8 @@ import { IJob, JobModel } from '../interface/job.interface'
 
 const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     title: { type: String, required: true },
     description: { type: String, required: true },
     companyName: { type: String, required: true },

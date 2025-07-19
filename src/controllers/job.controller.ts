@@ -12,6 +12,7 @@ import { CreateResume } from '../models/createResume.model'
  *******************/
 export const createJob = catchAsync(async (req: Request, res: Response) => {
   const {
+    userId,
     title,
     description,
     location,
@@ -26,6 +27,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   const job = await Job.create({
+    userId,
     title,
     description,
     companyName,
@@ -134,78 +136,6 @@ export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
-// export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
-//   const { userId } = req.query
-//   // const userid = "686fa88ad7e1a2ad8c1c0ae3"
-
-//   if (!userId) {
-//     throw new AppError(httpStatus.BAD_REQUEST, 'userId is required')
-//   }
-
-//   const resume = await CreateResume.findOne({ userId }).lean()
-
-//   if (!resume) {
-//     throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
-//   }
-
-//   const { title, country, skills = [] } = resume
-
-//   const matchConditions = []
-
-//   // 1. Match resume.title with job.title using case-insensitive partial match
-//   if (title) {
-//     matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
-//   }
-
-//   // 2. Match resume.country with job.location using case-insensitive partial match
-//   if (country) {
-//     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
-//   }
-
-//   // 3. Match skills with responsibilities
-//   if (skills.length > 0) {
-//     matchConditions.push({ responsibilities: { $in: skills } })
-//   }
-
-//   // Run query to find relevant jobs
-//   console.log('first')
-//   const jobs = await Job.find({ $or: matchConditions, status: 'active' })
-//     .limit(50)
-//     .lean()
-
-//   console.log('first')
-
-//   const exactMatches: any[] = []
-//   const partialMatches: any[] = []
-
-//   jobs.forEach((job) => {
-//     let matchCount = 0
-//     if (title && job.title?.toLowerCase().includes(title.toLowerCase()))
-//       matchCount++
-//     if (country && job.location?.toLowerCase().includes(country.toLowerCase()))
-//       matchCount++
-//     if (
-//       skills.length > 0 &&
-//       job.responsibilities?.some((r: string) => skills.includes(r))
-//     )
-//       matchCount++
-
-//     if (matchCount >= 2) {
-//       exactMatches.push(job)
-//     } else {
-//       partialMatches.push(job)
-//     }
-//   })
-
-//   res.status(200).json({
-//     success: true,
-//     data: {
-//       exactMatches,
-//       partialMatches,
-//     },
-//   })
-// })
-
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
