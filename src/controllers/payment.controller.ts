@@ -4,6 +4,7 @@ import catchAsync from '../utils/catchAsync'
 import { SubscriptionPlan } from '../models/subscriptionPlan.model'
 import { User } from '../models/user.model'
 import { createOrder, captureOrder } from '../services/paypal.service'
+import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 
 // JSON validation middleware
 const validateJsonBody = (
@@ -87,3 +88,59 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Payment capture failed', error })
   }
 }
+
+/*************************************
+ * GET ALL PAYMENT HISTORY FOR ADMIN *
+ *************************************/
+export const getAllPayments = catchAsync(
+  async (req: Request, res: Response) => {
+    const { page, limit, skip } = getPaginationParams(req.query)
+
+    const [payments, total] = await Promise.all([
+      paymentInfo
+        .find()
+        .populate('userId', 'name email')
+        .populate('planId', 'title price')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      paymentInfo.countDocuments(),
+    ])
+
+    const meta = buildMetaPagination(total, page, limit)
+
+    res.status(200).json({
+      success: true,
+      data: payments,
+      meta,
+    })
+  }
+)
+
+/**************************************
+ * GET ALL PAYMENT HISTORY FOR A USER *
+ **************************************/
+export const getPaymentsByUserId = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.params.userId
+    const { page, limit, skip } = getPaginationParams(req.query)
+
+    const [payments, total] = await Promise.all([
+      paymentInfo
+        .find({ userId })
+        .populate('planId', 'title price')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
+      paymentInfo.countDocuments({ userId }),
+    ])
+
+    const meta = buildMetaPagination(total, page, limit)
+
+    res.status(200).json({
+      success: true,
+      data: payments,
+      meta,
+    })
+  }
+)
