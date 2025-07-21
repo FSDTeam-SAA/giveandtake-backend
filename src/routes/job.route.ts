@@ -6,6 +6,7 @@ import {
   deleteJob,
   getSingleJob,
   recommendJobs,
+  getArchivedJobs,
 } from '../controllers/job.controller'
 
 const router = express.Router()
@@ -20,5 +21,10 @@ router.delete('/jobs/:id', deleteJob)
  * JOB RECOMMEND SYSTEM *
  ************************/
 router.get('/jobs/recommend', recommendJobs)
+
+/*******************************
+ * GET ARCRIVED JOBS BY USERID *
+ *******************************/
+router.route('/jobs/archived').get(getArchivedJobs)
 
 export default router

@@ -7,7 +7,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    companyName: { type: String, required: true },
+    companyName: { type: String, },
     salaryRange: { type: String },
     location: { type: String },
     shift: { type: String },

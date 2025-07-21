@@ -6,37 +6,102 @@ import { Job } from '../models/job.model'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
+import { create } from 'domain'
 
 /*******************
  * // CREATE A JOB *
  *******************/
+// export const createJob = catchAsync(async (req: Request, res: Response) => {
+//   const {
+//     userId,
+//     title,
+//     description,
+//     location,
+//     companyName,
+//     salaryRange,
+//     shift,
+//     jobType,
+//     company,
+//   } = req.body
+//   if (!userId || !title) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
+//   }
+
+//   const job = await Job.create({
+//     userId,
+//     title,
+//     description,
+//     companyName,
+//     salaryRange,
+//     location,
+//     jobType,
+//     company,
+//     shift,
+//   })
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.CREATED,
+//     success: true,
+//     message: 'Job created successfully',
+//     data: job,
+//   })
+// })
+
 export const createJob = catchAsync(async (req: Request, res: Response) => {
   const {
     userId,
+    companyId,
     title,
     description,
-    location,
     companyName,
     salaryRange,
+    location,
     shift,
-    jobType,
-    company,
+    responsibilities,
+    educationExperience,
+    benefits,
+    vacancy,
+    experience,
+    deadline,
+    status,
+    jobCategoryId,
+    compensation,
+    arcrivedJob,
+    applicationRequirement,
+    customQuestion,
   } = req.body
-  if (!title || !location || !jobType || !company || !shift) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
+
+  if (!userId || !title || !description) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Please fill in all required fields'
+    )
   }
 
-  const job = await Job.create({
+  const job = new Job({
     userId,
+    companyId,
     title,
     description,
     companyName,
     salaryRange,
     location,
-    jobType,
-    company,
     shift,
+    responsibilities,
+    educationExperience,
+    benefits,
+    vacancy,
+    experience,
+    deadline,
+    status,
+    jobCategoryId,
+    compensation,
+    arcrivedJob,
+    applicationRequirement,
+    customQuestion,
   })
+
+  await job.save()
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -59,13 +124,13 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const { page, limit, skip } = getPaginationParams(req.query)
 
   const totalJobs = await Job.countDocuments(filter)
-  console.log("first")
+  console.log('first')
   const jobs = await Job.find({ ...filter, arcrivedJob: false })
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
 
-    console.log(2,jobs)
+  console.log(2, jobs)
 
   const meta = buildMetaPagination(totalJobs, page, limit)
 
@@ -214,5 +279,27 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       exactMatches,
       partialMatches,
     },
+  })
+})
+
+/*******************************
+ * GET ARCRIVED JOBS BY USERID *
+ *******************************/
+export const getArchivedJobs = catchAsync(async (req, res) => {
+  const userId = req.user?._id
+
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
+  const archivedJobs = await Job.find({ userId, arcrivedJob: true }).sort({
+    createAt: -1,
+  })
+
+  if (!archivedJobs)
+    throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Archived jobs fetched successfully',
+    data: archivedJobs,
   })
 })
