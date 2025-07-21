@@ -4,10 +4,10 @@ import { IJob, JobModel } from '../interface/job.interface'
 const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    companyName: { type: String, },
+    companyName: { type: String },
     salaryRange: { type: String },
     location: { type: String },
     shift: { type: String },
@@ -35,6 +35,6 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
   { timestamps: true }
 )
 
-jobSchema.index({ title: 'text', location: 'text', responsibilities: 1 })
+jobSchema.index({ title: 'text', location: 'text', description: 'text' })
 
 export const Job = mongoose.model<IJob, JobModel>('Job', jobSchema)

@@ -129,6 +129,9 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
+    // .populate('userId', 'name email')
+    .populate('companyId')
+
 
   console.log(2, jobs)
 
@@ -287,7 +290,8 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
  *******************************/
 export const getArchivedJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id
-
+  console.log(userId)
+  console.log(1)
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
   const archivedJobs = await Job.find({ userId, arcrivedJob: true }).sort({
     createAt: -1,
