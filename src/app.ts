@@ -22,6 +22,7 @@ import blogRoutes from './routes/blog.route'
 import awardAndHonorRoutes from './routes/awardAndHonor.route'
 import elevatorPitchRoutes from './routes/elevatorPitch.route'
 import createResumeRoutes from './routes/createResume.routes'
+import companyRoutes from './routes/company.route'
 
 const app = express()
 
@@ -58,7 +59,7 @@ app.use('/api/v1/contact', contactUsRoutes)
 app.use('/api/v1/recruiter', recruiterAccoumntRoutes)
 
 /*****************************
- * APIS FOR FOLLOWING SYSTEM *
+ * APIS FOR FcompanyRoutesOLLOWING SYSTEM *
  *****************************/
 app.use('/api/v1/following', followingRoutes)
 
@@ -116,6 +117,13 @@ app.use('/api/v1/elevator-pitch', elevatorPitchRoutes)
  * APIS FOR CREATE RESUME *
  **************************/
 app.use('/api/v1/create-resume', createResumeRoutes)
+
+
+/*********************
+ * APIS FOR COMPANYS *
+ *********************/
+app.use('/api/v1/company', companyRoutes)
+
 
 
 app.use(notFound as never)
