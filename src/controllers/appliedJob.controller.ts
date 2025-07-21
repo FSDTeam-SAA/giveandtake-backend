@@ -92,6 +92,7 @@ export const getApplicationsByUser = catchAsync(
 
     const applications = await AppliedJob.find(filter)
       .populate('jobId')
+      .populate('userId', 'name email')
       .skip(skip)
       .limit(limit)
 
