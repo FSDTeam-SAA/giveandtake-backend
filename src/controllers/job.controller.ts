@@ -132,7 +132,6 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     // .populate('userId', 'name email')
     .populate('companyId')
 
-
   console.log(2, jobs)
 
   const meta = buildMetaPagination(totalJobs, page, limit)
@@ -290,8 +289,6 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
  *******************************/
 export const getArchivedJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id
-  console.log(userId)
-  console.log(1)
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
   const archivedJobs = await Job.find({ userId, arcrivedJob: true }).sort({
     createAt: -1,
@@ -305,5 +302,26 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
     success: true,
     message: 'Archived jobs fetched successfully',
     data: archivedJobs,
+  })
+})
+
+/************************************************
+ * FETCH JOBS THAT RICRUTER AND COMPANY CREATED *
+ ************************************************/
+export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
+  const userId = req.user?._id
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
+  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
+    createAt: -1,
+  })
+
+  if (!Jobs)
+    throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'jobs fetched successfully',
+    data: Jobs,
   })
 })

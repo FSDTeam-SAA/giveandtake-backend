@@ -7,6 +7,7 @@ import {
   getSingleJob,
   recommendJobs,
   getArchivedJobs,
+  getRicruitercompanyJobs,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -25,5 +26,7 @@ router.route('/jobs/recommend').get(recommendJobs)
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
+router.route('/jobs/ricruiter/company').get(protect, getRicruitercompanyJobs)
+
 
 export default router
