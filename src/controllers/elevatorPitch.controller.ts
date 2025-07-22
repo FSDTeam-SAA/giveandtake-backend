@@ -1,16 +1,18 @@
 import path from 'path'
 import fs from 'fs'
-import { Request, Response } from 'express'
+import { Request, response, Response } from 'express'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
-import { getVideoMetadata } from '../services/ffmpeg.service'
+// import { getVideoMetadata } from '../services/ffmpeg.service'
 import catchAsync from '../utils/catchAsync'
 import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary'
 import { paymentInfo } from '../models/paymentInfo.model'
-
-
+import AppError from '../errors/AppError'
+import axios from 'axios'
+import sendResponse from '../utils/sendResponse'
+import httpStatus from 'http-status'
 /*************************
  * CREATE ELEVATOR PITCH *
- *************************/ 
+ *************************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
@@ -68,7 +70,6 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     data: newPitch,
   })
 })
-
 
 /*************************
  * UPDATE ELEVATOR PITCH *
@@ -145,7 +146,7 @@ export const streamElevatorPitch = catchAsync(
 
     const pitch = await ElevatorPitch.findById(id)
     if (!pitch || !pitch.video?.url) {
-       res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Elevator pitch not found',
       })
@@ -156,3 +157,46 @@ export const streamElevatorPitch = catchAsync(
     res.redirect(pitch.video.url)
   }
 )
+
+/********************
+ * SECURE STREAMING *
+ ********************/
+export const secureStream = catchAsync(async (req, res) => {
+  const { id } = req.params
+
+  // verify user has the access to this video or not
+  const pitch = await ElevatorPitch.findOne({
+    _id: id,
+  })
+
+  if (!pitch || !pitch.video?.url) {
+    throw new AppError(404, 'Elevator pitch not found or access denied')
+  }
+
+  //  GET THE HLS PLAYLIST
+  const playlistUrl = pitch.video.url
+
+  try {
+    // PROXY THE REQUEST OF CLOUDINARY
+    const response = await axios.get(playlistUrl, {
+      responseType: 'stream',
+    })
+
+    // SET APPROPRIATE HEADERS
+    res.set({
+      'Content-Type': 'application/vnd.apple.mpegurl',
+      'Cache-Control': 'no-cache',
+    })
+
+    // PIPE THE RESPONSE TO THE CLIENT
+    response.data.pipe(res)
+  } catch (error) {
+    console.error('ERROR PROXYING HLS STREAM:', error)
+    sendResponse(res, {
+      statusCode: 500,
+      success: false,
+      message: 'Error streaming video',
+      data: null,
+    })
+  }
+})
