@@ -11,45 +11,6 @@ import { paymentInfo } from '../models/paymentInfo.model'
 /*************************
  * CREATE ELEVATOR PITCH *
  *************************/ 
-// export const createResume = catchAsync(async (req, res) => {
-//   const { userId } = req.query
-
-//   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
-//     throw new Error('No video file uploaded')
-//   }
-
-//   const localPath = (req.files.videoFile[0] as Express.Multer.File).path
-//   const metadata = await getVideoMetadata(localPath)
-
-//   if (metadata.duration > 30) {
-//     fs.unlinkSync(localPath)
-//     throw new Error('Video duration exceeds 30 seconds. Purchase a plan.')
-//   }
-
-//   const existingPitch = await ElevatorPitch.findOne({ userId })
-//   if (existingPitch) {
-//     fs.unlinkSync(localPath)
-//     throw new Error('You already have an elevator pitch.')
-//   }
-
-//   const cloudinaryResult = await uploadToCloudinary(localPath)
-//   if (!cloudinaryResult) throw new Error('Failed to upload to Cloudinary')
-
-//   const newPitch = await ElevatorPitch.create({
-//     userId,
-//     video: {
-//       url: cloudinaryResult.secure_url,
-//       publicId: cloudinaryResult.public_id,
-//     },
-//   })
-
-//   res.status(201).json({
-//     success: true,
-//     message: 'Elevator pitch created successfully',
-//     data: newPitch,
-//   })
-// })
-
 export const createResume = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
@@ -184,10 +145,11 @@ export const streamElevatorPitch = catchAsync(
 
     const pitch = await ElevatorPitch.findById(id)
     if (!pitch || !pitch.video?.url) {
-      return res.status(404).json({
+       res.status(404).json({
         success: false,
         message: 'Elevator pitch not found',
       })
+      return
     }
 
     // Cloudinary streaming (preferred via frontend player)
