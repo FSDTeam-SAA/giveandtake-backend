@@ -5,6 +5,8 @@ interface IElevatorPitch extends Document {
   video: {
     url: string
     publicId: string
+    hlsUrl: string
+    encryptionKeyUrl: string
   }
 }
 
@@ -19,6 +21,8 @@ const elevatorPitchSchema = new Schema<IElevatorPitch>(
     video: {
       url: String,
       publicId: String,
+      hlsUrl: String,
+      encryptionKeyUrl: String,
     },
   },
   { timestamps: true }

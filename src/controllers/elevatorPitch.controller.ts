@@ -200,3 +200,41 @@ export const secureStream = catchAsync(async (req, res) => {
     })
   }
 })
+
+/*********************
+ * GET ENCRIPTED KEY *
+ *********************/
+export const getEncriptionKey = catchAsync(async (req, res) => {
+  const { id } = req.params
+
+  // VARIFY ACCESS
+  const pitch = await ElevatorPitch.findOne({
+    _id: id,
+  })
+
+  if (!pitch || !pitch.encryptionKeyUrl) {
+    throw new AppError(404, 'Access denied or key not found')
+  }
+
+  // PROXY THE KEY REQUEST
+  try {
+    const response = await axios.get(pitch.encryptionKeyUrl, {
+      responseType: 'arraybuffer',
+    })
+
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    })
+
+    res.send(response.data)
+  } catch (error) {
+    console.error('Error retrieving encryption key:', error)
+    sendResponse(res, {
+      statusCode: 500,
+      success: false,
+      message: 'Error retrieving encryption key',
+      data: null,
+    })
+  }
+})
