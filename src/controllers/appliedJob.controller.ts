@@ -5,6 +5,11 @@ import { AppliedJob } from '../models/appliedJob.model'
 import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination';
+import { CreateResume } from '../models/createResume.model';
+import { Education } from '../models/education.model';
+import { Experience } from '../models/experience.model';
+import { ElevatorPitch } from '../models/elevatorPitch.model';
+
 
 /***************
  * CREATE Application
@@ -26,7 +31,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-/***************
+/****************************
  * GET Applications by Job ID
  ***************/
 export const getApplicationsByJob = catchAsync(
@@ -53,28 +58,6 @@ export const getApplicationsByJob = catchAsync(
 /***************
  * GET Applications by User ID (with optional query)
  ***************/
-// export const getApplicationsByUser = catchAsync(
-//   async (req: Request, res: Response) => {
-//     const { userId } = req.params
-//     const { status } = req.query
-
-//     if (!mongoose.Types.ObjectId.isValid(userId)) {
-//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid User ID')
-//     }
-
-//     const filter: any = { userId }
-//     if (status) filter.status = status
-
-//     const applications = await AppliedJob.find(filter).populate('jobId')
-
-//     res.status(httpStatus.OK).json({
-//       success: true,
-//       message: 'Applications fetched by user',
-//       data: applications,
-//     })
-//   }
-// )
-
 export const getApplicationsByUser = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
@@ -96,13 +79,29 @@ export const getApplicationsByUser = catchAsync(
       .skip(skip)
       .limit(limit)
 
+    const createResume = await CreateResume.findOne({ userId }).lean()
+
+    const education = await Education.find({ userId })
+
+    const experience = await Experience.find({ userId })
+
+    const elevatorPitch = await ElevatorPitch.findOne({ userId })
+
+
+
     const meta = buildMetaPagination(totalItems, page, limit)
 
     res.status(httpStatus.OK).json({
       success: true,
       message: 'Applications fetched by user',
       meta,
-      data: applications,
+      data: {
+        applications,
+        createResume,
+        education,
+        experience,
+        elevatorPitch,
+      },
     })
   }
 )
