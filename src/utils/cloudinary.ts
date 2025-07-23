@@ -1,12 +1,17 @@
 import { v2 as cloudinary } from 'cloudinary'
 import fs from 'fs'
-import config from "../config/config"
+import config from '../config/config'
 import path from 'path'
 
+// cloudinary.config({
+//   cloud_name: config.cloudinary.cloudName,
+//   api_key: config.cloudinary.apiKey,
+//   api_secret: config.cloudinary.apiSecret,
+// })
 cloudinary.config({
-  cloud_name: config.cloudinary.cloudName,
-  api_key: config.cloudinary.apiKey,
-  api_secret: config.cloudinary.apiSecret,
+  cloud_name: 'ddtuyxcsl',
+  api_key: '155594432527689',
+  api_secret: 'fw86uLN2JW_S9tYxb69R48Fym2k',
 })
 
 export const uploadToCloudinary = async (localFilePath: string) => {
@@ -41,17 +46,16 @@ export const deleteFromCloudinary = async (publicId: string) => {
   }
 }
 
-
-
-export const uploadHLS = async (localDir: string, folder: string) => {
+export const uploadHLS = async (localDir: string, cloudinaryFolder: string) => {
   try {
     // Upload all files in the directory
     const files = fs.readdirSync(localDir)
     const uploadPromises = files.map((file) => {
       const filePath = path.join(localDir, file)
+      console.log('firstdsfds')
       return cloudinary.uploader.upload(filePath, {
-        resource_type: 'auto',
-        folder: `${folder}/hls`,
+        resource_type: file.endsWith('.m3u8') ? 'video' : 'raw',
+        folder: cloudinaryFolder,
         use_filename: true,
       })
     })

@@ -1,29 +1,27 @@
-// import ffmpeg from 'fluent-ffmpeg'
-
-// export const getVideoMetadata = (
-//   filePath: string
-// ): Promise<{
-//   duration: number
-//   format: string
-// }> => {
-//   return new Promise((resolve, reject) => {
-//     ffmpeg.ffprobe(filePath, (err, metadata) => {
-//       if (err) return reject(err)
-
-//       const duration = metadata.format.duration || 0
-//       const format = metadata.format.format_name || 'unknown'
-
-//       resolve({ duration, format })
-//     })
-//   })
-// }
-
 import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
 
-const processVideoHLS = async (inputPath: string, outputDir: string) => {
+export const getVideoMetadata = (
+  filePath: string
+): Promise<{
+  duration: number
+  format: string
+}> => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err)
+
+      const duration = metadata.format.duration || 0
+      const format = metadata.format.format_name || 'unknown'
+
+      resolve({ duration, format })
+    })
+  })
+}
+
+export const processVideoHLS = async (inputPath: string, outputDir: string) => {
   // GENERATE RANDOM KEY FOR AES 128 ENCRIPTION
   const key = crypto.randomBytes(16).toString('hex')
   const keyFileName = 'encryption.key'

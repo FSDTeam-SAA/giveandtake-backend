@@ -1,3 +1,4 @@
+// models/elevatorPitch.model.ts
 import mongoose, { Schema, Document } from 'mongoose'
 
 interface IElevatorPitch extends Document {
@@ -5,8 +6,8 @@ interface IElevatorPitch extends Document {
   video: {
     url: string
     publicId: string
-    hlsUrl: string
-    encryptionKeyUrl: string
+    hlsUrl?: string
+    encryptionKeyUrl?: string
   }
 }
 

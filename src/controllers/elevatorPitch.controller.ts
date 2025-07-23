@@ -4,18 +4,33 @@ import { Request, response, Response } from 'express'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 // import { getVideoMetadata } from '../services/ffmpeg.service'
 import catchAsync from '../utils/catchAsync'
-import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary'
+import {
+  uploadToCloudinary,
+  uploadHLS,
+  deleteFromCloudinary,
+} from '../utils/cloudinary'
+
 import { paymentInfo } from '../models/paymentInfo.model'
 import AppError from '../errors/AppError'
 import axios from 'axios'
 import sendResponse from '../utils/sendResponse'
 import httpStatus from 'http-status'
+import { getVideoMetadata, processVideoHLS } from '../services/ffmpeg.service'
+import { v2 as cloudinary } from 'cloudinary'
+
+cloudinary.config({
+  cloud_name: 'ddtuyxcsl',
+  api_key: '155594432527689',
+  api_secret: 'fw86uLN2JW_S9tYxb69R48Fym2k',
+})
+
 /*************************
  * CREATE ELEVATOR PITCH *
  *************************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
+  // 1. Validate Input
   if (!userId || typeof userId !== 'string') {
     throw new Error('User ID is required')
   }
@@ -24,17 +39,20 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     throw new Error('No video file uploaded')
   }
 
-  const localPath = (req.files.videoFile[0] as Express.Multer.File).path
+  const videoFile = req.files.videoFile[0] as Express.Multer.File
+  const localPath = videoFile.path
+
+  // 2. Get Video Metadata
   const metadata = await getVideoMetadata(localPath)
 
-  // Check for existing pitch
+  // 3. Check if user already has a pitch
   const existingPitch = await ElevatorPitch.findOne({ userId })
   if (existingPitch) {
     fs.unlinkSync(localPath)
     throw new Error('You already have an elevator pitch.')
   }
 
-  // Check video duration and plan
+  // 4. Check video duration
   if (metadata.duration > 30) {
     const hasActivePlan = await paymentInfo.findOne({
       userId,
@@ -49,72 +67,62 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  // Upload to Cloudinary
-  const cloudinaryResult = await uploadToCloudinary(localPath)
-  if (!cloudinaryResult) {
-    fs.unlinkSync(localPath)
-    throw new Error('Failed to upload to Cloudinary')
-  }
+  // 5. Create Temp Folder
+  const tempFolder = path.join(__dirname, '../../temp', userId)
+  fs.mkdirSync(tempFolder, { recursive: true })
 
+  // 6. Convert to HLS with Encryption
+  const { playlistPath, keyPath } = await processVideoHLS(localPath, tempFolder)
+
+  // 7. Upload Original, HLS, and Key to Cloudinary
+  
+  try {
+    const [originalUpload, hlsUpload, keyUpload] = await Promise.all([
+      uploadToCloudinary(localPath, `elevator_pitches/${userId}/original`),
+      uploadHLS(tempFolder, `elevator_pitches/${userId}/hls`),
+      cloudinary.uploader.upload(keyPath, {
+        resource_type: 'raw',
+        folder: `elevator_pitches/${userId}/keys`,
+        type: 'authenticated',
+      }),
+    ])
+  } catch (uploadErr) {
+    // fs.rmSync(tempFolder, { recursive: true, force: true })
+    // fs.unlinkSync(localPath)
+    throw new Error(
+      `Cloudinary upload failed: ${uploadErr.message || uploadErr}`
+    )
+  }
+  
+  console.log('first')
+  // 8. Clean up temp files
+  fs.rmSync(tempFolder, { recursive: true, force: true })
+  fs.unlinkSync(localPath)
+
+  // 9. Save to DB
   const newPitch = await ElevatorPitch.create({
     userId,
     video: {
-      url: cloudinaryResult.secure_url,
-      publicId: cloudinaryResult.public_id,
+      url: originalUpload.secure_url,
+      publicId: originalUpload.public_id,
+      hlsUrl: hlsUpload.playlistUrl,
+      encryptionKeyUrl: keyUpload.secure_url,
     },
   })
 
   res.status(201).json({
     success: true,
     message: 'Elevator pitch created successfully',
-    data: newPitch,
+    data: {
+      id: newPitch._id,
+      hlsUrl: `/api/stream/${newPitch._id}`,
+    },
   })
 })
 
 /*************************
  * UPDATE ELEVATOR PITCH *
  *************************/
-export const updateResume = catchAsync(async (req, res) => {
-  const { userId } = req.query
-
-  if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
-    throw new Error('No video file uploaded')
-  }
-
-  const localPath = (req.files.videoFile[0] as Express.Multer.File).path
-  const metadata = await getVideoMetadata(localPath)
-
-  if (metadata.duration > 30) {
-    fs.unlinkSync(localPath)
-    throw new Error('Video duration exceeds 30 seconds')
-  }
-
-  const existingPitch = await ElevatorPitch.findOne({ userId })
-  if (!existingPitch) {
-    fs.unlinkSync(localPath)
-    throw new Error('No elevator pitch to update')
-  }
-
-  if (existingPitch.video?.publicId) {
-    await deleteFromCloudinary(existingPitch.video.publicId)
-  }
-
-  const cloudinaryResult = await uploadToCloudinary(localPath)
-  if (!cloudinaryResult) throw new Error('Failed to upload to Cloudinary')
-
-  existingPitch.video = {
-    url: cloudinaryResult.secure_url,
-    publicId: cloudinaryResult.public_id,
-  }
-
-  await existingPitch.save()
-
-  res.status(200).json({
-    success: true,
-    message: 'Elevator pitch updated successfully',
-    data: existingPitch,
-  })
-})
 
 /*************************
  * DELETE ELEVATOR PITCH *
@@ -161,42 +169,45 @@ export const streamElevatorPitch = catchAsync(
 /********************
  * SECURE STREAMING *
  ********************/
-export const secureStream = catchAsync(async (req, res) => {
+export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
+  const userId = req.user?.id // Assuming you have authentication middleware
 
-  // verify user has the access to this video or not
+  // 1. Verify user has access to this video
   const pitch = await ElevatorPitch.findOne({
     _id: id,
+    userId, // Ensure the video belongs to the requesting user
   })
 
   if (!pitch || !pitch.video?.url) {
-    throw new AppError(404, 'Elevator pitch not found or access denied')
+    return res.status(404).json({
+      success: false,
+      message: 'Elevator pitch not found or access denied',
+    })
   }
 
-  //  GET THE HLS PLAYLIST
+  // 2. Get the HLS playlist
   const playlistUrl = pitch.video.url
 
   try {
-    // PROXY THE REQUEST OF CLOUDINARY
+    // 3. Proxy the request to Cloudinary
     const response = await axios.get(playlistUrl, {
       responseType: 'stream',
     })
 
-    // SET APPROPRIATE HEADERS
+    // 4. Set appropriate headers
     res.set({
       'Content-Type': 'application/vnd.apple.mpegurl',
       'Cache-Control': 'no-cache',
     })
 
-    // PIPE THE RESPONSE TO THE CLIENT
+    // 5. Pipe the response to the client
     response.data.pipe(res)
   } catch (error) {
-    console.error('ERROR PROXYING HLS STREAM:', error)
-    sendResponse(res, {
-      statusCode: 500,
+    console.error('Error proxying HLS stream:', error)
+    res.status(500).json({
       success: false,
       message: 'Error streaming video',
-      data: null,
     })
   }
 })
@@ -204,37 +215,42 @@ export const secureStream = catchAsync(async (req, res) => {
 /*********************
  * GET ENCRIPTED KEY *
  *********************/
-export const getEncriptionKey = catchAsync(async (req, res) => {
-  const { id } = req.params
+export const getEncryptionKey = catchAsync(
+  async (req: Request, res: Response) => {
+    const { id } = req.params
+    const userId = req.user?.id
 
-  // VARIFY ACCESS
-  const pitch = await ElevatorPitch.findOne({
-    _id: id,
-  })
+    // Verify access
+    const pitch = await ElevatorPitch.findOne({
+      _id: id,
+      userId,
+    })
 
-  if (!pitch || !pitch.encryptionKeyUrl) {
-    throw new AppError(404, 'Access denied or key not found')
+    if (!pitch || !pitch.encryptionKeyUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'Access denied or key not found',
+      })
+    }
+
+    // Proxy the key request
+    try {
+      const response = await axios.get(pitch.encryptionKeyUrl, {
+        responseType: 'arraybuffer',
+      })
+
+      res.set({
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'no-store',
+      })
+
+      res.send(response.data)
+    } catch (error) {
+      console.error('Error fetching encryption key:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Error retrieving encryption key',
+      })
+    }
   }
-
-  // PROXY THE KEY REQUEST
-  try {
-    const response = await axios.get(pitch.encryptionKeyUrl, {
-      responseType: 'arraybuffer',
-    })
-
-    res.set({
-      'Content-Type': 'application/octet-stream',
-      'Cache-Control': 'no-store',
-    })
-
-    res.send(response.data)
-  } catch (error) {
-    console.error('Error retrieving encryption key:', error)
-    sendResponse(res, {
-      statusCode: 500,
-      success: false,
-      message: 'Error retrieving encryption key',
-      data: null,
-    })
-  }
-})
+)
