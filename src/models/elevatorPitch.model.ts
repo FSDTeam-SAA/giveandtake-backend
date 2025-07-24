@@ -8,6 +8,11 @@ interface IElevatorPitch extends Document {
     publicId: string
     hlsUrl?: string
     encryptionKeyUrl?: string
+    localPaths?: {
+      original: string
+      hls: string
+      key: string
+    }
   }
 }
 
@@ -24,6 +29,11 @@ const elevatorPitchSchema = new Schema<IElevatorPitch>(
       publicId: String,
       hlsUrl: String,
       encryptionKeyUrl: String,
+      localPaths: {
+      original: String,
+      hls: String,
+      key: String,
+    }
     },
   },
   { timestamps: true }

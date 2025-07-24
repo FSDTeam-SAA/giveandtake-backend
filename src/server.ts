@@ -7,6 +7,7 @@ import cors from 'cors'
 import { setupMessageSocket } from './sockets/message.socket'
 import cron from 'node-cron'
 import { deleteOldDeactivatedUsers } from './jobs/deleteOldDeactivatedUsers'
+import path from 'path'
 
 dotenv.config()
 
@@ -20,6 +21,7 @@ export const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
 })
+
 
 // Runs every day at midnight
 cron.schedule('0 0 * * *', async () => {

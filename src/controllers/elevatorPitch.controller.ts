@@ -27,6 +27,115 @@ cloudinary.config({
 /*************************
  * CREATE ELEVATOR PITCH *
  *************************/
+// export const createResume = catchAsync(async (req: Request, res: Response) => {
+//   const { userId } = req.query
+
+//   // 1. Validate Input
+//   if (!userId || typeof userId !== 'string') {
+//     throw new Error('User ID is required')
+//   }
+
+//   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
+//     throw new Error('No video file uploaded')
+//   }
+
+//   const videoFile = req.files.videoFile[0] as Express.Multer.File
+//   const localPath = videoFile.path
+
+//   if (!fs.existsSync(localPath)) {
+//     throw new Error('Uploaded file does not exist on server')
+//   }
+
+//   // 2. Get Video Metadata
+//   const metadata = await getVideoMetadata(localPath)
+
+//   // 3. Check if user already has a pitch
+//   const existingPitch = await ElevatorPitch.findOne({ userId })
+//   if (existingPitch) {
+//     fs.unlinkSync(localPath)
+//     throw new Error('You already have an elevator pitch.')
+//   }
+
+//   // 4. Check video duration
+//   if (metadata.duration > 30) {
+//     const hasActivePlan = await paymentInfo.findOne({
+//       userId,
+//       paymentStatus: 'complete',
+//     })
+
+//     if (!hasActivePlan) {
+//       fs.unlinkSync(localPath)
+//       throw new Error(
+//         'Video duration exceeds 30 seconds. Please purchase a plan.'
+//       )
+//     }
+//   }
+
+//   // 5. Create Temp Folder
+//   const tempFolder = path.join(__dirname, '../../temp', userId)
+//   fs.mkdirSync(tempFolder, { recursive: true })
+
+//   // 6. Convert to HLS with Encryption
+//   const { playlistPath, keyPath } = await processVideoHLS(localPath, tempFolder)
+
+//   let originalUpload, hlsUpload, keyUpload
+
+//   try {
+//     // // Upload original video file
+//     // originalUpload = await uploadToCloudinary(
+//     //   localPath,
+//     //   `elevator_pitches/${userId}/original`
+//     // )
+
+//     // Upload HLS playlist
+//     hlsUpload = await uploadHLS(tempFolder, `elevator_pitches/${userId}/hls`)
+
+//     // Upload the AES encryption key (.key file) as raw
+//     keyUpload = await cloudinary.uploader.upload(keyPath, {
+//       resource_type: 'raw',
+//       folder: `elevator_pitches/${userId}/keys`,
+//       type: 'authenticated',
+//     })
+//   } catch (uploadErr: any) {
+//     // Clean up if anything fails
+//     if (fs.existsSync(tempFolder)) {
+//       fs.rmSync(tempFolder, { recursive: true, force: true })
+//     }
+//     if (fs.existsSync(localPath)) {
+//       fs.unlinkSync(localPath)
+//     }
+//     throw new Error(`Upload failed: ${uploadErr.message || uploadErr}`)
+//   }
+
+//   // 8. Clean up temp files
+//   if (fs.existsSync(tempFolder)) {
+//     fs.rmSync(tempFolder, { recursive: true, force: true })
+//   }
+//   if (fs.existsSync(localPath)) {
+//     fs.unlinkSync(localPath)
+//   }
+
+//   // 9. Save to DB
+//   const newPitch = await ElevatorPitch.create({
+//     userId,
+//     video: {
+//       // url: originalUpload.secure_url,
+//       // publicId: originalUpload.public_id,
+//       hlsUrl: hlsUpload.playlistUrl,
+//       encryptionKeyUrl: keyUpload.secure_url,
+//     },
+//   })
+
+//   res.status(201).json({
+//     success: true,
+//     message: 'Elevator pitch created successfully',
+//     data: {
+//       id: newPitch._id,
+//       hlsUrl: `/api/stream/${newPitch._id}`,
+//     },
+//   })
+// })
+
 export const createResume = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
@@ -41,6 +150,10 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
   const videoFile = req.files.videoFile[0] as Express.Multer.File
   const localPath = videoFile.path
+
+  if (!fs.existsSync(localPath)) {
+    throw new Error('Uploaded file does not exist on server')
+  }
 
   // 2. Get Video Metadata
   const metadata = await getVideoMetadata(localPath)
@@ -67,58 +180,64 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  // 5. Create Temp Folder
-  const tempFolder = path.join(__dirname, '../../temp', userId)
-  fs.mkdirSync(tempFolder, { recursive: true })
+  // 5. Create Permanent Storage Folder
+  const storageFolder = path.join(__dirname, '../../storage', userId)
+  fs.mkdirSync(storageFolder, { recursive: true })
 
   // 6. Convert to HLS with Encryption
-  const { playlistPath, keyPath } = await processVideoHLS(localPath, tempFolder)
+  const { playlistPath, keyPath } = await processVideoHLS(
+    localPath,
+    storageFolder
+  )
 
-  // 7. Upload Original, HLS, and Key to Cloudinary
-  
-  try {
-    const [originalUpload, hlsUpload, keyUpload] = await Promise.all([
-      uploadToCloudinary(localPath, `elevator_pitches/${userId}/original`),
-      uploadHLS(tempFolder, `elevator_pitches/${userId}/hls`),
-      cloudinary.uploader.upload(keyPath, {
-        resource_type: 'raw',
-        folder: `elevator_pitches/${userId}/keys`,
-        type: 'authenticated',
-      }),
-    ])
-  } catch (uploadErr) {
-    // fs.rmSync(tempFolder, { recursive: true, force: true })
-    // fs.unlinkSync(localPath)
-    throw new Error(
-      `Cloudinary upload failed: ${uploadErr.message || uploadErr}`
-    )
-  }
-  
-  console.log('first')
-  // 8. Clean up temp files
-  fs.rmSync(tempFolder, { recursive: true, force: true })
-  fs.unlinkSync(localPath)
+  // 7. Move original video to storage
+  const originalFileName = `original-${Date.now()}${path.extname(localPath)}`
+  const originalStoragePath = path.join(storageFolder, originalFileName)
+  fs.renameSync(localPath, originalStoragePath)
+
+  // 8. Prepare URLs for database
+  const baseUrl = `${req.protocol}://${req.get('host')}/storage/${userId}`
 
   // 9. Save to DB
   const newPitch = await ElevatorPitch.create({
     userId,
     video: {
-      url: originalUpload.secure_url,
-      publicId: originalUpload.public_id,
-      hlsUrl: hlsUpload.playlistUrl,
-      encryptionKeyUrl: keyUpload.secure_url,
+      url: `${baseUrl}/${originalFileName}`,
+      hlsUrl: `${baseUrl}/playlist.m3u8`,
+      encryptionKeyUrl: `${baseUrl}/encryption.key`,
+      // Store local paths as well if needed for server-side processing
+      localPaths: {
+        original: originalStoragePath,
+        hls: playlistPath,
+        key: keyPath,
+      },
     },
   })
 
+  // 10. Respond with success
   res.status(201).json({
     success: true,
     message: 'Elevator pitch created successfully',
     data: {
       id: newPitch._id,
       hlsUrl: `/api/stream/${newPitch._id}`,
+      originalUrl: `${baseUrl}/${originalFileName}`,
     },
   })
 })
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*************************
  * UPDATE ELEVATOR PITCH *

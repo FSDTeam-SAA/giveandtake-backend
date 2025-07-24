@@ -14,16 +14,26 @@ cloudinary.config({
   api_secret: 'fw86uLN2JW_S9tYxb69R48Fym2k',
 })
 
-export const uploadToCloudinary = async (localFilePath: string) => {
+export const uploadToCloudinary = async (
+  localFilePath: string,
+  folderPath?: string
+) => {
   try {
     if (!localFilePath) return null
 
-    const response = await cloudinary.uploader.upload(localFilePath, {
+    const uploadOptions: any = {
       resource_type: 'auto',
-    })
+    }
 
-    // Remove file from local storage after upload
-    fs.unlinkSync(localFilePath)
+    // Only add folder if provided
+    if (folderPath) {
+      uploadOptions.folder = folderPath
+    }
+
+    const response = await cloudinary.uploader.upload(
+      localFilePath,
+      uploadOptions
+    )
 
     return response
   } catch (error) {
@@ -31,7 +41,7 @@ export const uploadToCloudinary = async (localFilePath: string) => {
     if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath)
     }
-    return null
+    throw error
   }
 }
 
@@ -46,28 +56,58 @@ export const deleteFromCloudinary = async (publicId: string) => {
   }
 }
 
+// export const uploadHLS = async (localDir: string, cloudinaryFolder: string) => {
+//   try {
+//     // Upload all files in the directory
+//     const files = fs.readdirSync(localDir)
+//     const uploadPromises = files.map((file) => {
+//       const filePath = path.join(localDir, file)
+//       console.log('firstdsfds')
+//       return cloudinary.uploader.upload(filePath, {
+//         resource_type: file.endsWith('.m3u8') ? 'video' : 'raw',
+//         folder: cloudinaryFolder,
+//         use_filename: true,
+//       })
+//     })
+
+//     const results = await Promise.all(uploadPromises)
+
+//     // Find the playlist file
+//     const playlist = results.find((r) => r.original_filename === 'playlist')
+
+//     return {
+//       playlistUrl: playlist?.secure_url,
+//       resources: results,
+//     }
+//   } catch (error) {
+//     console.error('Error uploading HLS:', error)
+//     throw error
+//   }
+// }
+
+
 export const uploadHLS = async (localDir: string, cloudinaryFolder: string) => {
   try {
-    // Upload all files in the directory
+    // Find the playlist file
     const files = fs.readdirSync(localDir)
-    const uploadPromises = files.map((file) => {
-      const filePath = path.join(localDir, file)
-      console.log('firstdsfds')
-      return cloudinary.uploader.upload(filePath, {
-        resource_type: file.endsWith('.m3u8') ? 'video' : 'raw',
-        folder: cloudinaryFolder,
-        use_filename: true,
-      })
+    const playlistFile = files.find((file) => file.endsWith('.m3u8'))
+
+    if (!playlistFile) {
+      throw new Error('No playlist file found')
+    }
+
+    const playlistPath = path.join(localDir, playlistFile)
+
+    // Upload only the playlist file
+    const result = await cloudinary.uploader.upload(playlistPath, {
+      resource_type: 'video',
+      folder: cloudinaryFolder,
+      use_filename: true,
     })
 
-    const results = await Promise.all(uploadPromises)
-
-    // Find the playlist file
-    const playlist = results.find((r) => r.original_filename === 'playlist')
-
     return {
-      playlistUrl: playlist?.secure_url,
-      resources: results,
+      playlistUrl: result.secure_url,
+      public_id: result.public_id,
     }
   } catch (error) {
     console.error('Error uploading HLS:', error)

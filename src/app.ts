@@ -23,6 +23,7 @@ import awardAndHonorRoutes from './routes/awardAndHonor.route'
 import elevatorPitchRoutes from './routes/elevatorPitch.route'
 import createResumeRoutes from './routes/createResume.routes'
 import companyRoutes from './routes/company.route'
+import path from 'path'
 
 const app = express()
 
@@ -31,6 +32,16 @@ app.use(
     origin: '*', //  frontend origin
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
+  })
+)
+
+// Serve static files with directory listing disabled
+app.use(
+  '/storage',
+  express.static(path.join(__dirname, '../storage'), {
+    dotfiles: 'deny', // Prevent access to dotfiles (.env, etc.)
+    index: false, // Disable directory index
+    redirect: false, // Disable path redirects
   })
 )
 
@@ -118,13 +129,10 @@ app.use('/api/v1/elevator-pitch', elevatorPitchRoutes)
  **************************/
 app.use('/api/v1/create-resume', createResumeRoutes)
 
-
 /*********************
  * APIS FOR COMPANYS *
  *********************/
 app.use('/api/v1/company', companyRoutes)
-
-
 
 app.use(notFound as never)
 app.use(globalErrorHandler)
