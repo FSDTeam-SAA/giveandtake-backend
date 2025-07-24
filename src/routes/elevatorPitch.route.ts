@@ -1,20 +1,56 @@
 import express from 'express'
 import {
   createResume,
-  updateResume,
   deleteResume,
   streamElevatorPitch,
   secureStream,
   getEncryptionKey,
+  checkVideoAccess,
 } from '../controllers/elevatorPitch.controller'
 import { resumeUpload } from '../middlewares/multer.middleware'
+import { protect } from '../middlewares/auth.middleware'
+// import { checkVideoAccess } from '../controllers/elevatorPitch.controller'
 
 const router = express.Router()
 
-router.post('/video', resumeUpload, createResume)
-// router.put('/video', resumeUpload, updateResume)
-router.delete('/video', deleteResume)
-router.get('/stream/:id', secureStream)
-router.get('/key/:id', getEncryptionKey)
+router.post('/video', protect, resumeUpload, createResume)
+router.delete('/video', protect, deleteResume)
+router.get('/stream/:id',
+  //  protect,
+    // checkVideoAccess,
+     streamElevatorPitch)
+router.get('/stream/:userId/:segment',
+  //  protect,
+    // checkVideoAccess,
+     secureStream)
+router.get('/key/:userId/:key', 
+  // protect,
+  //  checkVideoAccess,
+    getEncryptionKey)
 
 export default router
+
+
+
+
+
+// import express from 'express'
+// import {
+//   createResume,
+//   updateResume,
+//   deleteResume,
+//   streamElevatorPitch,
+//   secureStream,
+//   getEncryptionKey,
+// } from '../controllers/elevatorPitch.controller'
+// import { resumeUpload } from '../middlewares/multer.middleware'
+
+// const router = express.Router()
+
+// router.post('/video', resumeUpload, createResume)
+// // router.put('/video', resumeUpload, updateResume)
+// router.delete('/video', deleteResume)
+// router.get('/stream/:id', secureStream)
+// router.get('/key/:id', getEncryptionKey)
+
+// export default router
