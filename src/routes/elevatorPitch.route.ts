@@ -14,19 +14,31 @@ import { protect } from '../middlewares/auth.middleware'
 const router = express.Router()
 
 router.post('/video', protect, resumeUpload, createResume)
+
+
 router.delete('/video', protect, deleteResume)
+
+router.get(
+  '/stream/:userId/:segment',
+  //  protect,
+  // checkVideoAccess,
+  secureStream
+)
+
+
 router.get('/stream/:id',
   //  protect,
     // checkVideoAccess,
      streamElevatorPitch)
-router.get('/stream/:userId/:segment',
-  //  protect,
-    // checkVideoAccess,
-     secureStream)
+
+
+
+
 router.get('/key/:userId/:key', 
   // protect,
   //  checkVideoAccess,
     getEncryptionKey)
+
 
 export default router
 

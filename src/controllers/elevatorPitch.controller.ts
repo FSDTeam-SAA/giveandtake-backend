@@ -73,7 +73,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   fs.renameSync(tempPath, originalPath)
 
   // 9. Process video to HLS with encryption
-  const { playlistPath, keyPath } = await processVideoHLS(originalPath, hlsDir)
+  const { playlistPath, keyPath } = await processVideoHLS(originalPath, hlsDir, userId)
 
   // 10. Generate accessible URLs
   const baseUrl = `${req.protocol}://${req.get('host')}`
@@ -111,7 +111,7 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
 
   const pitch = await ElevatorPitch.findOne({ userId })
   if (!pitch) {
-    throw new AppError('Elevator pitch not found', httpStatus.NOT_FOUND)
+    throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
   }
 
   // Clean up local files
@@ -141,7 +141,7 @@ export const checkVideoAccess = catchAsync(
 
     const pitch = await ElevatorPitch.findById(id)
     if (!pitch) {
-      throw new AppError('Elevator pitch not found', httpStatus.NOT_FOUND)
+      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
     }
 
     // Check if the user is the owner
@@ -155,7 +155,7 @@ export const checkVideoAccess = catchAsync(
     })
 
     if (!appliedJob) {
-      throw new AppError('Access denied', httpStatus.FORBIDDEN)
+      throw new AppError( httpStatus.FORBIDDEN,'Access denied')
     }
 
     // Check if the requesting user is the job poster
@@ -165,9 +165,34 @@ export const checkVideoAccess = catchAsync(
       return next()
     }
 
-    throw new AppError('Access denied', httpStatus.FORBIDDEN)
+    throw new AppError(httpStatus.FORBIDDEN, 'Access denied')
   }
 )
+
+// export const streamElevatorPitch = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { id } = req.params
+
+//     const pitch = await ElevatorPitch.findById(id)
+//     if (!pitch || !pitch.video?.hlsUrl || !pitch.video.localPaths?.hls) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+//     }
+
+//     const playlistPath = pitch.video.localPaths.hls
+//     if (!fs.existsSync(playlistPath)) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'HLS playlist not found')
+//     }
+
+//     res.set({
+//       'Content-Type': 'application/vnd.apple.mpegurl',
+//       'Cache-Control': 'no-cache',
+//     })
+
+//     const playlistContent = fs.readFileSync(playlistPath, 'utf-8')
+//     res.send(playlistContent)
+//   }
+// )
+
 
 export const streamElevatorPitch = catchAsync(
   async (req: Request, res: Response) => {
@@ -175,20 +200,34 @@ export const streamElevatorPitch = catchAsync(
 
     const pitch = await ElevatorPitch.findById(id)
     if (!pitch || !pitch.video?.hlsUrl || !pitch.video.localPaths?.hls) {
-      throw new AppError('Elevator pitch not found', httpStatus.NOT_FOUND)
+      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
     }
 
     const playlistPath = pitch.video.localPaths.hls
+    const userId = pitch.userId.toString()
+
     if (!fs.existsSync(playlistPath)) {
-      throw new AppError('HLS playlist not found', httpStatus.NOT_FOUND)
+      throw new AppError(httpStatus.NOT_FOUND, 'HLS playlist not found')
     }
+
+    let playlistContent = fs.readFileSync(playlistPath, 'utf-8')
+
+    // ✅ Rewrite all .ts segment lines to point to secure endpoint
+    playlistContent = playlistContent
+      .split('\n')
+      .map((line) => {
+        if (line.trim().endsWith('.ts')) {
+          return `/api/v1/elevator-pitch/stream/${userId}/${line.trim()}`
+        }
+        return line
+      })
+      .join('\n')
 
     res.set({
       'Content-Type': 'application/vnd.apple.mpegurl',
       'Cache-Control': 'no-cache',
     })
 
-    const playlistContent = fs.readFileSync(playlistPath, 'utf-8')
     res.send(playlistContent)
   }
 )
@@ -199,7 +238,7 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const segmentPath = path.join(hlsDir, segment)
 
   if (!fs.existsSync(segmentPath)) {
-    throw new AppError('Segment not found', httpStatus.NOT_FOUND)
+    throw new AppError(httpStatus.NOT_FOUND, 'Segment not found')
   }
 
   res.set({
@@ -223,7 +262,7 @@ export const getEncryptionKey = catchAsync(
     )
 
     if (!fs.existsSync(keyPath)) {
-      throw new AppError('Encryption key not found', httpStatus.NOT_FOUND)
+      throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
     }
 
     res.set({
