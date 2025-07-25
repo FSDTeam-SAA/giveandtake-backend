@@ -6,7 +6,7 @@ import catchAsync from '../utils/catchAsync';
 
 // Dummy allowed values for career fields
 const dummyCareerFields = ['Technology', 'Healthcare', 'Finance'];
-const dummyCareerSubfields = {
+const dummyCareerSubfields: any = {
   Technology: ['Software Development', 'Data Science', 'IT Support'],
   Healthcare: ['Nursing', 'Surgery'],
   Finance: ['Accounting', 'Investment Banking'],
