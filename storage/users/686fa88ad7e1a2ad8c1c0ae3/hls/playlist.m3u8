@@ -3,7 +3,7 @@
 #EXT-X-TARGETDURATION:12
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-PLAYLIST-TYPE:VOD
-#EXT-X-KEY:METHOD=AES-128,URI="/api/v1/elevator-pitch/key/686fa88ad7e1a2ad8c1c0ae3/encryption.key",IV=0x03d83e6095a2112c8b9f3a96fb931d5d
+#EXT-X-KEY:METHOD=AES-128,URI="/api/v1/elevator-pitch/key/686fa88ad7e1a2ad8c1c0ae3/encryption.key",IV=0xa3d050f141ed89286923dbb9fcaee005
 #EXTINF:12.133333,
 playlist0.ts
 #EXTINF:7.833333,

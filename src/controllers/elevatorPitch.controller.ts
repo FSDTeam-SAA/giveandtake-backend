@@ -9,28 +9,136 @@ import httpStatus from 'http-status'
 import { getVideoMetadata, processVideoHLS } from '../services/ffmpeg.service'
 import { Job } from '../models/job.model'
 import { paymentInfo } from '../models/paymentInfo.model'
+import { uploadHLS } from '../utils/cloudinary'
+import axios from 'axios'
+
+// export const createResume = catchAsync(async (req: Request, res: Response) => {
+//   const { userId } = req.query
+
+//   // 1. Validate Input
+//   if (!userId || typeof userId !== 'string') {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+//   }
+//   // @ts-ignore
+//   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'No video file uploaded')
+//   }
+//   // @ts-ignore
+//   const videoFile = req.files.videoFile[0]
+//   const tempPath = videoFile.path
+
+//   // 2. Validate file exists
+//   if (!fs.existsSync(tempPath)) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Uploaded file not found')
+//   }
+
+//   // 3. Check if user already has a pitch
+//   const existingPitch = await ElevatorPitch.findOne({ userId })
+//   if (existingPitch) {
+//     fs.unlinkSync(tempPath)
+//     throw new AppError(
+//       httpStatus.BAD_REQUEST,
+//       'You already have an elevator pitch'
+//     )
+//   }
+
+//   // 4. Get Video Metadata
+//   const metadata = await getVideoMetadata(tempPath)
+
+//   // 5. Check video duration
+//   if (metadata.duration > 30) {
+//     const hasActivePlan = await paymentInfo.findOne({
+//       userId,
+//       paymentStatus: 'complete',
+//     })
+//     if (!hasActivePlan) {
+//       fs.unlinkSync(tempPath)
+//       throw new AppError(
+//         httpStatus.PAYMENT_REQUIRED,
+//         'Video duration exceeds 30 seconds. Please purchase a plan.'
+//       )
+//     }
+//   }
+
+//   // 6. Create user storage directory
+//   const userDir = path.join(__dirname, '../../storage/users', userId)
+//   fs.mkdirSync(userDir, { recursive: true })
+
+//   // 7. Generate secure filenames
+//   const originalFilename = `video_${Date.now()}${path.extname(
+//     videoFile.originalname
+//   )}`
+//   const originalPath = path.join(userDir, originalFilename)
+//   const hlsDir = path.join(userDir, 'hls')
+//   fs.mkdirSync(hlsDir, { recursive: true })
+
+//   // 8. Move original file to permanent storage
+//   fs.renameSync(tempPath, originalPath)
+
+//   // @ts-ignore
+//   // 9. Process video to HLS with encryption
+//   const { playlistPath, keyPath } = await processVideoHLS(
+//     originalPath,
+//     hlsDir,
+//     userId
+//   )
+//   fs.unlinkSync(originalPath)
+
+//   // 🔁 9.5 Upload HLS files to Cloudinary
+//   const cloudinaryFolder = `elevator_pitches/${userId}`
+//   const uploadedFiles = await uploadHLS(hlsDir, cloudinaryFolder)
+
+//   // // 10. Generate accessible URLs
+//   // const baseUrl = `${req.protocol}://${req.get('host')}`
+//   // const hlsUrl = `${baseUrl}/stream/${userId}/playlist.m3u8`
+//   // const keyUrl = `${baseUrl}/key/${userId}/encryption.key`
+
+//   // 11. Save to database
+//   const newPitch = await ElevatorPitch.create({
+//     userId,
+//     video: {
+//       url: `${baseUrl}/videos/${userId}/${originalFilename}`,
+//       hlsUrl,
+//       encryptionKeyUrl: keyUrl,
+//       localPaths: {
+//         original: originalPath,
+//         hls: playlistPath,
+//         key: keyPath,
+//       },
+//     },
+//   })
+
+//   // 12. Send response
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Elevator pitch created successfully',
+//     data: {
+//       id: newPitch._id,
+//       hlsUrl: `/api/stream/${newPitch._id}`,
+//     },
+//   })
+// })
 
 export const createResume = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.query
 
-  // 1. Validate Input
   if (!userId || typeof userId !== 'string') {
     throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
   }
+
   // @ts-ignore
   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'No video file uploaded')
   }
+
   // @ts-ignore
   const videoFile = req.files.videoFile[0]
   const tempPath = videoFile.path
 
-  // 2. Validate file exists
   if (!fs.existsSync(tempPath)) {
     throw new AppError(httpStatus.NOT_FOUND, 'Uploaded file not found')
   }
 
-  // 3. Check if user already has a pitch
   const existingPitch = await ElevatorPitch.findOne({ userId })
   if (existingPitch) {
     fs.unlinkSync(tempPath)
@@ -40,10 +148,8 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     )
   }
 
-  // 4. Get Video Metadata
   const metadata = await getVideoMetadata(tempPath)
 
-  // 5. Check video duration
   if (metadata.duration > 30) {
     const hasActivePlan = await paymentInfo.findOne({
       userId,
@@ -58,56 +164,57 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  // 6. Create user storage directory
-  const userDir = path.join(__dirname, '../../storage/users', userId)
-  fs.mkdirSync(userDir, { recursive: true })
-
-  // 7. Generate secure filenames
-  const originalFilename = `video_${Date.now()}${path.extname(
-    videoFile.originalname
-  )}`
-  const originalPath = path.join(userDir, originalFilename)
-  const hlsDir = path.join(userDir, 'hls')
+  // ✅ Process video to HLS
+  const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`)
   fs.mkdirSync(hlsDir, { recursive: true })
 
-  // 8. Move original file to permanent storage
-  fs.renameSync(tempPath, originalPath)
-
   // @ts-ignore
-  // 9. Process video to HLS with encryption
   const { playlistPath, keyPath } = await processVideoHLS(
-    originalPath,
+    tempPath,
     hlsDir,
     userId
   )
+  fs.unlinkSync(tempPath)
 
-  // 10. Generate accessible URLs
-  const baseUrl = `${req.protocol}://${req.get('host')}`
-  const hlsUrl = `${baseUrl}/stream/${userId}/playlist.m3u8`
-  const keyUrl = `${baseUrl}/key/${userId}/encryption.key`
+  // ✅ Upload HLS files to Cloudinary
+  const cloudinaryFolder = `elevator_pitches/${userId}/hls`
+  const uploadedFiles = await uploadHLS(hlsDir, cloudinaryFolder)
+  console.log('first', uploadedFiles)
 
-  // 11. Save to database
+  // @ts-ignore
+  // ✅ Extract Cloudinary URLs
+  const hlsUrl =
+    uploadedFiles.uploadedFiles?.['playlist.m3u8']?.secure_url || ''
+  // @ts-ignore
+
+  const encryptionKeyUrl =
+    uploadedFiles.uploadedFiles?.['encryption.key']?.secure_url || ''
+
+  // ✅ Clean up HLS temp directory
+  fs.rmSync(hlsDir, { recursive: true, force: true })
+
+  // ✅ Save to DB with only Cloudinary URLs
   const newPitch = await ElevatorPitch.create({
     userId,
     video: {
-      url: `${baseUrl}/videos/${userId}/${originalFilename}`,
+      url: null,
       hlsUrl,
-      encryptionKeyUrl: keyUrl,
+      encryptionKeyUrl,
       localPaths: {
-        original: originalPath,
-        hls: playlistPath,
-        key: keyPath,
-      },
+        original: null,
+        hls: hlsUrl,
+        key: encryptionKeyUrl,
+      }, // Optional: remove or mark as deprecated in schema
     },
   })
 
-  // 12. Send response
   res.status(httpStatus.CREATED).json({
     success: true,
-    message: 'Elevator pitch created successfully',
+    message: 'Elevator pitch created and uploaded to Cloudinary successfully',
     data: {
       id: newPitch._id,
-      hlsUrl: `/api/stream/${newPitch._id}`,
+      hlsUrl,
+      encryptionKeyUrl,
     },
   })
 })
@@ -139,6 +246,44 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
+// export const streamElevatorPitch = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { id } = req.params
+
+//     const pitch = await ElevatorPitch.findById(id)
+//     if (!pitch || !pitch.video?.hlsUrl) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+//     }
+
+//     const playlistPath = pitch.video.localPaths.hls
+//     const userId = pitch.userId.toString()
+
+//     // if (!fs.existsSync(playlistPath)) {
+//     //   throw new AppError(httpStatus.NOT_FOUND, 'HLS playlist not found')
+//     // }
+
+//     // let playlistContent = fs.readFileSync(playlistPath, 'utf-8')
+
+//     // ✅ Rewrite all .ts segment lines to point to secure endpoint
+//     playlistContent = playlistContent
+//       .split('\n')
+//       .map((line) => {
+//         if (line.trim().endsWith('.ts')) {
+//           return `/api/v1/elevator-pitch/stream/${userId}/${line.trim()}`
+//         }
+//         return line
+//       })
+//       .join('\n')
+
+//     res.set({
+//       'Content-Type': 'application/vnd.apple.mpegurl',
+//       'Cache-Control': 'no-cache',
+//     })
+
+//     res.send(playlistContent)
+//   }
+// )
+
 
 
 export const streamElevatorPitch = catchAsync(
@@ -146,25 +291,23 @@ export const streamElevatorPitch = catchAsync(
     const { id } = req.params
 
     const pitch = await ElevatorPitch.findById(id)
-    if (!pitch || !pitch.video?.hlsUrl || !pitch.video.localPaths?.hls) {
+    if (!pitch || !pitch.video?.hlsUrl) {
       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
     }
 
-    const playlistPath = pitch.video.localPaths.hls
+    const hlsUrl = pitch.video.hlsUrl
     const userId = pitch.userId.toString()
 
-    if (!fs.existsSync(playlistPath)) {
-      throw new AppError(httpStatus.NOT_FOUND, 'HLS playlist not found')
-    }
+    // ✅ Fetch playlist.m3u8 from Cloudinary
+    const playlistRes = await axios.get(hlsUrl)
+    let playlistContent = playlistRes.data as string
 
-    let playlistContent = fs.readFileSync(playlistPath, 'utf-8')
-
-    // ✅ Rewrite all .ts segment lines to point to secure endpoint
+    // ✅ Rewrite .ts segment lines to secure proxy endpoint
     playlistContent = playlistContent
       .split('\n')
       .map((line) => {
         if (line.trim().endsWith('.ts')) {
-          return `/api/v1/elevator-pitch/stream/${userId}/${line.trim()}`
+          return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${line.trim()}`
         }
         return line
       })
@@ -179,45 +322,113 @@ export const streamElevatorPitch = catchAsync(
   }
 )
 
+
+
+
+// export const secureStream = catchAsync(async (req: Request, res: Response) => {
+//   const { userId, segment } = req.params
+//   const hlsDir = path.join(__dirname, '../../storage/users', userId, 'hls')
+//   const segmentPath = path.join(hlsDir, segment)
+
+//   if (!fs.existsSync(segmentPath)) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Segment not found')
+//   }
+
+//   res.set({
+//     'Content-Type': 'video/mp2t',
+//     'Cache-Control': 'no-cache',
+//   })
+
+//   const stream = fs.createReadStream(segmentPath)
+//   stream.pipe(res)
+// })
+
 export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const { userId, segment } = req.params
-  const hlsDir = path.join(__dirname, '../../storage/users', userId, 'hls')
-  const segmentPath = path.join(hlsDir, segment)
 
-  if (!fs.existsSync(segmentPath)) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Segment not found')
+  // Find pitch by userId
+  const pitch = await ElevatorPitch.findOne({ userId })
+  if (!pitch || !pitch.video?.hlsUrl) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
   }
 
-  res.set({
-    'Content-Type': 'video/mp2t',
-    'Cache-Control': 'no-cache',
-  })
+  // Derive base URL from playlist.m3u8
+  const baseUrl = pitch.video.hlsUrl.replace(/playlist\.m3u8$/, '')
 
-  const stream = fs.createReadStream(segmentPath)
-  stream.pipe(res)
+  // Construct full URL to the .ts segment in Cloudinary
+  const segmentUrl = `${baseUrl}${segment}`
+
+  try {
+    const response = await axios.get(segmentUrl, { responseType: 'stream' })
+
+    res.set({
+      'Content-Type': 'video/mp2t',
+      'Cache-Control': 'no-cache',
+    })
+
+    response.data.pipe(res)
+  } catch (err) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Segment not found in Cloudinary')
+  }
 })
+
+// export const getEncryptionKey = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { userId, key } = req.params
+//     const keyPath = path.join(
+//       __dirname,
+//       '../../storage/users',
+//       userId,
+//       'hls',
+//       key
+//     )
+
+//     if (!fs.existsSync(keyPath)) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
+//     }
+
+//     res.set({
+//       'Content-Type': 'application/octet-stream',
+//       'Cache-Control': 'no-store',
+//     })
+
+//     const keyContent = fs.readFileSync(keyPath)
+//     res.send(keyContent)
+//   }
+// )
+
+
 
 export const getEncryptionKey = catchAsync(
   async (req: Request, res: Response) => {
     const { userId, key } = req.params
-    const keyPath = path.join(
-      __dirname,
-      '../../storage/users',
-      userId,
-      'hls',
-      key
-    )
 
-    if (!fs.existsSync(keyPath)) {
+    const pitch = await ElevatorPitch.findOne({ userId })
+    if (!pitch || !pitch.video?.encryptionKeyUrl) {
       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
     }
 
-    res.set({
-      'Content-Type': 'application/octet-stream',
-      'Cache-Control': 'no-store',
-    })
+    // Check that requested file matches the expected key filename (basic validation)
+    if (!pitch.video.encryptionKeyUrl.includes(key)) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid key name requested')
+    }
 
-    const keyContent = fs.readFileSync(keyPath)
-    res.send(keyContent)
+    try {
+      const keyResponse = await axios.get(pitch.video.encryptionKeyUrl, {
+        responseType: 'arraybuffer',
+      })
+
+      res.set({
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'no-store',
+      })
+
+      res.send(Buffer.from(keyResponse.data))
+    } catch (err) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        'Failed to fetch encryption key from Cloudinary'
+      )
+    }
   }
 )

@@ -15,7 +15,6 @@ const router = express.Router()
 router.post('/video', protect, resumeUpload, createResume)
 
 
-router.delete('/video', protect, deleteResume)
 
 router.get(
   '/stream/:userId/:segment',
@@ -24,12 +23,13 @@ router.get(
   secureStream
 )
 
+router.delete('/video', protect, deleteResume)
 
 router.get('/stream/:id',
   //  protect,
-    // checkVideoAccess,
-     streamElevatorPitch)
-
+  // checkVideoAccess,
+  streamElevatorPitch)
+  
 
 
 
