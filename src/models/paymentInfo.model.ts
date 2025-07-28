@@ -17,16 +17,24 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       ref: 'SubscriptionPlan',
       required: true,
     },
-    planType: {type: String, enum: [ 'payAsYouGo','basic', 'bronze', 'silver', 'gold', 'platinum']},
+    planType: {
+      type: String,
+      enum: ['payAsYouGo', 'basic', 'bronze', 'silver', 'gold', 'platinum'],
+    },
     paymentStatus: {
       type: String,
       enum: ['complete', 'pending', 'failed'],
       default: 'pending',
     },
-    duration: {type: String, enum:['monthly', 'yearly']},
-    seasonId: { type: String }, 
+    duration: { type: String, enum: ['monthly', 'yearly'] },
+    seasonId: { type: String },
     transactionId: { type: String, required: true },
-    paymentMethod: { type: String }, 
+    paymentMethod: { type: String },
+    planStatus: {
+      type: String,
+      enum: ['active', 'deactivate'],
+      default: 'active',
+    },
   },
   { timestamps: true }
 )

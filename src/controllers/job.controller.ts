@@ -7,6 +7,7 @@ import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
 import { create } from 'domain'
+import { checkIfUserCanPostJob } from '../helper/canPostJob'
 
 /*******************
  * // CREATE A JOB *
@@ -41,6 +42,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
       'Please fill in all required fields'
     )
   }
+
+  await checkIfUserCanPostJob(userId)
 
   const job = new Job({
     userId,
@@ -279,8 +282,7 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
     createAt: -1,
   })
 
-  if (!Jobs)
-    throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
+  if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
