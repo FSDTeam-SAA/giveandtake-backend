@@ -17,6 +17,7 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       ref: 'SubscriptionPlan',
       required: true,
     },
+    planType: {type: String, enum: [ 'payAsYouGo','basic', 'bronze', 'silver', 'gold', 'platinum']},
     paymentStatus: {
       type: String,
       enum: ['complete', 'pending', 'failed'],
