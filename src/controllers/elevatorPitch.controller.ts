@@ -11,6 +11,7 @@ import { Job } from '../models/job.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { uploadHLS } from '../utils/cloudinary'
 import axios from 'axios'
+import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
 
 /*************************************
  * ADD RESUME VIDEO (ELEVATOR PITCH) *
@@ -46,19 +47,23 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
   const metadata = await getVideoMetadata(tempPath)
 
-  if (metadata.duration > 30) {
-    const hasActivePlan = await paymentInfo.findOne({
-      userId,
-      paymentStatus: 'complete',
-    })
-    if (!hasActivePlan) {
-      fs.unlinkSync(tempPath)
-      throw new AppError(
-        httpStatus.PAYMENT_REQUIRED,
-        'Video duration exceeds 30 seconds. Please purchase a plan.'
-      )
-    }
-  }
+
+  // VALIDATE UPLOAD PERMISSION
+  await validateElevatorPitchAccess(userId, metadata.duration)
+
+  // if (metadata.duration > 30) {
+  //   const hasActivePlan = await paymentInfo.findOne({
+  //     userId,
+  //     paymentStatus: 'complete',
+  //   })
+  //   if (!hasActivePlan) {
+  //     fs.unlinkSync(tempPath)
+  //     throw new AppError(
+  //       httpStatus.PAYMENT_REQUIRED,
+  //       'Video duration exceeds 30 seconds. Please purchase a plan.'
+  //     )
+  //   }
+  // }
 
   // ✅ Process video to HLS
   const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`)
