@@ -23,6 +23,7 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       enum: ['complete', 'pending', 'failed'],
       default: 'pending',
     },
+    duration: {type: String, enum:['monthly', 'yearly']},
     seasonId: { type: String }, 
     transactionId: { type: String, required: true },
     paymentMethod: { type: String }, 

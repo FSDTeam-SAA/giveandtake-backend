@@ -11,42 +11,6 @@ import { create } from 'domain'
 /*******************
  * // CREATE A JOB *
  *******************/
-// export const createJob = catchAsync(async (req: Request, res: Response) => {
-//   const {
-//     userId,
-//     title,
-//     description,
-//     location,
-//     companyName,
-//     salaryRange,
-//     shift,
-//     jobType,
-//     company,
-//   } = req.body
-//   if (!userId || !title) {
-//     throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
-//   }
-
-//   const job = await Job.create({
-//     userId,
-//     title,
-//     description,
-//     companyName,
-//     salaryRange,
-//     location,
-//     jobType,
-//     company,
-//     shift,
-//   })
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.CREATED,
-//     success: true,
-//     message: 'Job created successfully',
-//     data: job,
-//   })
-// })
-
 export const createJob = catchAsync(async (req: Request, res: Response) => {
   const {
     userId,
