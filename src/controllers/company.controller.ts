@@ -118,20 +118,6 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
 /**************************
  * GET COMPANY BY USER ID *
  **************************/
-// export const getCompanyByUserId = catchAsync(
-//   async (req: Request, res: Response) => {
-//     const { userId } = req.params
-//     const companies = await Company.find({ userId: userId })
-
-//     sendResponse(res, {
-//       statusCode: httpStatus.OK,
-//       success: true,
-//       message: 'Company(s) fetched successfully',
-//       data: companies,
-//     })
-//   }
-// )
-
 export const getCompanyByUserId = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params

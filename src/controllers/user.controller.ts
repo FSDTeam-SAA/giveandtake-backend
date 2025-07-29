@@ -421,3 +421,19 @@ export const deactivateUser = catchAsync(async (req, res) => {
     data: null,
   })
 })
+
+/**********************************
+ * GET ALL THE USER EMAIL AND _ID *
+ **********************************/
+export const getAllUserEmails = catchAsync(
+  async (req: Request, res: Response) => {
+    const users = await User.find({}, { _id: 1, email: 1 }).lean()
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'All user emails and IDs fetched successfully',
+      data: users,
+    })
+  }
+)
