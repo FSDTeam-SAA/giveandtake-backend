@@ -4,6 +4,7 @@ import {
   updateCompany,
   getCompanyByUserId,
   deleteCompany,
+  getCompanyEmployeesWithSkills,
 } from '../controllers/company.controller'
 import { upload } from '../middlewares/multer.middleware'
 import { protect } from '../middlewares/auth.middleware'
@@ -14,5 +15,6 @@ router.post('/', upload.single('clogo'), protect ,createCompany)
 router.put('/:id', updateCompany)
 router.get('/user/:userId', getCompanyByUserId)
 router.delete('/:id', deleteCompany)
+router.get('/company-employess/skills/:userId', getCompanyEmployeesWithSkills)
 
 export default router

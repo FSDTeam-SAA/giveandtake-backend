@@ -7,7 +7,14 @@ import { uploadToCloudinary } from '../utils/cloudinary'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import mongoose from 'mongoose'
 import AppError from '../errors/AppError'
-import { getPaginationParams, buildMetaPagination, MetaPagination } from '../utils/pagination';
+import {
+  getPaginationParams,
+  buildMetaPagination,
+  MetaPagination,
+} from '../utils/pagination'
+import { CreateResume } from '../models/createResume.model'
+import { User } from '../models/user.model'
+
 
 /******************
  * CREATE COMPANY *
@@ -131,7 +138,7 @@ export const getCompanyByUserId = catchAsync(
     const companies = await Company.find({ userId })
       .skip(skip)
       .limit(limit)
-      .sort({ createdAt: -1 }) 
+      .sort({ createdAt: -1 })
 
     // Get related AwardsAndHonor (if any), for all companies by user
     const honors = await AwardsAndHonor.find({ userId }).sort({
@@ -153,10 +160,6 @@ export const getCompanyByUserId = catchAsync(
     })
   }
 )
-
-
-
-
 
 /************************
  * DELETE COMPANY BY ID *
@@ -180,3 +183,82 @@ export const deleteCompany = catchAsync(async (req: Request, res: Response) => {
     data: deleted,
   })
 })
+
+
+/*************************************
+ * GET COMPANY EMPLOYEES WITH SKILLS *
+ *************************************/
+export const getCompanyEmployeesWithSkills = catchAsync(
+  async (req: Request, res: Response) => {
+    const { userId } = req.params
+    const { page, limit, skip } = getPaginationParams(req.query)
+
+    // 1. Find the company document for the given userId (company)
+    const company = await Company.findOne({ userId })
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 })
+
+    if (!company) {
+      return sendResponse(res, {
+        statusCode: httpStatus.NOT_FOUND,
+        success: false,
+        message: 'Company not found',
+        data: null
+      })
+    }
+
+    // 2. Convert employee ObjectIds to strings for querying
+    const employeeIds = company.employeesId.map(
+      (id) => new mongoose.Types.ObjectId(id)
+    )
+
+    // 3. Fetch employee details from User model
+    const employees = await User.find({
+      _id: { $in: employeeIds },
+    }).select('_id name email phoneNum role')
+
+    // 4. Fetch skills from CreateResume model for these employees
+    const resumes = await CreateResume.find({
+      userId: { $in: employeeIds },
+    }).select('userId skills')
+
+    // Create a map of userId => skills
+    const skillsMap = new Map(
+      resumes.map((resume) => [resume.userId.toString(), resume.skills])
+    )
+
+    // 5. Combine employee data with their skills
+    const employeesWithSkills = employees.map((employee) => ({
+      _id: employee._id,
+      name: employee.name,
+      email: employee.email,
+      phoneNum: employee.phoneNum,
+      role: employee.role,
+      skills: skillsMap.get(employee._id.toString()) || [],
+    }))
+
+    // 6. Prepare the response data
+    const responseData = {
+      company: {
+        _id: company._id,
+        cname: company.cname,
+        clogo: company.clogo,
+        industry: company.industry,
+        aboutUs: company.aboutUs,
+        country: company.country,
+        city: company.city,
+      },
+      employees: employeesWithSkills,
+      meta: buildMetaPagination(1, page, limit),
+    }
+
+    // 7. Send the response
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Company and employees with skills fetched successfully',
+      data: responseData,
+    })
+  }
+)
