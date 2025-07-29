@@ -4,31 +4,105 @@ import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
+import { AwardsAndHonor } from '../models/awardsAndHonor.model';
+import mongoose from 'mongoose'
+import AppError from '../errors/AppError'
 
 /******************
  * CREATE COMPANY *
  ******************/
 
+// export const createCompany = catchAsync(async (req: Request, res: Response) => {
+//   const companyData = req.body
+
+//   // Upload logo if file exists
+//   if (req.file?.path) {
+//     const cloudinaryRes = await uploadToCloudinary(req.file.path)
+//     if (cloudinaryRes?.secure_url) {
+//       companyData.clogo = cloudinaryRes.secure_url
+//     }
+//   }
+
+//   const newCompany = await Company.create(companyData)
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.CREATED,
+//     success: true,
+//     message: 'Company created successfully',
+//     data: newCompany,
+//   })
+// })
+
+
 export const createCompany = catchAsync(async (req: Request, res: Response) => {
-  const companyData = req.body
+  const session = await mongoose.startSession()
+  session.startTransaction()
 
-  // Upload logo if file exists
-  if (req.file?.path) {
-    const cloudinaryRes = await uploadToCloudinary(req.file.path)
-    if (cloudinaryRes?.secure_url) {
-      companyData.clogo = cloudinaryRes.secure_url
+  try {
+    const { awarenessAndHonors, ...companyData } = req.body
+
+    // Handle file upload (e.g. logo)
+    if (req.file?.path) {
+      const cloudinaryRes = await uploadToCloudinary(req.file.path)
+      if (cloudinaryRes?.secure_url) {
+        companyData.clogo = cloudinaryRes.secure_url
+      }
     }
+
+    // Optional: attach userId from req.user if available
+    if (req.user?.id) {
+      companyData.userId = req.user.id
+    }
+
+    // Create company document
+    const newCompany = await Company.create([companyData], { session })
+
+    // Parse and insert awards and honors if provided
+    let createdHonors = [] as any[]
+
+    let parsedHonors = []
+    if (typeof awarenessAndHonors === 'string') {
+      try {
+        parsedHonors = JSON.parse(awarenessAndHonors)
+      } catch (err) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          'Invalid JSON format in awarenessAndHonors'
+        )
+      }
+    } else if (Array.isArray(awarenessAndHonors)) {
+      parsedHonors = awarenessAndHonors
+    }
+
+    if (parsedHonors.length > 0) {
+      const honorData = parsedHonors.map((item: any) => ({
+        ...item,
+        userId: companyData.userId,
+      }))
+      createdHonors = await AwardsAndHonor.insertMany(honorData, { session })
+    }
+
+    await session.commitTransaction()
+    session.endSession()
+
+    sendResponse(res, {
+      statusCode: httpStatus.CREATED,
+      success: true,
+      message: 'Company and associated honors created successfully',
+      data: {
+        company: newCompany[0],
+        honors: createdHonors,
+      },
+    })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    throw error
   }
-
-  const newCompany = await Company.create(companyData)
-
-  sendResponse(res, {
-    statusCode: httpStatus.CREATED,
-    success: true,
-    message: 'Company created successfully',
-    data: newCompany,
-  })
 })
+
+
+
 
 /************************
  * UPDATE COMPANY BY ID *
