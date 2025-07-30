@@ -31,6 +31,11 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
         question: { type: String },
       },
     ],
+    jobApprove: {
+      type: String,
+      enm: ['panding', 'approved', 'denied'],
+      default: 'panding',
+    },
   },
   { timestamps: true }
 )

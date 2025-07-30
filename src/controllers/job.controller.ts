@@ -92,7 +92,11 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
 
   const totalJobs = await Job.countDocuments(filter)
   console.log('first')
-  const jobs = await Job.find({ ...filter, arcrivedJob: false })
+  const jobs = await Job.find({
+    ...filter,
+    arcrivedJob: false,
+    jobApprove: 'approved',
+  })
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })

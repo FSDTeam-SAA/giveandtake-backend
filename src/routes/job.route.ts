@@ -29,4 +29,6 @@ router.route('/jobs/archived/user').get(protect, getArchivedJobs)
 router.route('/jobs/ricruiter/company').get(protect, getRicruitercompanyJobs)
 
 
+
+
 export default router
