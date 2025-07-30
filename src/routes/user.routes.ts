@@ -12,6 +12,8 @@ import {
   verifySecurityAnswers,
   deactivateUser,
   getAllUserEmails,
+  getUserById,
+  updateUser,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -35,5 +37,9 @@ router.post('/verify-security-answers', verifySecurityAnswers)
 router.post('/security-answers/reset-password', securityResetPassword)
 
 router.get('/all/user', getAllUserEmails)
+
+router.get('/user/single', protect, getUserById)
+router.patch('/user/update', protect, updateUser)
+
 
 export default router

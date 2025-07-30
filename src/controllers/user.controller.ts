@@ -264,7 +264,6 @@ export const setSecurityQuestions = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
 
-  
   await user.save()
 
   res.status(httpStatus.OK).json({
@@ -437,3 +436,59 @@ export const getAllUserEmails = catchAsync(
     })
   }
 )
+
+/***************************
+ * GET A SINGLE USER BY ID *
+ ***************************/
+export const getUserById = catchAsync(async (req: Request, res: Response) => {
+  const id = req.user?._id
+
+  const user = await User.findById(id).select(
+    '-password -verificationInfo -password_reset_token'
+  )
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User fetched successfully',
+    data: user,
+  })
+})
+
+/**************************
+ * UPDATE USER INFO BY ID *
+ **************************/
+export const updateUser = catchAsync(async (req: Request, res: Response) => {
+  const id = req.query._id
+  const updateData = req.body
+
+  // Optional: Restrict fields if needed
+  const allowedFields = ['name', 'phoneNum', 'address', 'avatar']
+  const filteredData: Partial<Record<string, any>> = {}
+
+  for (const field of allowedFields) {
+    if (updateData[field] !== undefined) {
+      filteredData[field] = updateData[field]
+    }
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(id, filteredData, {
+    new: true,
+    runValidators: true,
+  }).select('-password -verificationInfo -password_reset_token')
+
+  if (!updatedUser) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found or not updated')
+  }
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User updated successfully',
+    data: updatedUser,
+  })
+})
