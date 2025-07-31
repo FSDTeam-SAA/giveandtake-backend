@@ -24,7 +24,7 @@ export interface IUser {
   }
   password_reset_token: string
   deactivate: boolean
-  dateOfdeactivate: Date
+  dateOfdeactivate: Date | undefined
 }
 
 export interface UserModel extends Model<IUser> {

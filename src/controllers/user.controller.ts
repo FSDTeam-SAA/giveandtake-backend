@@ -82,6 +82,13 @@ export const login = catchAsync(async (req, res) => {
       data: { email: user.email },
     })
   }
+
+  // REACTIVATE ACCOUNT IF ACCOUNT IS DEACTIVATE
+  if (user.deactivate) {
+    user.deactivate = false
+    user.dateOfdeactivate = undefined
+  }
+
   const jwtPayload = {
     _id: user._id,
     email: user.email,
