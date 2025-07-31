@@ -8,6 +8,7 @@ import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
 import { create } from 'domain'
 import { checkIfUserCanPostJob } from '../helper/canPostJob'
+import { User } from '../models/user.model'
 
 /*******************
  * // CREATE A JOB *
@@ -43,6 +44,27 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     )
   }
 
+  // CHECK THE USER
+  const user = await User.findById(userId)
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  // ROLE BASE APPROVE LOGIC
+  let jobApprove: 'panding' | 'approved' | 'denied' = 'panding'
+
+  if (user.role === 'company') {
+    jobApprove = 'approved'
+  } else if (user.role === 'ricruiter') {
+    jobApprove = 'panding'
+  } else {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You are not authorized to create a job'
+    )
+  }
+
   await checkIfUserCanPostJob(userId)
 
   const job = new Job({
@@ -66,6 +88,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     arcrivedJob,
     applicationRequirement,
     customQuestion,
+    jobApprove,
   })
 
   await job.save()
