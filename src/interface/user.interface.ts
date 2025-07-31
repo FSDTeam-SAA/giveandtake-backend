@@ -14,7 +14,9 @@ export interface IUser {
     answer: string
   }[]
 
-  avatar?: string
+  avatar?: {
+    url: string
+  }
   role: 'admin' | 'candidate' | 'ricruiter' | 'company'
   verificationInfo: {
     verified: boolean

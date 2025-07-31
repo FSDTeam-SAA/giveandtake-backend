@@ -16,6 +16,7 @@ import {
   updateUser,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
+import { resumeUpload } from '../middlewares/multer.middleware'
 
 const router = express.Router()
 
@@ -39,7 +40,7 @@ router.post('/security-answers/reset-password', securityResetPassword)
 router.get('/all/user', getAllUserEmails)
 
 router.get('/user/single', protect, getUserById)
-router.patch('/user/update', protect, updateUser)
+router.patch('/user/update', protect, resumeUpload,updateUser)
 
 
 export default router
