@@ -29,8 +29,8 @@ const app = express()
 
 app.use(
   cors({
-    origin: '*', //  frontend origin
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   })
 )
