@@ -326,6 +326,7 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
 export const getPendingJobsForCompany = catchAsync(
   async (req: Request, res: Response) => {
     const companyId = req.user?._id
+    console.log(1, companyId)
 
     if (!companyId) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Company ID is required')
@@ -339,12 +340,13 @@ export const getPendingJobsForCompany = catchAsync(
     console.log('recruiter', recruiters)
 
     if (!recruiters || recruiters.length === 0) {
-      return sendResponse(res, {
+      sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
         message: 'No recruiters found for this company',
         data: [],
       })
+      return
     }
 
     // EXTRACT RECRUITER USER IDs

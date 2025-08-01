@@ -8,7 +8,7 @@ import {
   recommendJobs,
   getArchivedJobs,
   getRicruitercompanyJobs,
-  jobPending,
+  getPendingJobsForCompany,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -32,7 +32,7 @@ router.route('/jobs/ricruiter/company').get(protect, getRicruitercompanyJobs)
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
-router.route('/pandding/job/company', jobPending)
+router.get('/pending/job/company',protect, getPendingJobsForCompany)
 
 
 export default router
