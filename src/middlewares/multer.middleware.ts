@@ -18,7 +18,7 @@ export const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png/
+    const filetypes = /jpeg|jpg|png|mp4|mov|avi/
     const mimetype = filetypes.test(file.mimetype)
     const extname = filetypes.test(
       path.extname(file.originalname).toLowerCase()
@@ -30,3 +30,9 @@ export const upload = multer({
     cb(new Error('Only images (jpeg, jpg, png) are allowed'))
   },
 })
+
+
+export const resumeUpload = upload.fields([
+  { name: 'videoFile', maxCount: 1 },
+  { name: 'photo', maxCount: 1 },
+])

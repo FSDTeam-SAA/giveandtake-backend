@@ -16,8 +16,8 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       enum: ['candidate', 'recruiter', 'admin'],
       required: true,
     },
-    videoFile: { type: String },
     photo: { type: String },
+    aboutUs: { type: String },
     title: { type: String },
     firstName: { type: String },
     lastName: { type: String },
@@ -25,7 +25,9 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
     country: { type: String },
     city: { type: String },
     zipCode: { type: String },
+    jobCategoryId: { type: String },
     email: { type: String },
+    phoneNumber: { type: String },
     location: { type: String },
     sLink: [
       {
@@ -34,25 +36,11 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       },
     ],
     skills: [{ type: String }],
-    skillProficiency: { type: String },
-    jobType: { type: String },
-    yearOfExperience: { type: Number },
-    professionalSummary: { type: String },
-    experienceId: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Experience',
-      },
-    ],
-    educationId: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Education',
-      },
-    ],
   },
   { timestamps: true }
 )
+
+createResumeSchema.index({ title: 'text', country: 'text', skills: 1 })
 
 export const CreateResume = mongoose.model<ICreateResume, CreateResumeModel>(
   'CreateResume',

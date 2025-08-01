@@ -1,0 +1,28 @@
+import mongoose, { Schema } from 'mongoose'
+import { ICompany, CompanyModel } from '../interface/company.interface'
+
+const companySchema: Schema<ICompany> = new Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    clogo: { type: String },
+    aboutUs: { type: String },
+    cname: { type: String, required: true },
+    country: { type: String, required: true },
+    city: { type: String, required: true },
+    zipcode: { type: String },
+    cemail: { type: String, required: true },
+    cPhoneNumber: { type: String, required: true },
+    links: [{ type: String }],
+    industry: { type: String },
+    service: [{ type: String }],
+    employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  },
+  {
+    timestamps: true,
+  }
+)
+
+export const Company = mongoose.model<ICompany, CompanyModel>(
+  'Company',
+  companySchema
+)

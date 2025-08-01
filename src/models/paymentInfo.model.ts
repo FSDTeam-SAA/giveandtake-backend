@@ -17,14 +17,24 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       ref: 'SubscriptionPlan',
       required: true,
     },
+    planType: {
+      type: String,
+      enum: ['payAsYouGo', 'basic', 'bronze', 'silver', 'gold', 'platinum'],
+    },
     paymentStatus: {
       type: String,
       enum: ['complete', 'pending', 'failed'],
       default: 'pending',
     },
-    season: { type: String }, // e.g., "June 2025", or any billing cycle ID
+    duration: { type: String, enum: ['monthly', 'yearly'] },
+    seasonId: { type: String },
     transactionId: { type: String, required: true },
-    paymentMethod: { type: String }, // e.g., "PayPal", "Stripe", "Bkash"
+    paymentMethod: { type: String },
+    planStatus: {
+      type: String,
+      enum: ['active', 'deactivate'],
+      default: 'active',
+    },
   },
   { timestamps: true }
 )

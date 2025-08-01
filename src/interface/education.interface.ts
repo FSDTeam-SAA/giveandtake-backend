@@ -1,0 +1,13 @@
+import { Document, Model, Types } from 'mongoose'
+
+export interface IEducation extends Document {
+  userId: Types.ObjectId
+  instituteName: string
+  city: string
+  state: string
+  degree: string
+  fieldOfStudy: string
+  graduationDate: Date
+}
+
+export interface EducationModel extends Model<IEducation> {}

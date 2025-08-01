@@ -18,7 +18,7 @@ const messageSchema: Schema<IMessage> = new Schema<IMessage>(
     ],
     roomId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Room', // Assuming you have a Room model
+      ref: 'MessageRoom',
       required: true,
     },
   },

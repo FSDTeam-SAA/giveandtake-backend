@@ -10,8 +10,8 @@ export interface IResumeLink {
 export interface ICreateResume extends Document {
   userId: Types.ObjectId
   type: ResumeType
-  videoFile: string
   photo: string
+  aboutUs: string
   title: string
   firstName: string
   lastName: string
@@ -20,6 +20,7 @@ export interface ICreateResume extends Document {
   city: string
   zipCode: string
   email: string
+  phoneNumber: string
   location: string
   sLink: IResumeLink[]
   skills: string[]
@@ -27,8 +28,7 @@ export interface ICreateResume extends Document {
   jobType: string
   yearOfExperience: number
   professionalSummary: string
-  experienceId: Types.ObjectId[]
-  educationId: Types.ObjectId[] 
+  jobCategoryId: string
 }
 
 export interface CreateResumeModel extends Model<ICreateResume> {}

@@ -4,8 +4,6 @@ export type AccountType = 'candidat' | 'reqruter' | 'admin'
 
 export interface IRecruiterAccount extends Document {
   userId: Schema.Types.ObjectId
-  type: AccountType
-  videoFile: string
   bio: string
   photo: string
   title: string
@@ -16,18 +14,19 @@ export interface IRecruiterAccount extends Document {
   city: string
   zipCode: string
   emailAddress: string
+  phoneNumber: string
   location: string
 
-  companyName: string
-  companyWebsite: string
-  companyCountry: string
-  companyCity: string
+  upworkUrl: string
+  linkedIn: string
+  xLink: string
+  OtherLink: string
   roleAtCompany: string
-  companyLogo: string
-
-  careerField: string
-  careerSubField: string
-  summary: string
+  awardTitle: string
+  programName: string
+  programDate: string
+  awardDescription: string
+  companyId: Types.ObjectId
 }
 
 export interface RecruiterAccountModel extends Model<IRecruiterAccount> {}

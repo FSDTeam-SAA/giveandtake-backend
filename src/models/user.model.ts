@@ -10,7 +10,7 @@ const userSchema: Schema = new Schema<IUser>(
     password: { type: String, select: 0, required: true },
     role: {
       type: String,
-      enum: ['candidate', 'ricruiter', 'admin'],
+      enum: ['candidate', 'recruiter', 'company', 'admin'],
       default: 'candidate',
     },
     avatar: {
@@ -19,11 +19,21 @@ const userSchema: Schema = new Schema<IUser>(
     address: {
       type: String,
     },
+    securityQuestions: [
+      {
+        question: { type: String, default: '' },
+        answer: { type: String, default: '' },
+      },
+    ],
+
     verificationInfo: {
       verified: { type: Boolean, default: false },
       token: { type: String, default: '' },
+      resetToken: { type: String, default: '' },
     },
     password_reset_token: { type: String, default: '' },
+    deactivate: { type: Boolean, default: false },
+    dateOfdeactivate: { type: Date },
   },
   { timestamps: true }
 )

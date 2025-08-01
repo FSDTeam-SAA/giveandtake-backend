@@ -1,19 +1,14 @@
 import express from 'express'
 import { globalErrorHandler } from './middlewares/globalErrorHandler'
 import { notFound } from './middlewares/notFound'
-<<<<<<< Updated upstream
-=======
 import cors from 'cors'
 import path from 'path'
->>>>>>> Stashed changes
 
 import userRoutes from './routes/user.routes'
 import jobRoutes from './routes/job.route'
 import jobCategoryRoutes from './routes/jobCategory.routes'
 import subscriptionPlanRoutes from './routes/subscriptionPlan.route'
 import exprienceRoutes from './routes/exprience.route'
-<<<<<<< Updated upstream
-=======
 import contactUsRoutes from './routes/contactUs.route'
 import recruiterAccoumntRoutes from './routes/recruiterAccount.routes'
 import followingRoutes from './routes/following.route'
@@ -31,7 +26,6 @@ import createResumeRoutes from './routes/createResume.routes'
 import companyRoutes from './routes/company.route'
 import newsLetterRoutes from './routes/newsletter.routes'
 
->>>>>>> Stashed changes
 
 const app = express()
 
@@ -47,8 +41,6 @@ app.use('/api/v1/subscription', subscriptionPlanRoutes)
 
 app.use('/api/v1/experiences', exprienceRoutes)
 
-<<<<<<< Updated upstream
-=======
 /********************
  * APIS FOR CONTACT *
  ********************/
@@ -129,7 +121,6 @@ app.use('/api/v1/company', companyRoutes)
  ************************/
 app.use('/api/v1/newsletter', newsLetterRoutes)
 
->>>>>>> Stashed changes
 app.use(notFound as never)
 app.use(globalErrorHandler)
 

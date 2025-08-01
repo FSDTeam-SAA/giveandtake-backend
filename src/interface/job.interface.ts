@@ -15,6 +15,8 @@ export interface ICustomQuestion {
 }
 
 export interface IJob extends Document {
+  userId: Types.ObjectId
+  companyId: Types.ObjectId
   title: string
   description: string
   companyName: string
@@ -28,10 +30,12 @@ export interface IJob extends Document {
   experience: number
   deadline: Date
   status: JobStatus
+  arcrivedJob: boolean
   jobCategoryId: Types.ObjectId
   compensation: string
   applicationRequirement: IApplicationRequirement[]
   customQuestion: ICustomQuestion[]
+  jobApprove: string
 }
 
 export interface JobModel extends Model<IJob> {}
