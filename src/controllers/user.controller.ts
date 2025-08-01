@@ -338,7 +338,7 @@ export const verifySecurityAnswers = catchAsync(
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'Number of answers does not match the number of security questions'
-      )
+      ) 
     }
 
     if (!user || user.securityQuestions.length <= 0) {
