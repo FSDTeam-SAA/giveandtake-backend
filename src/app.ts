@@ -2,6 +2,7 @@ import express from 'express'
 import { globalErrorHandler } from './middlewares/globalErrorHandler'
 import { notFound } from './middlewares/notFound'
 import cors from 'cors'
+import path from 'path'
 
 import userRoutes from './routes/user.routes'
 import jobRoutes from './routes/job.route'
@@ -23,34 +24,15 @@ import awardAndHonorRoutes from './routes/awardAndHonor.route'
 import elevatorPitchRoutes from './routes/elevatorPitch.route'
 import createResumeRoutes from './routes/createResume.routes'
 import companyRoutes from './routes/company.route'
-import path from 'path'
+import newsLetterRoutes from './routes/newsletter.routes'
+
 
 const app = express()
-
-app.use(
-  cors({
-    origin: '*', 
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    credentials: true,
-  })
-)
-
-// Serve static files with directory listing disabled
-app.use(
-  '/storage',
-  express.static(path.join(__dirname, '../storage'), {
-    dotfiles: 'deny', // Prevent access to dotfiles (.env, etc.)
-    index: false, // Disable directory index
-    redirect: false, // Disable path redirects
-  })
-)
 
 app.use(express.json())
 
 app.use('/api/v1', userRoutes)
-/*****************
- * APIS FOR JOBS *
- *****************/
+
 app.use('/api/v1', jobRoutes)
 
 app.use('/api/v1/category', jobCategoryRoutes)
@@ -133,6 +115,11 @@ app.use('/api/v1/create-resume', createResumeRoutes)
  * APIS FOR COMPANYS *
  *********************/
 app.use('/api/v1/company', companyRoutes)
+
+/************************
+ * APIS FOR NEWSLETTERS *
+ ************************/
+app.use('/api/v1/newsletter', newsLetterRoutes)
 
 app.use(notFound as never)
 app.use(globalErrorHandler)

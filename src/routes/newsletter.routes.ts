@@ -14,7 +14,9 @@ const router = express.Router()
 router.post('/subscribe', createNewsletterSubscription)
 router.delete('/unsubscribe/:email', deleteNewsletterSubscription)
 
-// Admin protected routes
+/**************************
+ * ADMIN PROTECTED ROUTES *
+ **************************/
 router.get('/subscribers', protect,  getAllSubscribers)
 router.post('/send', protect, sendNewsletterToSubscribers)
 
