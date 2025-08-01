@@ -9,6 +9,7 @@ import { CreateResume } from '../models/createResume.model'
 import { create } from 'domain'
 import { checkIfUserCanPostJob } from '../helper/canPostJob'
 import { User } from '../models/user.model'
+import { RecruiterAccount } from '../models/recruiterAccount.model'
 
 /*******************
  * // CREATE A JOB *
@@ -318,3 +319,52 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
     data: Jobs,
   })
 })
+
+/*************************************
+ * GET ALL PENDING JOB ---> COMPANY *
+ *************************************/
+export const getPendingJobsForCompany = catchAsync(
+  async (req: Request, res: Response) => {
+    const companyId = req.user?._id
+
+    if (!companyId) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Company ID is required')
+    }
+
+    // FIND ALL RECRUITER CONNECTED TO THE COMPANY
+    const recruiters = await RecruiterAccount.find({ companyId }).select(
+      'userId'
+    )
+
+    console.log('recruiter', recruiters)
+
+    if (!recruiters || recruiters.length === 0) {
+      return sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: 'No recruiters found for this company',
+        data: [],
+      })
+    }
+
+    // EXTRACT RECRUITER USER IDs
+    const recruiterUserIds = recruiters.map((recruiter) => recruiter.userId)
+    console.log('recruiterUserIds', recruiterUserIds)
+
+    // FIND ALL PANDING JOBS POSTED BY THESE RECRUITERS
+    const pendingJobs = await Job.find({
+      userId: { $in: recruiterUserIds },
+      jobApprove: 'panding',
+    })
+      .sort({ createdAt: -1 })
+      .populate('userId', 'name role  ')
+      .populate('jobCategoryId')
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Pending jobs fetched successfully',
+      data: pendingJobs,
+    })
+  }
+)
