@@ -10,7 +10,9 @@ import { protect } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-// Public routes
+/*****************
+ * PUBLIC ROUTES *
+ *****************/
 router.post('/subscribe', createNewsletterSubscription)
 router.delete('/unsubscribe/:email', deleteNewsletterSubscription)
 
