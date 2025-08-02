@@ -12,6 +12,7 @@ interface IElevatorPitch extends Document {
       key: string // Path to encryption key
     }
   }
+  status: string
 }
 
 const elevatorPitchSchema = new Schema<IElevatorPitch>(
@@ -32,6 +33,10 @@ const elevatorPitchSchema = new Schema<IElevatorPitch>(
         key: String,
       },
     },
+    status: {
+      type: String,
+      enum: ['active', 'deactivate']
+    }
   },
   { timestamps: true }
 )

@@ -12,12 +12,6 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
         ref: 'User',
         required: true,
       },
-      type: {
-        type: String,
-        enum: ['candidat', 'reqruter', 'admin'],
-        required: true,
-      },
-      videoFile: { type: String },
       bio: { type: String },
       photo: { type: String },
       title: { type: String },
@@ -27,34 +21,20 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       country: { type: String },
       city: { type: String },
       zipCode: { type: String },
+      location: { type: String },
       emailAddress: { type: String },
       phoneNumber: { type: String },
-      location: { type: String },
-      
+
       upworkUrl: { type: String },
       linkedIn: { type: String },
       xLink: { type: String },
       OtherLink: { type: String },
-      
-      companyId: { type: String },
       roleAtCompany: { type: String },
-
       awardTitle: { type: String },
-      programName : { type: String },
-      programDate : { type: String },
-      awardDescription : { type: String },
-
-      
-
-      
-      // companyWebsite: { type: String },
-      // companyLogo: { type: String },
-      // companyCountry: { type: String },
-      // companyCity: { type: String },
-      // careerField: { type: String },
-      // careerSubField: { type: String },
-      // summary: { type: String },
-
+      programName: { type: String },
+      programDate: { type: String },
+      awardDescription: { type: String },
+      companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     },
     { timestamps: true }
   )

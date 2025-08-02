@@ -13,7 +13,7 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
       features: [{ type: String }],
       for: {
         type: String,
-        enum: ['candidate', 'recruiter'],
+        enum: ['candidate', 'recruiter', 'company'],
         required: true,
       },
     },

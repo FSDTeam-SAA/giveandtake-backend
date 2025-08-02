@@ -85,32 +85,54 @@ export const deleteFromCloudinary = async (publicId: string) => {
 //   }
 // }
 
-
 export const uploadHLS = async (localDir: string, cloudinaryFolder: string) => {
   try {
-    // Find the playlist file
     const files = fs.readdirSync(localDir)
-    const playlistFile = files.find((file) => file.endsWith('.m3u8'))
 
-    if (!playlistFile) {
-      throw new Error('No playlist file found')
+    if (files.length === 0) {
+      throw new Error('No files found in the directory')
     }
 
-    const playlistPath = path.join(localDir, playlistFile)
+    const uploadedFiles: {
+      [filename: string]: {
+        secure_url: string
+        public_id: string
+      }
+    } = {}
 
-    // Upload only the playlist file
-    const result = await cloudinary.uploader.upload(playlistPath, {
-      resource_type: 'video',
-      folder: cloudinaryFolder,
-      use_filename: true,
-    })
+    for (const file of files) {
+      const filePath = path.join(localDir, file)
+
+      const isRaw =
+        file.endsWith('.key') ||
+        file.endsWith('.key.info') ||
+        file.endsWith('.m3u8')
+      const result = await cloudinary.uploader.upload(filePath, {
+        resource_type: 'raw',
+        folder: cloudinaryFolder,
+        use_filename: true,
+        unique_filename: false,
+        overwrite: true,
+      })
+
+      uploadedFiles[file] = {
+        secure_url: result.secure_url,
+        public_id: result.public_id,
+      }
+      fs.unlinkSync(filePath)
+    }
+
+    // Optional: Find main playlist
+    const mainPlaylist = Object.keys(uploadedFiles).find((f) =>
+      f.endsWith('.m3u8')
+    )
 
     return {
-      playlistUrl: result.secure_url,
-      public_id: result.public_id,
+      playlistUrl: mainPlaylist ? uploadedFiles[mainPlaylist].secure_url : null,
+      uploadedFiles,
     }
   } catch (error) {
-    console.error('Error uploading HLS:', error)
+    console.error('Error uploading HLS directory:', error)
     throw error
   }
 }

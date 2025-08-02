@@ -7,46 +7,13 @@ import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
 import { create } from 'domain'
+import { checkIfUserCanPostJob } from '../helper/canPostJob'
+import { User } from '../models/user.model'
+import { RecruiterAccount } from '../models/recruiterAccount.model'
 
 /*******************
  * // CREATE A JOB *
  *******************/
-// export const createJob = catchAsync(async (req: Request, res: Response) => {
-//   const {
-//     userId,
-//     title,
-//     description,
-//     location,
-//     companyName,
-//     salaryRange,
-//     shift,
-//     jobType,
-//     company,
-//   } = req.body
-//   if (!userId || !title) {
-//     throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
-//   }
-
-//   const job = await Job.create({
-//     userId,
-//     title,
-//     description,
-//     companyName,
-//     salaryRange,
-//     location,
-//     jobType,
-//     company,
-//     shift,
-//   })
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.CREATED,
-//     success: true,
-//     message: 'Job created successfully',
-//     data: job,
-//   })
-// })
-
 export const createJob = catchAsync(async (req: Request, res: Response) => {
   const {
     userId,
@@ -78,6 +45,29 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     )
   }
 
+  // CHECK THE USER
+  const user = await User.findById(userId)
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  // ROLE BASE APPROVE LOGIC
+  let jobApprove: 'panding' | 'approved' | 'denied' = 'panding'
+
+  if (user.role === 'company') {
+    jobApprove = 'approved'
+  } else if (user.role === 'ricruiter') {
+    jobApprove = 'panding'
+  } else {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You are not authorized to create a job'
+    )
+  }
+
+  await checkIfUserCanPostJob(userId)
+
   const job = new Job({
     userId,
     companyId,
@@ -99,6 +89,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     arcrivedJob,
     applicationRequirement,
     customQuestion,
+    jobApprove,
   })
 
   await job.save()
@@ -125,7 +116,11 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
 
   const totalJobs = await Job.countDocuments(filter)
   console.log('first')
-  const jobs = await Job.find({ ...filter, arcrivedJob: false })
+  const jobs = await Job.find({
+    ...filter,
+    arcrivedJob: false,
+    jobApprove: 'approved',
+  })
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
@@ -315,8 +310,7 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
     createAt: -1,
   })
 
-  if (!Jobs)
-    throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
+  if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -325,3 +319,54 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
     data: Jobs,
   })
 })
+
+/*************************************
+ * GET ALL PENDING JOB ---> COMPANY *
+ *************************************/
+export const getPendingJobsForCompany = catchAsync(
+  async (req: Request, res: Response) => {
+    const companyId = req.user?._id
+    console.log(1, companyId)
+
+    if (!companyId) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Company ID is required')
+    }
+
+    // FIND ALL RECRUITER CONNECTED TO THE COMPANY
+    const recruiters = await RecruiterAccount.find({ companyId }).select(
+      'userId'
+    )
+
+    console.log('recruiter', recruiters)
+
+    if (!recruiters || recruiters.length === 0) {
+      sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: 'No recruiters found for this company',
+        data: [],
+      })
+      return
+    }
+
+    // EXTRACT RECRUITER USER IDs
+    const recruiterUserIds = recruiters.map((recruiter) => recruiter.userId)
+    console.log('recruiterUserIds', recruiterUserIds)
+
+    // FIND ALL PANDING JOBS POSTED BY THESE RECRUITERS
+    const pendingJobs = await Job.find({
+      userId: { $in: recruiterUserIds },
+      jobApprove: 'panding',
+    })
+      .sort({ createdAt: -1 })
+      .populate('userId', 'name role  ')
+      .populate('jobCategoryId')
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Pending jobs fetched successfully',
+      data: pendingJobs,
+    })
+  }
+)

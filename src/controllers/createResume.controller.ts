@@ -15,8 +15,6 @@ import path from 'path'
  * CREATE RESUME *
  ********************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
-  // const { userId, resume, experiences, educationList, awardsAndHonors } =
-  //   req.body
 
   const {userId} = req.body
 
@@ -31,20 +29,16 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   // check if file was uplaod
   let uploadFileUrl = null
   if (req.file) {
-    console.log('first')
     const cloudinaryResult = await uploadToCloudinary(req.file.path)
     if (cloudinaryResult) {
       uploadFileUrl = cloudinaryResult.secure_url
-      console.log('second')
     }
   }
-  console.log('theard ')
   const resumeDoc = await CreateResume.create({
     ...resume,
     userId,
     photo: uploadFileUrl,
   })
-  console.log(4)
 
   const exparienceDocs = await Experience.insertMany(
     experiences.map((exp: any) => ({ ...exp, userId }))
@@ -57,7 +51,6 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const awarenessDocs = await AwardsAndHonor.insertMany(
     awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
   )
-  console.log('4')
   res.status(httpStatus.CREATED).json({
     success: true,
     message: 'Resume created successfully',

@@ -9,14 +9,15 @@ export interface IUser {
   password: string
   whatsappNum?: string
   address?: string
-  securityQuestions?: 
-    {
-      question: string
-      answer: string
-    } []
-  
-  avatar?: string
-  role: 'admin' | 'candidate' | 'ricruiter'
+  securityQuestions?: {
+    question: string
+    answer: string
+  }[]
+
+  avatar?: {
+    url: string
+  }
+  role: 'admin' | 'candidate' | 'ricruiter' | 'company'
   verificationInfo: {
     verified: boolean
     token: string
@@ -24,7 +25,7 @@ export interface IUser {
   }
   password_reset_token: string
   deactivate: boolean
-  dateOfdeactivate: Date
+  dateOfdeactivate: Date | undefined
 }
 
 export interface UserModel extends Model<IUser> {

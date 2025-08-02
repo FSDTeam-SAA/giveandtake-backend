@@ -35,6 +35,7 @@ export interface IJob extends Document {
   compensation: string
   applicationRequirement: IApplicationRequirement[]
   customQuestion: ICustomQuestion[]
+  jobApprove: string
 }
 
 export interface JobModel extends Model<IJob> {}
