@@ -4,6 +4,7 @@ import { Bookmark } from '../models/bookmark.model'
 import sendResponse from '../utils/sendResponse'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
+import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 
 /***********************
  * CREATE BOOKMARK
@@ -37,15 +38,26 @@ export const getBookmarksByUser = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
 
+    // GET QUERYES FOR PAGINATION
+    const { page, limit, skip } = getPaginationParams(req.query)
+
     const bookmarks = await Bookmark.find({ userId })
       .sort({ createdAt: -1 })
       .populate('jobId')
+      .skip(skip)
+      .limit(limit)
+
+    // TOTAL COUNT
+    const totalItems = await Bookmark.countDocuments({ userId })
+
+    // BUILD META DATA
+    const meta = buildMetaPagination(totalItems, page, limit)
 
     sendResponse(res, {
       statusCode: 200,
       success: true,
       message: 'Bookmarks fetched successfully',
-      data: bookmarks,
+      data: { bookmarks, meta },
     })
   }
 )
