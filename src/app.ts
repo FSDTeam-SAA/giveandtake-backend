@@ -28,6 +28,14 @@ import newsLetterRoutes from "./routes/newsletter.routes";
 
 const app = express();
 
+app.use(
+  cors({
+    origin: "*", //  frontend origin
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 app.use("/api/v1", userRoutes);
