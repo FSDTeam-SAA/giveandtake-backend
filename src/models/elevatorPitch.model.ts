@@ -39,7 +39,7 @@ const elevatorPitchSchema = new Schema<IElevatorPitch>(
     }
   },
   { timestamps: true }
-)
+) 
 
 export const ElevatorPitch = mongoose.model<IElevatorPitch>(
   'ElevatorPitch',

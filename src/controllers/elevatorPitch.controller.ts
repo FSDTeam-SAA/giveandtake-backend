@@ -12,6 +12,7 @@ import { paymentInfo } from '../models/paymentInfo.model'
 import { uploadHLS } from '../utils/cloudinary'
 import axios from 'axios'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
+import { User } from '../models/user.model'
 
 /*************************************
  * ADD RESUME VIDEO (ELEVATOR PITCH) *
@@ -255,5 +256,46 @@ export const getEncryptionKey = catchAsync(
         'Failed to fetch encryption key from Cloudinary'
       )
     }
+  }
+)
+
+/**********************
+ * ALL ELEVATOR PITCH *
+ **********************/
+export const getAllElevatorPitches = catchAsync(
+  async (req: Request, res: Response) => {
+    const { type } = req.query
+
+    if (!type || typeof type !== 'string') {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Query param "type" is required'
+      )
+    }
+
+    const allowedRoles = ['candidate', 'recruiter']
+    if (!allowedRoles.includes(type)) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid user type')
+    }
+
+    // Step 1: Get users with the requested role
+    const users = await User.find({ role: type }, '_id name email')
+    console.log(users)
+
+    const userIds = users.map((u) => u._id)
+    console.log(userIds)
+
+    // Step 2: Get Elevator Pitches of those users
+    const pitches = await ElevatorPitch.find({
+      userId: { $in: userIds },
+    }).populate('userId', 'name email role')
+
+    console.log(pitches)
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      total: pitches.length,
+      data: pitches,
+    })
   }
 )

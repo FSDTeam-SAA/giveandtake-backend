@@ -5,9 +5,10 @@ import {
   streamElevatorPitch,
   secureStream,
   getEncryptionKey,
+  getAllElevatorPitches,
 } from '../controllers/elevatorPitch.controller'
 import { resumeUpload } from '../middlewares/multer.middleware'
-import { protect } from '../middlewares/auth.middleware'
+import { isAdmin, protect } from '../middlewares/auth.middleware'
 import { checkVideoAccess } from '../middlewares/checkVideoAccess.middleware'
 
 const router = express.Router()
@@ -21,5 +22,7 @@ router.delete('/video', protect, deleteResume)
 router.get('/stream/:id', protect, checkVideoAccess, streamElevatorPitch)
 
 router.get('/key/:userId/:key', protect, checkVideoAccess, getEncryptionKey)
+
+router.get('/all/elevator-pitches', protect, getAllElevatorPitches)
 
 export default router
