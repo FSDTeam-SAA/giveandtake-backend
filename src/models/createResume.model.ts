@@ -14,7 +14,6 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
     type: {
       type: String,
       enum: ['candidate', 'recruiter', 'admin'],
-      required: true,
     },
     photo: { type: String },
     aboutUs: { type: String },
