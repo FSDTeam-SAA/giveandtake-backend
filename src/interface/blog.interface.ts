@@ -5,6 +5,7 @@ export interface IBlog extends Document {
   description: string
   image?: string
   userId: Types.ObjectId
+  imagePublicId: string
 }
 
 export type BlogModel = Model<IBlog>
