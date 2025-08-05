@@ -15,7 +15,6 @@ router.post(
   '/recruiter-account',
   protect,
   upload.fields([
-    { name: 'videoFile', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
   ]),
   createRecruiterAccount
