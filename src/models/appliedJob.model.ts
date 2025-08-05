@@ -15,8 +15,8 @@ const appliedJobSchema: Schema<IAppliedJob> = new Schema(
     },
     status: {
       type: String,
-      enum: ['padding', 'rejected', 'shortlisted'],
-      default: 'padding',
+      enum: ['pending', 'rejected', 'shortlisted'],
+      default: 'pending',
     },
   },
   { timestamps: true }

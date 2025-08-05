@@ -53,12 +53,12 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   // ROLE BASE APPROVE LOGIC
-  let jobApprove: 'panding' | 'approved' | 'denied' = 'panding'
+  let jobApprove: 'pending' | 'approved' | 'denied' = 'pending'
 
   if (user.role === 'company') {
     jobApprove = 'approved'
   } else if (user.role === 'ricruiter') {
-    jobApprove = 'panding'
+    jobApprove = 'pending'
   } else {
     throw new AppError(
       httpStatus.FORBIDDEN,
@@ -353,10 +353,10 @@ export const getPendingJobsForCompany = catchAsync(
     const recruiterUserIds = recruiters.map((recruiter) => recruiter.userId)
     console.log('recruiterUserIds', recruiterUserIds)
 
-    // FIND ALL PANDING JOBS POSTED BY THESE RECRUITERS
+    // FIND ALL pending JOBS POSTED BY THESE RECRUITERS
     const pendingJobs = await Job.find({
       userId: { $in: recruiterUserIds },
-      jobApprove: 'panding',
+      jobApprove: 'pending',
     })
       .sort({ createdAt: -1 })
       .populate('userId', 'name role  ')

@@ -33,8 +33,8 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     ],
     jobApprove: {
       type: String,
-      enm: ['panding', 'approved', 'denied'],
-      default: 'panding',
+      enm: ['pending', 'approved', 'denied'],
+      default: 'pending',
     },
   },
   { timestamps: true }

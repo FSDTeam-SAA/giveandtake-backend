@@ -59,8 +59,10 @@ export const createRecruiterAccount = catchAsync(
 export const getRecruiterAccountByUserId = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
+    console.log(userId, 2)
 
     const account = await RecruiterAccount.findOne({ userId })
+    console.log(account, 1)
 
     if (!account) {
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
