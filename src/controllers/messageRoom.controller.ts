@@ -60,7 +60,7 @@ export const getMessageRooms = catchAsync(
       case 'candidate':
         filter = { userId: objectId }
         break
-      case 'recruiter ':
+      case 'recruiter':
         filter = { recruiterId: objectId }
         break
       case 'company':
