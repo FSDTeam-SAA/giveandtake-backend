@@ -27,12 +27,11 @@ router.route('/jobs/recommend').get(recommendJobs)
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
-router.route('/jobs/ricruiter/company').get(protect, getRicruitercompanyJobs)
+router.route('/jobs/recruiter/company').get(protect, getRicruitercompanyJobs)
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
-router.get('/pending/job/company',protect, getPendingJobsForCompany)
-
+router.get('/pending/job/company', protect, getPendingJobsForCompany)
 
 export default router

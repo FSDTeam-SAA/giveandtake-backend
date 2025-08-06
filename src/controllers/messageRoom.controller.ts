@@ -5,7 +5,6 @@ import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import mongoose from 'mongoose'
 
-
 /***********************
  * CREATE MESSAGE ROOM *
  ***********************/
@@ -44,21 +43,24 @@ export const getMessageRooms = catchAsync(
     const { type, userId } = req.query
 
     if (!type || !userId) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Query parameters "type" and "userId" are required')
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Query parameters "type" and "userId" are required'
+      )
     }
-    
+
     if (!mongoose.Types.ObjectId.isValid(userId as string)) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid userId')
     }
-    
+
     const objectId = new mongoose.Types.ObjectId(userId as string)
     let filter = {}
-    
+
     switch (type) {
       case 'candidate':
         filter = { userId: objectId }
         break
-      case 'ricruiter':
+      case 'recruiter ':
         filter = { recruiterId: objectId }
         break
       case 'company':
@@ -67,19 +69,19 @@ export const getMessageRooms = catchAsync(
       default:
         throw new AppError(httpStatus.BAD_REQUEST, 'Invalid type')
     }
-    
+
     const rooms = await MessageRoom.find(filter)
       .populate('userId', 'name email role')
       .populate('recruiterId', 'name email role')
       .populate('companyId', 'name email role')
-    
+
     res.status(httpStatus.OK).json({
       success: true,
       message: 'Message rooms fetched',
       data: rooms,
     })
   }
-  ) 
+)
 
 /***********************
  * DELETE MESSAGE ROOM *

@@ -57,7 +57,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   if (user.role === 'company') {
     jobApprove = 'approved'
-  } else if (user.role === 'ricruiter') {
+  } else if (user.role === 'recruiter ') {
     jobApprove = 'pending'
   } else {
     throw new AppError(
