@@ -71,6 +71,7 @@ export const getMessageRooms = catchAsync(
     }
 
     const rooms = await MessageRoom.find(filter)
+      .sort({ createdAt: -1 })
       .populate('userId', 'name email role')
       .populate('recruiterId', 'name email role')
       .populate('companyId', 'name email role')
