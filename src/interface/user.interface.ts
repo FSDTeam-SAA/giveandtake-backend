@@ -17,7 +17,7 @@ export interface IUser {
   avatar?: {
     url: string
   }
-  role: 'admin' | 'candidate' | 'recruiter ' | 'company'
+  role: 'admin' | 'candidate' | 'recruiter' | 'company'
   verificationInfo: {
     verified: boolean
     token: string
