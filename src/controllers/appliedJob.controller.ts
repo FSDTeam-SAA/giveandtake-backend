@@ -9,6 +9,7 @@ import { CreateResume } from '../models/createResume.model';
 import { Education } from '../models/education.model';
 import { Experience } from '../models/experience.model';
 import { ElevatorPitch } from '../models/elevatorPitch.model';
+import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 
 
 /***************
@@ -85,6 +86,8 @@ export const getApplicationsByUser = catchAsync(
 
     const experience = await Experience.find({ userId })
 
+    const awardsAndHonor = await AwardsAndHonor.find({ userId })
+
     const elevatorPitch = await ElevatorPitch.findOne({ userId })
 
 
@@ -101,6 +104,7 @@ export const getApplicationsByUser = catchAsync(
         education,
         experience,
         elevatorPitch,
+        awardsAndHonor,
       },
     })
   }
