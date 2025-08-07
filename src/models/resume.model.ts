@@ -8,6 +8,7 @@ const resumeSchema: Schema<IResume> = new Schema<IResume>(
       ref: 'User',
       required: true,
     },
+    visaSponsorship: { type: String, enum:[ 'yes', 'no'] },
     file: [
       {
         filename: { type: String, required: true },
@@ -16,7 +17,6 @@ const resumeSchema: Schema<IResume> = new Schema<IResume>(
       },
     ],
     uploadDate: { type: Date, default: Date.now },
-    skills: [{ type: String }],
   },
   { timestamps: true }
 )

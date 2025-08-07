@@ -10,7 +10,7 @@ export interface IResume extends Document {
   userId: Types.ObjectId
   file: IResumeFile[]
   uploadDate: Date
-  skills: string[]
+  visaSponsorship: string
 }
 
 export interface ResumeModel extends Model<IResume> {}

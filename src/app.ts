@@ -25,6 +25,7 @@ import elevatorPitchRoutes from "./routes/elevatorPitch.route";
 import createResumeRoutes from "./routes/createResume.routes";
 import companyRoutes from "./routes/company.route";
 import newsLetterRoutes from "./routes/newsletter.routes";
+import resumeRoutes from "./routes/resume.route";
 
 const app = express();
 
@@ -127,6 +128,12 @@ app.use("/api/v1/company", companyRoutes);
  * APIS FOR NEWSLETTERS *
  ************************/
 app.use("/api/v1/newsletter", newsLetterRoutes);
+
+/********************
+ * APIS FOR RESUME *
+ ********************/
+app.use("/api/v1/resume", resumeRoutes);
+
 
 app.use(notFound as never);
 app.use(globalErrorHandler);

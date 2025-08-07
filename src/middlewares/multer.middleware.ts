@@ -36,3 +36,6 @@ export const resumeUpload = upload.fields([
   { name: 'videoFile', maxCount: 1 },
   { name: 'photo', maxCount: 1 },
 ])
+
+
+export const resumeFileUpload = multer({ storage }).array('resumes', 5)
