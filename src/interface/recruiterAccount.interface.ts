@@ -16,17 +16,13 @@ export interface IRecruiterAccount extends Document {
   emailAddress: string
   phoneNumber: string
   location: string
-
-  upworkUrl: string
-  linkedIn: string
-  xLink: string
-  OtherLink: string
   roleAtCompany: string
   awardTitle: string
   programName: string
   programDate: string
   awardDescription: string
   companyId: Types.ObjectId
+  sLink: string[]
 }
 
 export interface RecruiterAccountModel extends Model<IRecruiterAccount> {}

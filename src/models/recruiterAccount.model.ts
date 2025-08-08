@@ -24,17 +24,18 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       location: { type: String },
       emailAddress: { type: String },
       phoneNumber: { type: String },
-
-      upworkUrl: { type: String },
-      linkedIn: { type: String },
-      xLink: { type: String },
-      OtherLink: { type: String },
       roleAtCompany: { type: String },
       awardTitle: { type: String },
       programName: { type: String },
       programDate: { type: String },
       awardDescription: { type: String },
       companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
+      sLink: [
+        {
+          label: { type: String },
+          url: { type: String },
+        },
+      ],
     },
     { timestamps: true }
   )
