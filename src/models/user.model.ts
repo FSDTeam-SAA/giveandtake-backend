@@ -34,6 +34,7 @@ const userSchema: Schema = new Schema<IUser>(
     password_reset_token: { type: String, default: '' },
     deactivate: { type: Boolean, default: false },
     dateOfdeactivate: { type: Date },
+    refresh_token: { type: String },
   },
   { timestamps: true }
 )
