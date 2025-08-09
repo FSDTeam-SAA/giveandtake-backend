@@ -5,6 +5,7 @@ export type AccountType = 'candidat' | 'reqruter' | 'admin'
 export interface IRecruiterAccount extends Document {
   userId: Schema.Types.ObjectId
   bio: string
+  aboutUs: string
   photo: string
   title: string
   firstName: string

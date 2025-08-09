@@ -13,6 +13,7 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
         required: true,
       },
       bio: { type: String },
+      aboutUs: { type: String },
       photo: { type: String },
       title: { type: String },
       firstName: { type: String },
