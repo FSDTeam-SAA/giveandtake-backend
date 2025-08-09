@@ -21,7 +21,7 @@ router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
-router.route('/jobs/recommend').get(recommendJobs)
+router.route('/jobs/recommend').get(protect,recommendJobs)
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *

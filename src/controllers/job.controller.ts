@@ -36,6 +36,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     arcrivedJob,
     applicationRequirement,
     customQuestion,
+    employement_Type,
+    website_Url,
+    publishDate
   } = req.body
 
   if (!userId || !title || !description) {
@@ -90,6 +93,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     applicationRequirement,
     customQuestion,
     jobApprove,
+    employement_Type,
+    website_Url,
+    publishDate
   })
 
   await job.save()
@@ -243,7 +249,8 @@ export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
  * JOB RECOMMEND SYSTEM *
  ************************/
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.query
+  // const { userId } = req.query
+  const userId = req.user?._id
 
   if (!userId) {
     throw new AppError(httpStatus.BAD_REQUEST, 'userId is required')
