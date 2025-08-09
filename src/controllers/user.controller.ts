@@ -103,6 +103,12 @@ export const login = catchAsync(async (req, res) => {
     process.env.JWT_ACCESS_SECRET as string,
     process.env.JWT_ACCESS_EXPIRES_IN as string
   )
+  const refreshToken = createToken(
+    jwtPayload,
+    process.env.JWT_REFRESH_SECRET as string,
+    process.env.JWT_REFRESH_EXPIRES_IN as string
+  )
+  user.refresh_token = refreshToken
 
   let _user = await user.save()
 
@@ -114,6 +120,7 @@ export const login = catchAsync(async (req, res) => {
       accessToken,
       role: user.role,
       _id: user._id,
+      refreshToken
     },
   })
 })
