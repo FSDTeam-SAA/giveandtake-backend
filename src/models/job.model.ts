@@ -41,6 +41,8 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       default: 'pending',
     },
     publishDate: { type: Date },
+    employement_Type: { type: String , enum: ['full-time', 'part-time', 'internship'] },
+    website_Url: { type: String },
   },
   { timestamps: true }
 )

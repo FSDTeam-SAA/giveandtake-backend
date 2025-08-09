@@ -37,6 +37,8 @@ export interface IJob extends Document {
   customQuestion: ICustomQuestion[]
   jobApprove: string
   publishDate: Date
+  employement_Type: string
+  website_Url : string
 }
 
 export interface JobModel extends Model<IJob> {}
