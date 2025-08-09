@@ -16,9 +16,9 @@ import { AwardsAndHonor } from '../models/awardsAndHonor.model'
  * CREATE Application
  ***************/
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
-  const { jobId, userId, status } = req.body
+  const { jobId, userId, status, resumeId } = req.body
 
-  const exists = await AppliedJob.findOne({ jobId, userId })
+  const exists = await AppliedJob.findOne({ jobId, userId, resumeId: resumeId })
   if (exists) {
     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
   }
@@ -46,7 +46,7 @@ export const getApplicationsByJob = catchAsync(
     const applications = await AppliedJob.find({ jobId }).populate(
       'userId',
       'name email'
-    )
+    ).populate("resumeId")
 
     res.status(httpStatus.OK).json({
       success: true,
@@ -77,6 +77,7 @@ export const getApplicationsByUser = catchAsync(
     const applications = await AppliedJob.find(filter)
       .populate('jobId')
       .populate('userId', 'name email')
+      .populate("resumeId")
       .skip(skip)
       .limit(limit)
 

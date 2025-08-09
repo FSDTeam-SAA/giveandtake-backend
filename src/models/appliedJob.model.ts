@@ -18,6 +18,10 @@ const appliedJobSchema: Schema<IAppliedJob> = new Schema(
       enum: ['pending', 'rejected', 'shortlisted'],
       default: 'pending',
     },
+    resumeId:{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Resume',
+    }
   },
   { timestamps: true }
 )
