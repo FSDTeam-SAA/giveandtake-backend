@@ -5,5 +5,6 @@ export interface IAppliedJob extends Document {
   userId: mongoose.Types.ObjectId
   status: 'pending' | 'rejected' | 'shortlisted'
   createdAt?: Date
-  updatedAt?: Date
+  updatedAt?: Date,
+  resumeId: mongoose.Types.ObjectId
 }
