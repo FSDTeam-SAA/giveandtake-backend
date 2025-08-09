@@ -1,6 +1,6 @@
 import { Document, Model, Types } from 'mongoose'
 
-export type JobStatus = 'active' | 'deactive'
+export type JobStatus = 'active' | 'deactivate'
 
 export interface IApplicationRequirement {
   label: string
@@ -36,6 +36,7 @@ export interface IJob extends Document {
   applicationRequirement: IApplicationRequirement[]
   customQuestion: ICustomQuestion[]
   jobApprove: string
+  publishDate: Date
 }
 
 export interface JobModel extends Model<IJob> {}

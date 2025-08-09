@@ -105,6 +105,41 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 /********************************************
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
+// export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
+//   const { title, location } = req.query
+
+//   const filter: any = {}
+//   if (title) filter.title = { $regex: title, $options: 'i' }
+//   if (location) filter.location = { $regex: location, $options: 'i' }
+
+//   const { page, limit, skip } = getPaginationParams(req.query)
+
+//   const totalJobs = await Job.countDocuments(filter)
+//   console.log('first')
+//   const jobs = await Job.find({
+//     ...filter,
+//     arcrivedJob: false,
+//     jobApprove: 'approved',
+//   })
+//     .skip(skip)
+//     .limit(limit)
+//     .sort({ createdAt: -1 })
+//     // .populate('userId', 'name email')
+//     .populate('companyId')
+
+//   console.log(2, jobs)
+
+//   const meta = buildMetaPagination(totalJobs, page, limit)
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.OK,
+//     success: true,
+//     message: 'Jobs fetched successfully',
+//     data: { meta, jobs },
+//   })
+// })
+
+
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const { title, location } = req.query
 
@@ -112,10 +147,21 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   if (title) filter.title = { $regex: title, $options: 'i' }
   if (location) filter.location = { $regex: location, $options: 'i' }
 
+  // Ensure publishDate is null OR publishDate <= today
+  filter.$or = [
+    { publishDate: { $exists: false } },
+    { publishDate: null },
+    { publishDate: { $lte: new Date() } },
+  ]
+
   const { page, limit, skip } = getPaginationParams(req.query)
 
-  const totalJobs = await Job.countDocuments(filter)
-  console.log('first')
+  const totalJobs = await Job.countDocuments({
+    ...filter,
+    arcrivedJob: false,
+    jobApprove: 'approved',
+  })
+
   const jobs = await Job.find({
     ...filter,
     arcrivedJob: false,
@@ -124,10 +170,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
-    // .populate('userId', 'name email')
     .populate('companyId')
-
-  console.log(2, jobs)
 
   const meta = buildMetaPagination(totalJobs, page, limit)
 
@@ -138,6 +181,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     data: { meta, jobs },
   })
 })
+
 
 /*******************
  * // UPDATE A JOB *

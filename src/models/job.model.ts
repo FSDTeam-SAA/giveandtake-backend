@@ -17,7 +17,11 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     vacancy: { type: Number, default: 1 },
     experience: { type: Number },
     deadline: { type: Date },
-    status: { type: String, enum: ['active', 'deactive'], default: 'active' },
+    status: {
+      type: String,
+      enum: ['active', 'deactivate'],
+      default: 'active',
+    },
     jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCategory' },
     compensation: { type: String },
     arcrivedJob: { type: Boolean, default: false },
@@ -36,6 +40,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       enm: ['pending', 'approved', 'denied'],
       default: 'pending',
     },
+    publishDate: { type: Date },
   },
   { timestamps: true }
 )
