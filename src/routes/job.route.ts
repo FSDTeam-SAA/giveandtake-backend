@@ -16,12 +16,12 @@ const router = express.Router()
 
 router.route('/jobs').post(createJob).get(getAllJobs)
 
-router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
-
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
 router.route('/jobs/recommend').get(protect,recommendJobs)
+router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
+
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
