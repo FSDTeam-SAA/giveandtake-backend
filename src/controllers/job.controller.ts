@@ -66,7 +66,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     )
   }
 
-  await checkIfUserCanPostJob(userId)
+  // await checkIfUserCanPostJob(userId)
 
   const job = new Job({
     userId,
