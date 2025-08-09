@@ -564,3 +564,45 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
     data: updatedUser,
   })
 })
+
+
+// Refresh Token
+export const refreshToken = catchAsync(async (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        throw new AppError(400, 'Refresh token is required');
+    }
+
+    const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET as string) as JwtPayload;
+    const user = await User.findById(decoded._id);
+    if (!user ) {
+        throw new AppError(401, 'Invalid refresh token');
+    }
+    const jwtPayload = {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+    };
+
+    const accessToken = createToken(
+        jwtPayload,
+        process.env.JWT_ACCESS_SECRET as string,
+        process.env.JWT_ACCESS_EXPIRES_IN as string,
+    );
+
+    const refreshToken1 = createToken(
+        jwtPayload,
+        process.env.JWT_REFRESH_SECRET as string,
+        process.env.JWT_REFRESH_EXPIRES_IN as string,
+    );
+    user.refresh_token = refreshToken1;
+    await user.save();
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Token refreshed successfully',
+        data: { accessToken: accessToken, refreshToken: refreshToken1 },
+    });
+});

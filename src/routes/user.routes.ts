@@ -14,6 +14,7 @@ import {
   getAllUserEmails,
   getUserById,
   updateUser,
+  refreshToken,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 import { resumeUpload } from '../middlewares/multer.middleware'
@@ -41,6 +42,7 @@ router.get('/all/user', getAllUserEmails)
 
 router.get('/user/single', protect, getUserById)
 router.patch('/user/update', protect, resumeUpload,updateUser)
+router.post('/refresh-token', refreshToken)
 
 
 export default router
