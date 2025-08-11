@@ -15,6 +15,7 @@ import { Request, Response } from 'express'
 
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
+import { CreateResume } from '../models/createResume.model'
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body
@@ -469,11 +470,15 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
 
+  const resume = await CreateResume.findOne( { userId: id } ).select("sLink");
+  const user1: any = user.toObject();
+  user1.sLink  = resume?.sLink;
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'User fetched successfully',
-    data: user,
+    data: user1,
   })
 })
 
