@@ -472,7 +472,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
 
   const resume = await CreateResume.findOne( { userId: id } ).select("sLink");
   const user1: any = user.toObject();
-  user1.sLink  = resume?.sLink;
+  user1.sLink  = resume?.sLink || null;
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
