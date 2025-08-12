@@ -161,6 +161,52 @@ export const getCompanyByUserId = catchAsync(
   }
 )
 
+
+export const getCompanyByEmployeeId = catchAsync(
+  async (req: Request, res: Response) => {
+    const { userId } = req.params
+
+    const { page, limit, skip } = getPaginationParams(req.query)
+
+    // Count total companies for this user
+    const totalCompanies = await Company.countDocuments({ userId })
+
+    // Fetch companies with pagination
+    const companies = await Company.find({ employeesId: { $in: [userId] } })
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 })
+
+
+    companies.map( async (company) => {
+      const honors = await AwardsAndHonor.find({ userId: company.userId })
+      .sort({ programeDate: -1 })
+      return {...company.toObject(), honors }
+    })
+
+    // Get related AwardsAndHonor (if any), for all companies by user
+    const honors = await AwardsAndHonor.find({ userId }).sort({
+      programeDate: -1,
+    })
+
+    const meta = buildMetaPagination(totalCompanies, page, limit)
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Companies and related honors fetched successfully',
+
+      data: {
+        meta,
+        companies,
+        honors,
+      },
+    })
+  }
+)
+
+
+
 /************************
  * DELETE COMPANY BY ID *
  ************************/
