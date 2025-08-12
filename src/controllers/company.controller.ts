@@ -178,16 +178,19 @@ export const getCompanyByEmployeeId = catchAsync(
       .sort({ createdAt: -1 })
 
 
-    companies.map( async (company) => {
-      const honors = await AwardsAndHonor.find({ userId: company.userId })
-      .sort({ programeDate: -1 })
-      return {...company.toObject(), honors }
-    })
+    const companiesWithHonors = await Promise.all(
+      companies.map(async (company) => {
+        const honors = await AwardsAndHonor.find({ userId: company.userId })
+          .sort({ programeDate: -1 });
 
-    // Get related AwardsAndHonor (if any), for all companies by user
-    const honors = await AwardsAndHonor.find({ userId }).sort({
-      programeDate: -1,
-    })
+        return { ...company.toObject(), honors };
+      })
+    );
+
+    // // Get related AwardsAndHonor (if any), for all companies by user
+    // const honors = await AwardsAndHonor.find({ userId }).sort({
+    //   programeDate: -1,
+    // })
 
     const meta = buildMetaPagination(totalCompanies, page, limit)
 
@@ -198,8 +201,7 @@ export const getCompanyByEmployeeId = catchAsync(
 
       data: {
         meta,
-        companies,
-        honors,
+        companiesWithHonors,
       },
     })
   }
