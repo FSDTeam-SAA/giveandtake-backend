@@ -23,7 +23,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
   }
 
-  const application = await AppliedJob.create({ jobId, userId, status })
+  const application = await AppliedJob.create({ jobId, userId, status, resumeId })
 
   res.status(httpStatus.CREATED).json({
     success: true,
