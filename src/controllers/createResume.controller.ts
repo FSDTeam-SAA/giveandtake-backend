@@ -102,12 +102,10 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   // } = req.body
 
 
-  const {
-    resume = {},
-    experiences = [],
-    educationList = [],
-    awardsAndHonors = [],
-  } = req.body
+  const resume = JSON.parse(req.body.resume || '{}')
+  const experiences = JSON.parse(req.body.experiences || '[]')
+  const educationList = JSON.parse(req.body.educationList || '[]')
+  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]')
   
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
