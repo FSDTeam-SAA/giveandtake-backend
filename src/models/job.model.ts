@@ -4,7 +4,7 @@ import { IJob, JobModel } from '../interface/job.interface'
 const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
     title: { type: String, required: true },
     description: { type: String, required: true },
     companyName: { type: String },
@@ -41,7 +41,10 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       default: 'pending',
     },
     publishDate: { type: Date },
-    employement_Type: { type: String , enum: ['full-time', 'part-time', 'internship'] },
+    employement_Type: {
+      type: String,
+      enum: ['full-time', 'part-time', 'internship'],
+    },
     website_Url: { type: String },
   },
   { timestamps: true }
