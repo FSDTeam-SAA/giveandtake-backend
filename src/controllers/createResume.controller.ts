@@ -94,13 +94,21 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
  *******************/
 export const updateResume = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id
+  // const {
+  //   resume,
+  //   experiences = [],
+  //   educationList = [],
+  //   awardsAndHonors = [],
+  // } = req.body
+
+
   const {
-    resume,
+    resume = {},
     experiences = [],
     educationList = [],
     awardsAndHonors = [],
   } = req.body
-
+  
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
   // Upload new photo if provided
