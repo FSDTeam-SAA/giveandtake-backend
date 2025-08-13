@@ -54,6 +54,23 @@ export const getResumeByUserId = catchAsync(
   }
 )
 
+
+export const getResumeByUserId1 = catchAsync(
+  async (req: Request, res: Response) => {
+    const {userId} = req.params
+
+    const resumes = await Resume.find({ userId })
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Resumes fetched successfully',
+      data: resumes,
+    })
+  }
+)
+
+
 /***********************
  * ADD NEW FILE TO RESUME *
  ***********************/

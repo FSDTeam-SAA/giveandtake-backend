@@ -482,6 +482,32 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
+
+
+export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
+  const {userId} = req.params
+
+  const user = await User.findById(userId).select(
+    '-password -verificationInfo -password_reset_token'
+  )
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  const resume = await CreateResume.findOne( { userId: userId } ).select("sLink");
+  const user1: any = user.toObject();
+  user1.sLink  = resume?.sLink || null;
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'User fetched successfully',
+    data: user1,
+  })
+})
+
+
 /**************************
  * UPDATE USER INFO BY ID *
  **************************/
