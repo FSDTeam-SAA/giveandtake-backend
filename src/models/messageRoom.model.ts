@@ -23,6 +23,10 @@ const messageRoomSchema: Schema<IMessageRoom> = new Schema<IMessageRoom>(
       type: String,
       default: '',
     },
+    lastMessageSender: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: '',
+    }
   },
   { timestamps: true }
 )

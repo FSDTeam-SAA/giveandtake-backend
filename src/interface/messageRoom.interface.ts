@@ -6,6 +6,7 @@ export interface IMessageRoom extends Document {
   lastMessage: string
   messsageAccepted: boolean
   companyId: Types.ObjectId
+  lastMessageSender: Types.ObjectId
 }
 
 export interface MessageRoomModel extends Model<IMessageRoom> {}

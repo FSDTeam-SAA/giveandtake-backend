@@ -51,8 +51,6 @@ import { MessageRoom } from '../models/messageRoom.model'
 //   })
 // })
 
-
-
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const { message, roomId, userId } = req.body
   const files = req.files as Express.Multer.File[]
@@ -87,7 +85,10 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   // ✅ Update lastMessage in MessageRoom
   await MessageRoom.findByIdAndUpdate(
     roomId,
-    { lastMessage: message || (fileData.length ? '📎 Attachment' : '') },
+    {
+      lastMessage: message || (fileData.length ? '📎 Attachment' : ''),
+      lastMessageSender: userId,
+    },
     { new: true }
   )
 
@@ -100,7 +101,6 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     data: newMessage,
   })
 })
-
 
 /***************
  * GET MESSAGES BY ROOM (Paginated)
