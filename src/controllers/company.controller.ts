@@ -151,7 +151,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Company updated successfully',
-    data: updated,
+    data: {updated,results},
   })
 })
 
