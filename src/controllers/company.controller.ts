@@ -37,8 +37,8 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     companyData.links = JSON.parse(companyData.links || "[]");
     companyData.service = JSON.parse(companyData.service || "[]");
     // Optional: attach userId from req.user if available
-    if (req.user?.id) {
-      companyData.userId = req.user.id;
+    if (req.user?._id) {
+      companyData.userId = req.user._id;
     }
 
     // Create company document
