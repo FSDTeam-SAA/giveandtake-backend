@@ -204,6 +204,34 @@ export const getApplicationsByUser = catchAsync(
 /***************
  * UPDATE Application Status
  ***************/
+// export const updateApplicationStatus = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { id } = req.params
+//     const { status } = req.body
+
+//     if (!['shortlisted', 'rejected'].includes(status)) {
+//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid status value')
+//     }
+
+//     const updated = await AppliedJob.findByIdAndUpdate(
+//       id,
+//       { status },
+//       { new: true }
+//     )
+
+//     if (!updated) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Application not found')
+//     }
+
+//     res.status(httpStatus.OK).json({
+//       success: true,
+//       message: 'Application status updated',
+//       data: updated,
+//     })
+//   }
+// )
+
+
 export const updateApplicationStatus = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
@@ -217,11 +245,25 @@ export const updateApplicationStatus = catchAsync(
       id,
       { status },
       { new: true }
-    )
+    ).populate('jobId', 'title')
 
     if (!updated) {
       throw new AppError(httpStatus.NOT_FOUND, 'Application not found')
     }
+
+    // ✅ Notify the applicant about status change
+    const jobTitle = (updated.jobId as any)?.title || 'the job'
+    let notifyMessage =
+      status === 'shortlisted'
+        ? `You have been shortlisted for the job "${jobTitle}".`
+        : `You have been rejected for the job "${jobTitle}".`
+
+    await createNotification({
+      to: updated.userId as mongoose.Types.ObjectId,
+      message: notifyMessage,
+      type: 'job_application_status',
+      id: updated._id,
+    })
 
     res.status(httpStatus.OK).json({
       success: true,
@@ -230,6 +272,7 @@ export const updateApplicationStatus = catchAsync(
     })
   }
 )
+
 
 /***************
  * DELETE Application
