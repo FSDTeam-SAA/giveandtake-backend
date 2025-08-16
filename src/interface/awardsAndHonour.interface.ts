@@ -5,5 +5,6 @@ export interface IAwardsAndHonor extends Document {
   title: string
   programeName: string
   programeDate: Date
-  description: string
+  description: string,
+  issuer: string
 }

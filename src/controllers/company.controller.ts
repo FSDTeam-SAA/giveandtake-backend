@@ -125,6 +125,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
             title: item.title,
             programeDate: item.programeDate,
             description: item.description,
+            issuer: item.issuer,
           });
           return await newHonor.save();
         }
@@ -136,6 +137,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
               title: item.title,
               programeDate: item.programeDate,
               description: item.description,
+              issuer: item.issuer,
             },
             { new: true }
           );
