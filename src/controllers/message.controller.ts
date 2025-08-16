@@ -6,10 +6,52 @@ import AppError from '../errors/AppError'
 import mongoose from 'mongoose'
 import { io } from '../server'
 import { uploadToCloudinary } from '../utils/cloudinary' // Adjust path
+import { MessageRoom } from '../models/messageRoom.model'
 
 /***************
  * CREATE MESSAGE
  ***************/
+
+// export const createMessage = catchAsync(async (req: Request, res: Response) => {
+//   const { message, roomId, userId } = req.body
+//   const files = req.files as Express.Multer.File[]
+
+//   if (!mongoose.Types.ObjectId.isValid(roomId)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
+//   }
+
+//   // Upload all files to Cloudinary
+//   const fileData = await Promise.all(
+//     files.map(async (file) => {
+//       const result = await uploadToCloudinary(file.path)
+//       if (result) {
+//         return {
+//           filename: file.originalname,
+//           url: result.secure_url,
+//           public_id: result.public_id, // save this if you want to support deletion
+//           uploadedAt: new Date(),
+//         }
+//       }
+//     })
+//   )
+
+//   const newMessage = await Message.create({
+//     message,
+//     roomId,
+//     userId,
+//     file: fileData.filter(Boolean), // remove nulls
+//   })
+
+//   io.to(roomId).emit('newMessage', newMessage)
+
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Message created',
+//     data: newMessage,
+//   })
+// })
+
+
 
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const { message, roomId, userId } = req.body
@@ -27,13 +69,14 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
         return {
           filename: file.originalname,
           url: result.secure_url,
-          public_id: result.public_id, // save this if you want to support deletion
+          public_id: result.public_id,
           uploadedAt: new Date(),
         }
       }
     })
   )
 
+  // Create message
   const newMessage = await Message.create({
     message,
     roomId,
@@ -41,6 +84,14 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     file: fileData.filter(Boolean), // remove nulls
   })
 
+  // ✅ Update lastMessage in MessageRoom
+  await MessageRoom.findByIdAndUpdate(
+    roomId,
+    { lastMessage: message || (fileData.length ? '📎 Attachment' : '') },
+    { new: true }
+  )
+
+  // Emit socket event
   io.to(roomId).emit('newMessage', newMessage)
 
   res.status(httpStatus.CREATED).json({
