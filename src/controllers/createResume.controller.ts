@@ -89,6 +89,36 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
+
+
+/*********************
+ * GET A USER RESUME *
+ *********************/
+export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.params.userId
+
+  const resume = await CreateResume.findOne({ userId })
+  const experiences = await Experience.find({ userId })
+  const education = await Education.find({ userId })
+  const awardsAndHonors = await AwardsAndHonor.find({ userId })
+  const elevatorPitch = await ElevatorPitch.find({ userId })
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Resume fetched successfully',
+    data: {
+      resume,
+      experiences,
+      education,
+      awardsAndHonors,
+      elevatorPitch,
+    },
+  })
+})
+
+
+
 /*******************
  * UPDATE A RESUME *
  *******************/
