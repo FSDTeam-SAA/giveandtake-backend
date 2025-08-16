@@ -95,21 +95,29 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
 export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
+  const companyData ={...req.body} as any
+
   // Upload new logo if provided
   if (req.file?.path) {
     const cloudinaryRes = await uploadToCloudinary(req.file.path);
     if (cloudinaryRes?.secure_url) {
-      req.body.clogo = cloudinaryRes.secure_url;
+      companyData.clogo = cloudinaryRes.secure_url;
     }
   }
 
-  const updated = await Company.findByIdAndUpdate(id, req.body, {
+      companyData.employeesId = JSON.parse(req.body.employeesId || "[]");
+    companyData.links = JSON.parse(req.body.links || "[]");
+    companyData.service = JSON.parse(req.body.service || "[]");
+
+  const updated = await Company.findByIdAndUpdate(id, companyData, {
     new: true,
     runValidators: true,
   })
     const honors = JSON.parse(req.body.honors || "[]"); // expecting array
+    let results
+    if(honors.length > 0){
 
-    const results = await Promise.all(
+     results = await Promise.all(
       honors.map(async (item: any) => {
         if (item.type === "create") {
           const newHonor = new AwardsAndHonor({
@@ -140,6 +148,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
         return null;
       })
     );
+  }
 
   if (!updated) {
     res.status(httpStatus.NOT_FOUND).json({
