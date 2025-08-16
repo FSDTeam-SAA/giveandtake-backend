@@ -105,6 +105,39 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     new: true,
     runValidators: true,
   })
+    const honors = JSON.parse(req.body.honors || "[]"); // expecting array
+
+    const results = await Promise.all(
+      honors.map(async (item: any) => {
+        if (item.type === "create") {
+          const newHonor = new AwardsAndHonor({
+            userId: req.user?._id, // adjust if needed
+            title: item.title,
+            programeDate: item.programeDate,
+            description: item.description,
+          });
+          return await newHonor.save();
+        }
+
+        if (item.type === "update" && item._id) {
+          return await AwardsAndHonor.findByIdAndUpdate(
+            item._id,
+            {
+              title: item.title,
+              programeDate: item.programeDate,
+              description: item.description,
+            },
+            { new: true }
+          );
+        }
+
+        if (item.type === "delete" && item._id) {
+          return await AwardsAndHonor.findByIdAndDelete(item._id);
+        }
+
+        return null;
+      })
+    );
 
   if (!updated) {
     res.status(httpStatus.NOT_FOUND).json({
