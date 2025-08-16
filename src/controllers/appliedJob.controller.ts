@@ -10,20 +10,68 @@ import { Education } from '../models/education.model';
 import { Experience } from '../models/experience.model';
 import { ElevatorPitch } from '../models/elevatorPitch.model';
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
+import { createNotification } from '../sockets/notification.service'
+import { Job } from '../models/job.model'
 
 
 /***************
  * CREATE Application
  ***************/
+// export const applyForJob = catchAsync(async (req: Request, res: Response) => {
+//   const { jobId, userId, status, resumeId } = req.body
+
+//   const exists = await AppliedJob.findOne({ jobId, userId, resumeId: resumeId })
+//   if (exists) {
+//     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
+//   }
+
+//   const application = await AppliedJob.create({ jobId, userId, status, resumeId })
+
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Application submitted',
+//     data: application,
+//   })
+// })
+
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, userId, status, resumeId } = req.body
 
-  const exists = await AppliedJob.findOne({ jobId, userId, resumeId: resumeId })
+  // Check if already applied
+  const exists = await AppliedJob.findOne({ jobId, userId, resumeId })
   if (exists) {
     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
   }
 
-  const application = await AppliedJob.create({ jobId, userId, status, resumeId })
+  // Create application
+  const application = await AppliedJob.create({
+    jobId,
+    userId,
+    status,
+    resumeId,
+  })
+
+  // 🔹 Fetch job details (to know who posted it)
+  const job = await Job.findById(jobId).populate('userId', 'username')
+  if (!job) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+  }
+
+  // ✅ Notify the Job Owner
+  await createNotification({
+    to: job.userId as mongoose.Types.ObjectId,
+    message: `A new candidate has applied for your job "${job.title}".`,
+    type: 'job_application',
+    id: application._id,
+  })
+
+  // ✅ Notify the Applicant
+  await createNotification({
+    to: userId,
+    message: `You have successfully applied for the job "${job.title}".`,
+    type: 'job_application_confirmation',
+    id: application._id,
+  })
 
   res.status(httpStatus.CREATED).json({
     success: true,
@@ -31,6 +79,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     data: application,
   })
 })
+
 
 /****************************
  * GET Applications by Job ID
@@ -55,10 +104,6 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
 //     })
 //   }
 // )
-
-
-
-
 
 
 export const getApplicationsByJob = catchAsync(
