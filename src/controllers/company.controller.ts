@@ -37,8 +37,8 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     companyData.links = JSON.parse(companyData.links || "[]");
     companyData.service = JSON.parse(companyData.service || "[]");
     // Optional: attach userId from req.user if available
-    if (req.user?.id) {
-      companyData.userId = req.user.id;
+    if (req.user?._id) {
+      companyData.userId = req.user._id;
     }
 
     // Create company document
@@ -125,6 +125,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
             title: item.title,
             programeDate: item.programeDate,
             description: item.description,
+            issuer: item.issuer,
           });
           return await newHonor.save();
         }
@@ -136,6 +137,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
               title: item.title,
               programeDate: item.programeDate,
               description: item.description,
+              issuer: item.issuer,
             },
             { new: true }
           );

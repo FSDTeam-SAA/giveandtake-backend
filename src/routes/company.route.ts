@@ -13,7 +13,7 @@ import { protect } from '../middlewares/auth.middleware'
 const router = express.Router()
 
 router.post('/', upload.single('clogo'), protect ,createCompany)
-router.put('/:id',upload.single('clogo'), updateCompany)
+router.put('/:id',upload.single('clogo'),protect, updateCompany)
 router.get('/user/:userId', getCompanyByUserId)
 router.get('/employee/:userId', getCompanyByEmployeeId)
 router.delete('/:id', deleteCompany)

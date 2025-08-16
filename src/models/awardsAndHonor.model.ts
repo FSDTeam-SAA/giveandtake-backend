@@ -21,6 +21,10 @@ const AwardsAndHonorSchema: Schema<IAwardsAndHonor> = new Schema(
     programeDate: {
       type: Date,
     },
+        issuer: {
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
     },

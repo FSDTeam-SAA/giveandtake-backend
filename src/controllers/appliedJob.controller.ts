@@ -35,26 +35,70 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
 /****************************
  * GET Applications by Job ID
  ***************/
+// export const getApplicationsByJob = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { jobId } = req.params
+
+//     if (!mongoose.Types.ObjectId.isValid(jobId)) {
+//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid Job ID')
+//     }
+
+//     const applications = await AppliedJob.find({ jobId }).populate(
+//       'userId',
+//       'name email'
+//     ).populate("resumeId")
+
+//     res.status(httpStatus.OK).json({
+//       success: true,
+//       message: 'Applications fetched by job',
+//       data: applications,
+//     })
+//   }
+// )
+
+
+
+
+
+
 export const getApplicationsByJob = catchAsync(
   async (req: Request, res: Response) => {
-    const { jobId } = req.params
+    const { jobId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid Job ID')
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid Job ID");
     }
 
-    const applications = await AppliedJob.find({ jobId }).populate(
-      'userId',
-      'name email'
-    ).populate("resumeId")
+    // ✅ Extract pagination params (default: page=1, limit=10)
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    // ✅ Get total count for pagination metadata
+    const total = await AppliedJob.countDocuments({ jobId });
+
+    // ✅ Fetch applications with pagination
+    const applications = await AppliedJob.find({ jobId })
+      .populate("userId", "name email")
+      .populate("resumeId")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }); // optional: newest first
 
     res.status(httpStatus.OK).json({
       success: true,
-      message: 'Applications fetched by job',
+      message: "Applications fetched by job",
       data: applications,
-    })
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   }
-)
+);
+
 
 /***************
  * GET Applications by User ID (with optional query)
