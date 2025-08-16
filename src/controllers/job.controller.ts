@@ -371,6 +371,26 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
   })
 })
 
+
+
+
+export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
+  const userId = req.params.id
+  const Jobs = await Job.find({ companyId: userId, arcrivedJob: false }).sort({
+    createAt: -1,
+  })
+
+  // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'jobs fetched successfully',
+    data: Jobs,
+  })
+})
+
+
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/

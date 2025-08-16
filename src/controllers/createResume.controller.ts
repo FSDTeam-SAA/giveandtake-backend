@@ -162,24 +162,86 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   ])
 
   // Insert new related documents
-  const [updatedExperiences, updatedEducation, updatedAwards] =
-    await Promise.all([
-      experiences.length
-        ? Experience.insertMany(
-            experiences.map((exp: any) => ({ ...exp, userId }))
-          )
-        : Promise.resolve([]),
-      educationList.length
-        ? Education.insertMany(
-            educationList.map((edu: any) => ({ ...edu, userId }))
-          )
-        : Promise.resolve([]),
-      awardsAndHonors.length
-        ? AwardsAndHonor.insertMany(
-            awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
-          )
-        : Promise.resolve([]),
-    ])
+  // const [updatedExperiences, updatedEducation, updatedAwards] =
+  //   await Promise.all([
+  //     experiences.length
+  //       ? Experience.insertMany(
+  //           experiences.map((exp: any) => ({ ...exp, userId }))
+  //         )
+  //       : Promise.resolve([]),
+  //     educationList.length
+  //       ? Education.insertMany(
+  //           educationList.map((edu: any) => ({ ...edu, userId }))
+  //         )
+  //       : Promise.resolve([]),
+  //     awardsAndHonors.length
+  //       ? AwardsAndHonor.insertMany(
+  //           awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
+  //         )
+  //       : Promise.resolve([]),
+  //   ])
+
+  const [updatedExperiences, updatedEducation, updatedAwards] = await Promise.all([
+  // 🔹 Experiences
+  Promise.all(
+    experiences.map(async (exp: any) => {
+      if (exp.type === "create") {
+        return await Experience.create({ ...exp, userId });
+      }
+      if (exp.type === "update" && exp._id) {
+        return await Experience.findByIdAndUpdate(
+          exp._id,
+          { ...exp, userId },
+          { new: true }
+        );
+      }
+      if (exp.type === "delete" && exp._id) {
+        return await Experience.findByIdAndDelete(exp._id);
+      }
+      return null;
+    })
+  ),
+
+  // 🔹 Education
+  Promise.all(
+    educationList.map(async (edu: any) => {
+      if (edu.type === "create") {
+        return await Education.create({ ...edu, userId });
+      }
+      if (edu.type === "update" && edu._id) {
+        return await Education.findByIdAndUpdate(
+          edu._id,
+          { ...edu, userId },
+          { new: true }
+        );
+      }
+      if (edu.type === "delete" && edu._id) {
+        return await Education.findByIdAndDelete(edu._id);
+      }
+      return null;
+    })
+  ),
+
+  // 🔹 Awards & Honors
+  Promise.all(
+    awardsAndHonors.map(async (honor: any) => {
+      if (honor.type === "create") {
+        return await AwardsAndHonor.create({ ...honor, userId });
+      }
+      if (honor.type === "update" && honor._id) {
+        return await AwardsAndHonor.findByIdAndUpdate(
+          honor._id,
+          { ...honor, userId },
+          { new: true }
+        );
+      }
+      if (honor.type === "delete" && honor._id) {
+        return await AwardsAndHonor.findByIdAndDelete(honor._id);
+      }
+      return null;
+    })
+  ),
+]);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
