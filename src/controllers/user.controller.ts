@@ -637,3 +637,43 @@ export const refreshToken = catchAsync(async (req, res) => {
         data: { accessToken: accessToken, refreshToken: refreshToken1 },
     });
 });
+
+
+
+/***************************
+ * GET ALL CANDIDATE USERS *
+ ***************************/
+export const getCandidates = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 10
+    const skip = (page - 1) * limit
+
+    // Find candidates
+    const candidates = await User.find({ role: 'candidate' })
+      .skip(skip)
+      .limit(limit)
+      .select('-password -refresh_token') // exclude sensitive fields
+
+    // Count total candidates
+    const total = await User.countDocuments({ role: 'candidate' })
+
+    res.status(200).json({
+      success: true,
+      message: 'Candidates retrieved successfully',
+      data: candidates,
+      meta: {
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+      },
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving candidates',
+      error: error.message,
+    })
+  }
+}
