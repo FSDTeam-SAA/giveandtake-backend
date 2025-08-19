@@ -17,6 +17,7 @@ import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
 import { CreateResume } from '../models/createResume.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
+import { Company } from '../models/company.model'
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body
@@ -733,6 +734,65 @@ export const getRecruitersWithAccounts = async (
       // recruiter.controller.ts
       success: false,
       message: 'Error retrieving recruiters',
+      error: error.message,
+    })
+  }
+}
+
+
+/*************************
+ * GET ALL COMPANY USERS *
+ *************************/
+export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 10
+    const skip = (page - 1) * limit
+
+    // Find users with role = company
+    const companies = await User.find({ role: 'company' })
+      .skip(skip)
+      .limit(limit)
+      .select('-password -refresh_token')
+      .lean()
+
+    // Collect company user IDs
+    const companyUserIds = companies.map((c) => c._id)
+
+    // Fetch company profiles linked to those users
+    const companyProfiles = await Company.find({
+      userId: { $in: companyUserIds },
+    }).lean()
+
+    // Merge user + company profile
+    const companiesWithAccounts = companies.map((companyUser) => {
+      const profile = companyProfiles.find(
+        (p) => p.userId?.toString() === companyUser._id.toString()
+      )
+      return {
+        ...companyUser,
+        companyProfile: profile || null,
+      }
+    })
+
+    // Count total
+    const total = await User.countDocuments({ role: 'company' })
+
+    res.status(200).json({
+      success: true,
+      message: 'Companies with accounts retrieved successfully',
+      data: companiesWithAccounts,
+      meta: {
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+      },
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving companies',
       error: error.message,
     })
   }

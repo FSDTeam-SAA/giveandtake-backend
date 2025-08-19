@@ -18,6 +18,7 @@ import {
   getUserById1,
   getCandidates,
   getRecruitersWithAccounts,
+  getCompaniesWithAccounts,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 import { resumeUpload } from '../middlewares/multer.middleware'
@@ -28,10 +29,9 @@ router.post('/user/register', register)
 router.post('/user/login', login)
 router.post('/user/verify', verifyEmail)
 router.post('/user/forget', forgetPassword),
-router.post('/user/reset-password', resetPassword)
+  router.post('/user/reset-password', resetPassword)
 router.post('/user/change-password', protect, changePassword)
 router.patch('/user/deactivate', protect, deactivateUser)
-
 
 /**********************
  * SECURITY QUESTIONS *
@@ -45,15 +45,11 @@ router.get('/all/user', getAllUserEmails)
 
 router.get('/user/single', protect, getUserById)
 router.get('/user/single/:userId', protect, getUserById1)
-router.patch('/user/update', protect, resumeUpload,updateUser)
+router.patch('/user/update', protect, resumeUpload, updateUser)
 router.post('/refresh-token', refreshToken)
-
 
 router.get('/candidates', getCandidates)
 router.get('/recruiters', getRecruitersWithAccounts)
-
-
-
-
+router.get('/companies', getCompaniesWithAccounts)
 
 export default router
