@@ -16,6 +16,7 @@ import { Request, Response } from 'express'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
 import { CreateResume } from '../models/createResume.model'
+import { RecruiterAccount } from '../models/recruiterAccount.model'
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body
@@ -121,7 +122,7 @@ export const login = catchAsync(async (req, res) => {
       accessToken,
       role: user.role,
       _id: user._id,
-      refreshToken
+      refreshToken,
     },
   })
 })
@@ -346,7 +347,7 @@ export const verifySecurityAnswers = catchAsync(
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'Number of answers does not match the number of security questions'
-      ) 
+      )
     }
 
     if (!user || user.securityQuestions.length <= 0) {
@@ -470,9 +471,9 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
 
-  const resume = await CreateResume.findOne( { userId: id } ).select("sLink");
-  const user1: any = user.toObject();
-  user1.sLink  = resume?.sLink || null;
+  const resume = await CreateResume.findOne({ userId: id }).select('sLink')
+  const user1: any = user.toObject()
+  user1.sLink = resume?.sLink || null
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -482,10 +483,8 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-
-
 export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
-  const {userId} = req.params
+  const { userId } = req.params
 
   const user = await User.findById(userId).select(
     '-password -verificationInfo -password_reset_token'
@@ -495,9 +494,9 @@ export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
 
-  const resume = await CreateResume.findOne( { userId: userId } ).select("sLink");
-  const user1: any = user.toObject();
-  user1.sLink  = resume?.sLink || null;
+  const resume = await CreateResume.findOne({ userId: userId }).select('sLink')
+  const user1: any = user.toObject()
+  user1.sLink = resume?.sLink || null
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -506,7 +505,6 @@ export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
     data: user1,
   })
 })
-
 
 /**************************
  * UPDATE USER INFO BY ID *
@@ -596,49 +594,49 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-
 // Refresh Token
 export const refreshToken = catchAsync(async (req, res) => {
-    const { refreshToken } = req.body;
+  const { refreshToken } = req.body
 
-    if (!refreshToken) {
-        throw new AppError(400, 'Refresh token is required');
-    }
+  if (!refreshToken) {
+    throw new AppError(400, 'Refresh token is required')
+  }
 
-    const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET as string) as JwtPayload;
-    const user = await User.findById(decoded._id);
-    if (!user ) {
-        throw new AppError(401, 'Invalid refresh token');
-    }
-    const jwtPayload = {
-        _id: user._id,
-        email: user.email,
-        role: user.role,
-    };
+  const decoded = verifyToken(
+    refreshToken,
+    process.env.JWT_REFRESH_SECRET as string
+  ) as JwtPayload
+  const user = await User.findById(decoded._id)
+  if (!user) {
+    throw new AppError(401, 'Invalid refresh token')
+  }
+  const jwtPayload = {
+    _id: user._id,
+    email: user.email,
+    role: user.role,
+  }
 
-    const accessToken = createToken(
-        jwtPayload,
-        process.env.JWT_ACCESS_SECRET as string,
-        process.env.JWT_ACCESS_EXPIRES_IN as string,
-    );
+  const accessToken = createToken(
+    jwtPayload,
+    process.env.JWT_ACCESS_SECRET as string,
+    process.env.JWT_ACCESS_EXPIRES_IN as string
+  )
 
-    const refreshToken1 = createToken(
-        jwtPayload,
-        process.env.JWT_REFRESH_SECRET as string,
-        process.env.JWT_REFRESH_EXPIRES_IN as string,
-    );
-    user.refresh_token = refreshToken1;
-    await user.save();
+  const refreshToken1 = createToken(
+    jwtPayload,
+    process.env.JWT_REFRESH_SECRET as string,
+    process.env.JWT_REFRESH_EXPIRES_IN as string
+  )
+  user.refresh_token = refreshToken1
+  await user.save()
 
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Token refreshed successfully',
-        data: { accessToken: accessToken, refreshToken: refreshToken1 },
-    });
-});
-
-
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Token refreshed successfully',
+    data: { accessToken: accessToken, refreshToken: refreshToken1 },
+  })
+})
 
 /***************************
  * GET ALL CANDIDATE USERS *
@@ -673,6 +671,65 @@ export const getCandidates = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Error retrieving candidates',
+      error: error.message,
+    })
+  }
+}
+
+export const getRecruitersWithAccounts = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1
+    const limit = parseInt(req.query.limit as string) || 10
+    const skip = (page - 1) * limit
+
+    // Find recruiters
+    const recruiters = await User.find({ role: 'recruiter' })
+      .skip(skip)
+      .limit(limit)
+      .select('-password -refresh_token') // hide sensitive fields
+      .lean() // return plain JS objects (faster)
+
+    // Get all recruiter IDs
+    const recruiterIds = recruiters.map((r) => r._id)
+
+    // Find recruiter accounts linked to those users
+    const recruiterAccounts = await RecruiterAccount.find({
+      userId: { $in: recruiterIds },
+    }).lean()
+
+    // Merge recruiter + recruiterAccount by userId
+    const recruitersWithAccounts = recruiters.map((recruiter) => {
+      const account = recruiterAccounts.find(
+        (acc) => acc.userId.toString() === recruiter._id.toString()
+      )
+      return {
+        ...recruiter,
+        recruiterAccount: account || null,
+      }
+    })
+
+    // Count total recruiters
+    const total = await User.countDocuments({ role: 'recruiter' })
+
+    res.status(200).json({
+      success: true,
+      message: 'Recruiters with accounts retrieved successfully',
+      data: recruitersWithAccounts,
+      meta: {
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+      },
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      // recruiter.controller.ts
+      success: false,
+      message: 'Error retrieving recruiters',
       error: error.message,
     })
   }
