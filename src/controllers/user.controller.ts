@@ -676,6 +676,9 @@ export const getCandidates = async (req: Request, res: Response) => {
   }
 }
 
+/****************************
+ * GET ALL RECRUITER USERS *
+ ****************************/
 export const getRecruitersWithAccounts = async (
   req: Request,
   res: Response

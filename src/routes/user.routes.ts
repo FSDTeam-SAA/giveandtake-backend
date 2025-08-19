@@ -17,6 +17,7 @@ import {
   refreshToken,
   getUserById1,
   getCandidates,
+  getRecruitersWithAccounts,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 import { resumeUpload } from '../middlewares/multer.middleware'
@@ -49,6 +50,8 @@ router.post('/refresh-token', refreshToken)
 
 
 router.get('/candidates', getCandidates)
+router.get('/recruiters', getRecruitersWithAccounts)
+
 
 
 
