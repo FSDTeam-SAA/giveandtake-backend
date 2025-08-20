@@ -9,6 +9,7 @@ import {
   getArchivedJobs,
   getRicruitercompanyJobs,
   getPendingJobsForCompany,
+  getRicruitercompanyJobs1,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -28,7 +29,7 @@ router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
  *******************************/
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
 router.route('/jobs/recruiter/company').get(protect, getRicruitercompanyJobs)
-router.route('/all-jobs/company/:id').get(protect, getRicruitercompanyJobs)
+router.route('/all-jobs/company/:id').get(protect, getRicruitercompanyJobs1)
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
