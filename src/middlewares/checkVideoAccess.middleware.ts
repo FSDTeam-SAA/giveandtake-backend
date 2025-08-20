@@ -10,7 +10,7 @@ export const checkVideoAccess = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params // ElevatorPitch ID
     const userId = req.user?.id // From auth middleware
-
+    
     const pitch = await ElevatorPitch.findById(id)
     if (!pitch) {
       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')

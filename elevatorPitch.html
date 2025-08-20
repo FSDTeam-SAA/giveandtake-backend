@@ -42,9 +42,10 @@
     const errorDiv = document.getElementById('error');
 
     // Replace these values with your actual data
-    const pitchId = '688326c2bcc3b669ecf85d3a'; // The unique ID for the pitch (used for playlist)
-    const userId = '686fa88ad7e1a2ad8c1c0ae3';  // The owner/user ID (used for segment and key access)
-    const token = 'YOUR_JWT_TOKEN_HERE';       // Replace with a valid token for auth
+    // const pitchId = '688326c2bcc3b669ecf85d3a'; // The unique ID for the pitch (used for playlist)
+    const pitchId = '68a61b0e7cd00856478aee8a';
+    const userId = '68a61a0f7cd00856478aee7d';  // The owner/user ID (used for segment and key access)
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2OGE2MWEwZjdjZDAwODU2NDc4YWVlN2QiLCJlbWFpbCI6InppaGFkdWw3MDhAZ21haWwuY29tIiwicm9sZSI6InJlY3J1aXRlciIsImlhdCI6MTc1NTcxNjI0MywiZXhwIjoxNzU1ODAyNjQzfQ.XMMBOtyW07tFigBi2rtsQvXGs2fhRBq7sthgbfmJR7Y';       // Replace with a valid token for auth
 
     // API URL where the .m3u8 playlist is served
     const playlistUrl = `http://localhost:5000/api/v1/elevator-pitch/stream/${pitchId}`;
