@@ -231,7 +231,7 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
-  const job = await Job.findById(id)
+  const job = await Job.findById(id).populate('companyId')
 
   if (!job) {
     throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
