@@ -10,6 +10,7 @@ import { create } from 'domain'
 import { checkIfUserCanPostJob } from '../helper/canPostJob'
 import { User } from '../models/user.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
+import { Company } from '../models/company.model'
 
 /*******************
  * // CREATE A JOB *
@@ -17,7 +18,6 @@ import { RecruiterAccount } from '../models/recruiterAccount.model'
 export const createJob = catchAsync(async (req: Request, res: Response) => {
   const {
     userId,
-    companyId,
     title,
     description,
     companyName,
@@ -57,11 +57,20 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   // ROLE BASE APPROVE LOGIC
   let jobApprove: 'pending' | 'approved' | 'denied' = 'pending'
+  let companyId;
 
   if (user.role === 'company') {
     jobApprove = 'approved'
+    const a = await Company.findOne({ userId: userId })
+    if (a) {
+      companyId = a._id
+    }
   } else if (user.role === 'recruiter') {
     jobApprove = 'pending'
+    const a = await RecruiterAccount.findOne({ userId: userId })
+    if (a) {
+      companyId = a.companyId
+    }
   } else {
     throw new AppError(
       httpStatus.FORBIDDEN,
