@@ -40,6 +40,10 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       enm: ['pending', 'approved', 'denied'],
       default: 'pending',
     },
+    adminApprove: {
+      type: Boolean,
+      default: false,
+    },
     publishDate: { type: Date },
     employement_Type: {
       type: String,

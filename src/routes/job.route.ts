@@ -10,6 +10,7 @@ import {
   getRicruitercompanyJobs,
   getPendingJobsForCompany,
   getRicruitercompanyJobs1,
+  adminApproveJobs,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -35,5 +36,10 @@ router.route('/all-jobs/company/:id').get(protect, getRicruitercompanyJobs1)
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
 router.get('/pending/job/company', protect, getPendingJobsForCompany)
+
+// Api for fetch jobs that need to be admin approvals  
+router.get('/admin/job/approve', 
+  // protect,
+   adminApproveJobs)
 
 export default router

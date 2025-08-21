@@ -6,7 +6,6 @@ import { Job } from '../models/job.model'
 import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
 import sendResponse from '../utils/sendResponse'
 import { CreateResume } from '../models/createResume.model'
-import { create } from 'domain'
 import { checkIfUserCanPostJob } from '../helper/canPostJob'
 import { User } from '../models/user.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
@@ -38,7 +37,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     customQuestion,
     employement_Type,
     website_Url,
-    publishDate
+    publishDate,
   } = req.body
 
   if (!userId || !title || !description) {
@@ -57,7 +56,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   // ROLE BASE APPROVE LOGIC
   let jobApprove: 'pending' | 'approved' | 'denied' = 'pending'
-  let companyId;
+  let companyId
 
   if (user.role === 'company') {
     jobApprove = 'approved'
@@ -104,7 +103,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     jobApprove,
     employement_Type,
     website_Url,
-    publishDate
+    publishDate,
   })
 
   await job.save()
@@ -120,107 +119,28 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 /********************************************
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
-// export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-//   const { title, location } = req.query
-
-//   const filter: any = {}
-//   if (title) filter.title = { $regex: title, $options: 'i' }
-//   if (location) filter.location = { $regex: location, $options: 'i' }
-
-//   const { page, limit, skip } = getPaginationParams(req.query)
-
-//   const totalJobs = await Job.countDocuments(filter)
-//   console.log('first')
-//   const jobs = await Job.find({
-//     ...filter,
-//     arcrivedJob: false,
-//     jobApprove: 'approved',
-//   })
-//     .skip(skip)
-//     .limit(limit)
-//     .sort({ createdAt: -1 })
-//     // .populate('userId', 'name email')
-//     .populate('companyId')
-
-//   console.log(2, jobs)
-
-//   const meta = buildMetaPagination(totalJobs, page, limit)
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: 'Jobs fetched successfully',
-//     data: { meta, jobs },
-//   })
-// })
-
-
-// export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-//   const { title, location } = req.query
-
-//   const filter: any = {}
-//   if (title) filter.title = { $regex: title, $options: 'i' }
-//   if (location) filter.location = { $regex: location, $options: 'i' }
-
-//   // Ensure publishDate is null OR publishDate <= today
-//   filter.$or = [
-//     { publishDate: { $exists: false } },
-//     { publishDate: null },
-//     { publishDate: { $lte: new Date() } },
-//   ]
-
-//   const { page, limit, skip } = getPaginationParams(req.query)
-
-//   const totalJobs = await Job.countDocuments({
-//     ...filter,
-//     arcrivedJob: false,
-//     jobApprove: 'approved',
-//   })
-
-//   const jobs = await Job.find({
-//     ...filter,
-//     arcrivedJob: false,
-//     jobApprove: 'approved',
-//   })
-//     .skip(skip)
-//     .limit(limit)
-//     .sort({ createdAt: -1 })
-//     .populate('companyId')
-
-//   const meta = buildMetaPagination(totalJobs, page, limit)
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: 'Jobs fetched successfully',
-//     data: { meta, jobs },
-//   })
-// })
-
-
-
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title, location, jobCategoryId } = req.query;
+  const { title, location, jobCategoryId } = req.query
 
-  const filter: any = {};
-  if (title) filter.title = { $regex: title, $options: 'i' };
-  if (location) filter.location = { $regex: location, $options: 'i' };
-  if (jobCategoryId) filter.jobCategoryId = jobCategoryId; // <-- filter by category
+  const filter: any = {}
+  if (title) filter.title = { $regex: title, $options: 'i' }
+  if (location) filter.location = { $regex: location, $options: 'i' }
+  if (jobCategoryId) filter.jobCategoryId = jobCategoryId // <-- filter by category
 
   // Ensure publishDate is null OR publishDate <= today
   filter.$or = [
     { publishDate: { $exists: false } },
     { publishDate: null },
     { publishDate: { $lte: new Date() } },
-  ];
+  ]
 
-  const { page, limit, skip } = getPaginationParams(req.query);
+  const { page, limit, skip } = getPaginationParams(req.query)
 
   const totalJobs = await Job.countDocuments({
     ...filter,
     arcrivedJob: false,
     jobApprove: 'approved',
-  });
+  })
 
   const jobs = await Job.find({
     ...filter,
@@ -230,19 +150,17 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
-    .populate('companyId');
+    .populate('companyId')
 
-  const meta = buildMetaPagination(totalJobs, page, limit);
+  const meta = buildMetaPagination(totalJobs, page, limit)
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Jobs fetched successfully',
     data: { meta, jobs },
-  });
-});
-
-
+  })
+})
 
 /*******************
  * // UPDATE A JOB *
@@ -426,9 +344,6 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
   })
 })
 
-
-
-
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id
   const Jobs = await Job.find({ companyId: userId, arcrivedJob: false }).sort({
@@ -444,7 +359,6 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
     data: Jobs,
   })
 })
-
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
@@ -496,3 +410,24 @@ export const getPendingJobsForCompany = catchAsync(
     })
   }
 )
+
+// Api for fetch jobs that need to be admin approvals
+export const adminApproveJobs = catchAsync(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query)
+
+  const jobs = await Job.find({ adminApprove: false })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+
+  const total = await Job.countDocuments({ adminApprove: false })
+
+  const meta = buildMetaPagination(total, page, limit)
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Pending jobs fetched successfully',
+    data: { jobs, meta },
+  })
+})

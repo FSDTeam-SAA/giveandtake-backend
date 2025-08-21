@@ -36,9 +36,10 @@ export interface IJob extends Document {
   applicationRequirement: IApplicationRequirement[]
   customQuestion: ICustomQuestion[]
   jobApprove: string
+  adminApprove: boolean
   publishDate: Date
   employement_Type: string
-  website_Url : string
+  website_Url: string
 }
 
 export interface JobModel extends Model<IJob> {}
