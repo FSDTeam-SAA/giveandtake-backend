@@ -739,7 +739,6 @@ export const getRecruitersWithAccounts = async (
   }
 }
 
-
 /*************************
  * GET ALL COMPANY USERS *
  *************************/
@@ -797,3 +796,17 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
     })
   }
 }
+
+// fetch all user without admin
+export const fetchAllUsers = catchAsync(async (req, res) => {
+  const users = await User.find({ role: { $ne: 'admin' } }).select(
+    'name avatar address phoneNum role '
+  )
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'All users fetched successfully',
+    data: users,
+  })
+})

@@ -19,6 +19,7 @@ import {
   getCandidates,
   getRecruitersWithAccounts,
   getCompaniesWithAccounts,
+  fetchAllUsers,
 } from '../controllers/user.controller'
 import { protect } from '../middlewares/auth.middleware'
 import { resumeUpload } from '../middlewares/multer.middleware'
@@ -51,5 +52,8 @@ router.post('/refresh-token', refreshToken)
 router.get('/candidates', getCandidates)
 router.get('/recruiters', getRecruitersWithAccounts)
 router.get('/companies', getCompaniesWithAccounts)
+
+// fetch all user without admin
+router.get('/fetch/all/users', fetchAllUsers)
 
 export default router
