@@ -145,6 +145,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const jobs = await Job.find({
     ...filter,
     arcrivedJob: false,
+    adminApprove: true,
     jobApprove: 'approved',
   })
     .skip(skip)
