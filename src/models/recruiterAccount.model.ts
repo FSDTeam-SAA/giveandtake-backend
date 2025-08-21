@@ -14,6 +14,7 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       },
       bio: { type: String },
       aboutUs: { type: String },
+      banner: {type:String},
       photo: { type: String },
       title: { type: String },
       firstName: { type: String },

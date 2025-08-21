@@ -28,16 +28,34 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
   // check if file was uplaod
   let uploadFileUrl = null
-  if (req.file) {
-    const cloudinaryResult = await uploadToCloudinary(req.file.path)
-    if (cloudinaryResult) {
-      uploadFileUrl = cloudinaryResult.secure_url
+  let banner = null
+  // if (req.file) {
+  //   const cloudinaryResult = await uploadToCloudinary(req.file.path)
+  //   if (cloudinaryResult) {
+  //     uploadFileUrl = cloudinaryResult.secure_url
+  //   }
+  // }
+
+      const files = req.files as Record<string, Express.Multer.File[]>;
+
+    if (files?.photo?.[0]?.path) {
+      const logoRes = await uploadToCloudinary(files.clogo[0].path);
+      if (logoRes?.secure_url) {
+        uploadFileUrl = logoRes.secure_url;
+      }
     }
-  }
+
+        if (files?.banner?.[0]?.path) {
+      const certRes = await uploadToCloudinary(files.banner[0].path);
+      if (certRes?.secure_url) {
+        banner = certRes.secure_url;
+      }
+    }
   const resumeDoc = await CreateResume.create({
     ...resume,
     userId,
     photo: uploadFileUrl,
+    banner
   })
 
   const exparienceDocs = await Experience.insertMany(

@@ -27,10 +27,25 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     const { AwardsAndHonors, ...companyData } = req.body;
 
     // Handle file upload (e.g. logo)
-    if (req.file?.path) {
-      const cloudinaryRes = await uploadToCloudinary(req.file.path);
-      if (cloudinaryRes?.secure_url) {
-        companyData.clogo = cloudinaryRes.secure_url;
+    // if (req.file?.path) {
+    //   const cloudinaryRes = await uploadToCloudinary(req.file.path);
+    //   if (cloudinaryRes?.secure_url) {
+    //     companyData.clogo = cloudinaryRes.secure_url;
+    //   }
+    // }
+    const files = req.files as Record<string, Express.Multer.File[]>;
+
+    if (files?.clogo?.[0]?.path) {
+      const logoRes = await uploadToCloudinary(files.clogo[0].path);
+      if (logoRes?.secure_url) {
+        companyData.clogo = logoRes.secure_url;
+      }
+    }
+
+        if (files?.banner?.[0]?.path) {
+      const certRes = await uploadToCloudinary(files.banner[0].path);
+      if (certRes?.secure_url) {
+        companyData.banner = certRes.secure_url;
       }
     }
     companyData.employeesId = JSON.parse(companyData.employeesId || "[]");
