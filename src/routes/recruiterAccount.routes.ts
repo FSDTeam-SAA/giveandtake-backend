@@ -16,6 +16,7 @@ router.post(
   protect,
   upload.fields([
     { name: 'photo', maxCount: 1 },
+    {name: 'banner', maxCount: 1}
   ]),
   createRecruiterAccount
 )

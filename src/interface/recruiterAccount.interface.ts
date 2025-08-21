@@ -6,6 +6,7 @@ export interface IRecruiterAccount extends Document {
   userId: Schema.Types.ObjectId
   bio: string
   aboutUs: string
+  banner: string
   photo: string
   title: string
   firstName: string

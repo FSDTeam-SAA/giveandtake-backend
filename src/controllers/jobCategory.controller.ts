@@ -9,7 +9,7 @@ import AppError from '../errors/AppError'
 // create category
 export const createJobCategory = catchAsync(
   async (req: Request, res: Response) => {
-    const { name } = req.body
+    const { name, role } = req.body
     if (!name) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
     }
@@ -31,6 +31,7 @@ export const createJobCategory = catchAsync(
     const category = await JobCategory.create({
       name,
       categoryIcon,
+      role
     })
 
     sendResponse(res, {
@@ -61,7 +62,7 @@ export const getAllCategorys = catchAsync(
 export const updateJobCategory = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
-    const { name } = req.body
+    const { name, role } = req.body
 
     const category = await JobCategory.findById(id)
     if (!category) {
@@ -85,6 +86,7 @@ export const updateJobCategory = catchAsync(
 
     category.name = name
     category.categoryIcon = newIcon
+    category.role = role
     await category.save()
 
     sendResponse(res, {

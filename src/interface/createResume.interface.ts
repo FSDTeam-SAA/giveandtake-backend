@@ -10,6 +10,7 @@ export interface IResumeLink {
 export interface ICreateResume extends Document {
   userId: Types.ObjectId
   type: ResumeType
+  banner: string
   photo: string
   aboutUs: string
   title: string
