@@ -3,6 +3,7 @@ import { Document, Model, Types } from 'mongoose'
 export interface ICompany extends Document {
   userId?: number
   clogo?: string
+  banner: string
   aboutUs?: string
   cname: string
   country: string

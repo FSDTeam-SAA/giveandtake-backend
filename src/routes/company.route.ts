@@ -12,7 +12,10 @@ import { protect } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-router.post('/', upload.single('clogo'), protect ,createCompany)
+router.post('/', upload.fields([
+    { name: "clogo", maxCount: 1 },   // first file field
+    { name: "banner", maxCount: 1 }, // second file field
+  ]), protect ,createCompany)
 router.put('/:id',upload.single('clogo'),protect, updateCompany)
 router.get('/user/:userId', getCompanyByUserId)
 router.get('/employee/:userId', getCompanyByEmployeeId)

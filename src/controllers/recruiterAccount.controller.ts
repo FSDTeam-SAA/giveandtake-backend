@@ -23,6 +23,7 @@ export const createRecruiterAccount = catchAsync(
 
     let videoUrl = ''
     let photoUrl = ''
+    let banner = ''
 
     // @ts-ignore
     const files = req.files as { [fieldname: string]: Express.Multer.File[] }
@@ -37,10 +38,18 @@ export const createRecruiterAccount = catchAsync(
       if (uploaded) photoUrl = uploaded.secure_url
     }
 
+        if (files?.banner?.[0]?.path) {
+      const certRes = await uploadToCloudinary(files.banner[0].path);
+      if (certRes?.secure_url) {
+        banner = certRes.secure_url;
+      }
+    }
+
     const recruiterAccount = await RecruiterAccount.create({
       userId,
       videoFile: videoUrl,
       photo: photoUrl,
+      banner,
       ...rest,
     })
 
