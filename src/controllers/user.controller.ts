@@ -447,22 +447,60 @@ export const deactivateUser = catchAsync(async (req, res) => {
  **********************************/
 export const getAllUserEmails = catchAsync(
   async (req: Request, res: Response) => {
+    const { userId } = req.query;
+
+    const company = await Company.findOne({ userId: userId as string });
+    const companyId = company?._id?.toString();
+
+    // Fetch all users with selected fields
     const users = await User.find({}, { _id: 1, email: 1, role: 1 }).lean();
-    const companies = await Company.find({}, { employeesId: 1, _id: 0 }).lean();
-    const allEmployeeIds = new Set(
-      companies.flatMap((c) => c.employeesId.map((id) => id.toString()))
+
+    // Get all employeesId and userId (company owner) from all companies
+    const companies = await Company.find(
+      {},
+      { employeesId: 1, userId: 1 }
+    ).lean();
+
+    // Gather all employee IDs across all companies
+    const allEmployeeIds = new Set<string>();
+    companies.forEach((c) => {
+      if (c.employeesId) {
+        c.employeesId.forEach((id) => allEmployeeIds.add(id.toString()));
+      }
+      if (c.userId) {
+        allEmployeeIds.add(c.userId.toString());
+      }
+    });
+
+    let currentCompanyEmployeeIds: string[] = [];
+    if (companyId) {
+      const currentCompany = companies.find(
+        (c) => c._id?.toString() === companyId
+      );
+      if (currentCompany) {
+        currentCompanyEmployeeIds = [
+          ...(currentCompany.employeesId?.map((id) => id.toString()) || []),
+        ];
+        if (currentCompany.userId) {
+          currentCompanyEmployeeIds.push(currentCompany.userId.toString());
+        }
+      }
+    }
+
+    // Exclude all employees except those in the current company (if provided)
+    const excludedIds = [...allEmployeeIds].filter(
+      (id) => !currentCompanyEmployeeIds.includes(id)
     );
 
-    // Step 3: Filter users who are NOT in employeesId
-    const notListedUsers = users.filter(
-      (u) => !allEmployeeIds.has(u._id.toString())
+    const filteredUsers = users.filter(
+      (u) => !excludedIds.includes(u._id.toString())
     );
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: "All user emails and IDs fetched successfully",
-      data: notListedUsers,
+      data: filteredUsers,
     });
   }
 );
