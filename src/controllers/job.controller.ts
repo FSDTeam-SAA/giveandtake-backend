@@ -403,7 +403,7 @@ export const getPendingJobsForCompany = catchAsync(
       jobApprove: 'pending',
     })
       .sort({ createdAt: -1 })
-      .populate('userId', 'name role  ')
+      .populate('userId', 'name role avatar')
       .populate('jobCategoryId')
 
     sendResponse(res, {
