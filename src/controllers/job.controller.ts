@@ -38,6 +38,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     employement_Type,
     website_Url,
     publishDate,
+    career_Stage,
+    location_Type
   } = req.body
 
   if (!userId || !title || !description) {
@@ -104,6 +106,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     employement_Type,
     website_Url,
     publishDate,
+    location_Type,
+    career_Stage
   })
 
   await job.save()
@@ -367,9 +371,13 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
 export const getPendingJobsForCompany = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.user?._id
+    // ✅ Extract pagination params (default: page=1, limit=10)
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-    const company = await Company.findOne({userId: userId});
-    const companyId = company?._id; 
+    const company = await Company.findOne({ userId: userId });
+    const companyId = company?._id;
     console.log(1, companyId)
 
     if (!companyId) {
@@ -405,6 +413,8 @@ export const getPendingJobsForCompany = catchAsync(
       .sort({ createdAt: -1 })
       .populate('userId', 'name role avatar')
       .populate('jobCategoryId')
+      .skip(skip)
+      .limit(limit)
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
