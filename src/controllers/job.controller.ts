@@ -366,7 +366,10 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
  *************************************/
 export const getPendingJobsForCompany = catchAsync(
   async (req: Request, res: Response) => {
-    const companyId = req.user?._id
+    const userId = req.user?._id
+
+    const company = await Company.findOne({userId: userId});
+    const companyId = company?._id; 
     console.log(1, companyId)
 
     if (!companyId) {
