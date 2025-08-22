@@ -30,6 +30,8 @@ export interface ICreateResume extends Document {
   yearOfExperience: number
   professionalSummary: string
   jobCategoryId: string
+  certifications: [string]
+  languages: [string]
 }
 
-export interface CreateResumeModel extends Model<ICreateResume> {}
+export interface CreateResumeModel extends Model<ICreateResume> { }

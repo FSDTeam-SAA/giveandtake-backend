@@ -47,7 +47,15 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     publishDate: { type: Date },
     employement_Type: {
       type: String,
-      enum: ['full-time', 'part-time', 'internship'],
+      enum: ['full-time', 'part-time', 'internship','contract','temporary','freelance','volunteer'],
+    },
+    location_Type:{
+      type: String,
+      enum: ['onsite', 'remote', 'hybrid']
+    },
+    career_Stage:{
+      type: String,
+      enum: ['New Entry', 'Experienced Professional', 'Career Returner']
     },
     website_Url: { type: String },
   },

@@ -40,6 +40,8 @@ export interface IJob extends Document {
   publishDate: Date
   employement_Type: string
   website_Url: string
+  location_Type: string
+  career_Stage: string
 }
 
 export interface JobModel extends Model<IJob> {}
