@@ -429,7 +429,7 @@ export const getPendingJobsForCompany = catchAsync(
 export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query)
 
-  const jobs = await Job.find({ adminApprove: false })
+  const jobs = await Job.find({ adminApprove: false, jobApprove : "approved" })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
