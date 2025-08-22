@@ -1,127 +1,126 @@
-import { Request, Response } from 'express'
-import catchAsync from '../utils/catchAsync'
-import { JobCategory } from '../models/jobCategory.model'
-import sendResponse from '../utils/sendResponse'
-import httpStatus from 'http-status'
-import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary'
-import AppError from '../errors/AppError'
+import { Request, Response } from "express";
+import catchAsync from "../utils/catchAsync";
+import { JobCategory } from "../models/jobCategory.model";
+import sendResponse from "../utils/sendResponse";
+import httpStatus from "http-status";
+import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary";
+import AppError from "../errors/AppError";
 
 // create category
 export const createJobCategory = catchAsync(
   async (req: Request, res: Response) => {
-    const { name, role } = req.body
+    const { name, role } = req.body;
     if (!name) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Please fill in all fields')
+      throw new AppError(httpStatus.BAD_REQUEST, "Please fill in all fields");
     }
 
-    let categoryIcon = ''
+    let categoryIcon = "";
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path)
+      const result = await uploadToCloudinary(req.file.path);
 
       if (!result) {
         throw new AppError(
           httpStatus.INTERNAL_SERVER_ERROR,
-          'Failed to upload image'
-        )
+          "Failed to upload image"
+        );
       }
 
-      categoryIcon = result.secure_url
+      categoryIcon = result.secure_url;
     }
 
     const category = await JobCategory.create({
       name,
       categoryIcon,
-      role
-    })
+      role: JSON.parse(role || "{}"),
+    });
 
     sendResponse(res, {
       statusCode: httpStatus.CREATED,
       success: true,
-      message: 'Job category created successfully',
+      message: "Job category created successfully",
       data: category,
-    })
+    });
   }
-)
+);
 
 // get all categorys
 export const getAllCategorys = catchAsync(
   async (req: Request, res: Response) => {
-    const category = await JobCategory.find().sort({ createdAt: -1 })
-    console.log('first')
+    const category = await JobCategory.find().sort({ createdAt: -1 });
+    console.log("first");
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'Job category fetched successfully',
+      message: "Job category fetched successfully",
       data: category,
-    })
+    });
   }
-)
+);
 
 // updateJobCategory
 export const updateJobCategory = catchAsync(
   async (req: Request, res: Response) => {
-    const { id } = req.params
-    const { name, role } = req.body
+    const { id } = req.params;
+    const { name, role } = req.body;
 
-    const category = await JobCategory.findById(id)
+    const category = await JobCategory.findById(id);
     if (!category) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Job category not found')
+      throw new AppError(httpStatus.NOT_FOUND, "Job category not found");
     }
 
-    let newIcon = category.categoryIcon
+    let newIcon = category.categoryIcon;
 
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path)
+      const result = await uploadToCloudinary(req.file.path);
       if (!result) {
         throw new AppError(
           httpStatus.INTERNAL_SERVER_ERROR,
-          'Failed to upload image'
-        )
+          "Failed to upload image"
+        );
       }
-      await deleteFromCloudinary(category.categoryIcon)
+      await deleteFromCloudinary(category.categoryIcon);
 
-      newIcon = result.secure_url
+      newIcon = result.secure_url;
     }
 
-    category.name = name
-    category.categoryIcon = newIcon
-    category.role = role
-    await category.save()
+    category.name = name;
+    category.categoryIcon = newIcon;
+    category.role = role;
+    await category.save();
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'Job category updated successfully',
+      message: "Job category updated successfully",
       data: category,
-    })
+    });
   }
-)
-
+);
 
 // delete category
 export const deleteJobCategory = catchAsync(
   async (req: Request, res: Response) => {
-    const { id } = req.params
+    const { id } = req.params;
 
-    const category = await JobCategory.findById(id)
+    const category = await JobCategory.findById(id);
     if (!category) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Category not found')
+      throw new AppError(httpStatus.NOT_FOUND, "Category not found");
     }
 
     // Delete icon from Cloudinary
-    const publicId = category.categoryIcon?.split('/').pop()?.split('.')[0]
+    const publicId = category.categoryIcon?.split("/").pop()?.split(".")[0];
     if (publicId) {
-      await deleteFromCloudinary(publicId)
+      await deleteFromCloudinary(publicId);
     }
 
-    await category.deleteOne()
+    await category.deleteOne();
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'Category deleted successfully',
+      message: "Category deleted successfully",
       data: null,
-    })
+    });
   }
-)
+);
