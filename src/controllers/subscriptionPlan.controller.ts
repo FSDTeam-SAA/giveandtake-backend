@@ -47,6 +47,20 @@ export const getAllSubscriptionPlans = catchAsync(
     })
   }
 )
+// GET ALL
+export const getSingleSubscriptionPlans = catchAsync(
+  async (req: Request, res: Response) => {
+    const{id} = req.params
+    const plans = await SubscriptionPlan.findById(id)
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'All subscription plans fetched successfully',
+      data: plans,
+    })
+  }
+)
 
 // UPDATE
 export const updateSubscriptionPlan = catchAsync(
