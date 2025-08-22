@@ -7,6 +7,7 @@ import {
   getAllCategorys,
   updateJobCategory,
   deleteJobCategory,
+  getSingleCategorys,
 } from '../controllers/jobCategory.controller'
 
 const router = express.Router()
@@ -27,4 +28,5 @@ router.patch(
 )
 
 router.delete('/job-category/:id', protect, isAdmin, deleteJobCategory)
+router.get('/job-category/:id', protect, isAdmin, getSingleCategorys)
 export default router

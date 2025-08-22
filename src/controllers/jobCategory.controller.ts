@@ -57,6 +57,21 @@ export const getAllCategorys = catchAsync(
     });
   }
 );
+// get all categorys
+export const getSingleCategorys = catchAsync(
+  async (req: Request, res: Response) => {
+    const {id} = req.params
+    const category = await JobCategory.findById(id);
+    console.log("first");
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Job category fetched successfully",
+      data: category,
+    });
+  }
+);
 
 // updateJobCategory
 export const updateJobCategory = catchAsync(
