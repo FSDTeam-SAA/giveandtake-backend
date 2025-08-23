@@ -505,6 +505,34 @@ export const getAllUserEmails = catchAsync(
   }
 );
 
+export const getAllCompanies = catchAsync(
+  async (req: Request, res: Response) => {
+    const companies = await Company.find({})
+      .populate({
+        path: "userId",
+        select: "name email phoneNum avatar.url role", // no need to specify `model`
+      })
+      .select(
+        "cname clogo banner country city cemail cPhoneNumber industry service links"
+      );
+
+    const filteredCompanies = companies.map((company) => ({
+      id: company._id,
+      cname: company.cname,
+      clogo: company.clogo,
+      cemail: company.cemail,
+      industry: company.industry,
+    }));
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "All Companies fetched successfully",
+      data: filteredCompanies,
+    });
+  }
+);
+
 /***************************
  * GET A SINGLE USER BY ID *
  ***************************/
