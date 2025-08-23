@@ -3,10 +3,8 @@ import { Document, Model, Types } from 'mongoose'
 export interface IExperience extends Document {
   userId: Types.ObjectId
   employer: string
-  jobTitle: string
   firstName: string
   company: string
-  currentlyWorking: boolean
   position: string
   startDate: Date
   endDate: Date
