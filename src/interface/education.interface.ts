@@ -8,6 +8,7 @@ export interface IEducation extends Document {
   degree: string
   fieldOfStudy: string
   graduationDate: Date
+  startDate: Date
 }
 
 export interface EducationModel extends Model<IEducation> {}

@@ -13,6 +13,7 @@ const educationSchema: Schema<IEducation> = new Schema<IEducation>(
     state: { type: String },
     degree: { type: String },
     fieldOfStudy: { type: String },
+    startDate: { type: Date,  },
     graduationDate: { type: Date },
   },
   { timestamps: true }
