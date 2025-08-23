@@ -10,6 +10,7 @@ import { checkIfUserCanPostJob } from "../helper/canPostJob";
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
+import { AppliedJob } from "../models/appliedJob.model";
 
 /*******************
  * // CREATE A JOB *
@@ -337,17 +338,31 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
-  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
-    createAt: -1,
-  });
+  // const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
+  //   createAt: -1,
+  // });
 
-  if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+  
+  // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+
+  // const applicantCount = await AppliedJob.countDocuments({jobId: Jobs._id})
+
+  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({ createdAt: -1 });
+
+if (!Jobs.length) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+
+const jobsWithApplicants = await Promise.all(
+  Jobs.map(async (job) => {
+    const applicantCount = await AppliedJob.countDocuments({ jobId: job._id });
+    return { ...job.toObject(), applicantCount };
+  })
+);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "jobs fetched successfully",
-    data: Jobs,
+    data: jobsWithApplicants,
   });
 });
 

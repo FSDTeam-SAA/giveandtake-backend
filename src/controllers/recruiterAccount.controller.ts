@@ -104,18 +104,23 @@ export const updateRecruiterAccount = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
 
+        if (files?.videoFile) {
+      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
+      if (uploaded) updates.videoFile = uploaded.secure_url
+    }
+
     // // Handle new video upload
-    // if (files?.videoFile?.[0]) {
-    //   const uploadedVideo = await uploadToCloudinary(files.videoFile[0].path)
-    //   if (uploadedVideo?.secure_url) {
-    //     updates.videoFile = uploadedVideo.secure_url
-    //     // Optional: delete old video from Cloudinary if storing public_id
-    //   }
-    // }
+    if (files?.banner) {
+      const uploadedVideo = await uploadToCloudinary(files?.banner[0]?.path)
+      if (uploadedVideo?.secure_url) {
+        updates.banner = uploadedVideo.secure_url
+        // Optional: delete old video from Cloudinary if storing public_id
+      }
+    }
 
     // Handle new photo upload
-    if (files?.photo?.[0]) {
-      const uploadedPhoto = await uploadToCloudinary(files.photo[0].path)
+    if (files?.photo) {
+      const uploadedPhoto = await uploadToCloudinary(files?.photo[0]?.path)
       if (uploadedPhoto?.secure_url) {
         updates.photo = uploadedPhoto.secure_url
         // Optional: delete old photo from Cloudinary if storing public_id
