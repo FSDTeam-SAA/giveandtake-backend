@@ -105,16 +105,16 @@ export const updateRecruiterAccount = catchAsync(
     }
 
     // // Handle new video upload
-    // if (files?.videoFile?.[0]) {
-    //   const uploadedVideo = await uploadToCloudinary(files.videoFile[0].path)
-    //   if (uploadedVideo?.secure_url) {
-    //     updates.videoFile = uploadedVideo.secure_url
-    //     // Optional: delete old video from Cloudinary if storing public_id
-    //   }
-    // }
+    if (files?.banner) {
+      const uploadedVideo = await uploadToCloudinary(files.videoFile[0].path)
+      if (uploadedVideo?.secure_url) {
+        updates.videoFile = uploadedVideo.secure_url
+        // Optional: delete old video from Cloudinary if storing public_id
+      }
+    }
 
     // Handle new photo upload
-    if (files?.photo?.[0]) {
+    if (files?.photo) {
       const uploadedPhoto = await uploadToCloudinary(files.photo[0].path)
       if (uploadedPhoto?.secure_url) {
         updates.photo = uploadedPhoto.secure_url

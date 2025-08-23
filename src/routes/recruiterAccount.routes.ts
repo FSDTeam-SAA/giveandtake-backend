@@ -26,7 +26,7 @@ router.patch(
   '/recruiter-account/:userId',
   protect,
   upload.fields([
-    { name: 'videoFile', maxCount: 1 },
+    { name: 'banner', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
   ]),
   updateRecruiterAccount
