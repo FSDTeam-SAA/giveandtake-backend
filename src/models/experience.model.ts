@@ -9,6 +9,8 @@ const experienceSchema: Schema<IExperience> = new Schema<IExperience>(
       required: true,
     },
     employer: { type: String,  },
+    company: {type: String},
+    position: {type: String},
     jobTitle: { type: String, },
     startDate: { type: Date,  },
     endDate: { type: Date },
@@ -19,6 +21,7 @@ const experienceSchema: Schema<IExperience> = new Schema<IExperience>(
     jobCategory: { type: String },
     careerField: { type: String },
     careerSubfield: { type: String },
+    currentlyWorking: { type: Boolean },
   },
   { timestamps: true }
 )

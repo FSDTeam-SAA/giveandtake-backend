@@ -5,6 +5,9 @@ export interface IExperience extends Document {
   employer: string
   jobTitle: string
   firstName: string
+  company: string
+  currentlyWorking: boolean
+  position: string
   startDate: Date
   endDate: Date
   country: string
