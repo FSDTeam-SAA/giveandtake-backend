@@ -16,7 +16,8 @@ router.post(
   protect,
   upload.fields([
     { name: 'photo', maxCount: 1 },
-    {name: 'banner', maxCount: 1}
+    {name: 'banner', maxCount: 1},
+    {name: 'videoFile', maxCount: 1}
   ]),
   createRecruiterAccount
 )
@@ -28,6 +29,7 @@ router.patch(
   upload.fields([
     { name: 'banner', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
+    { name: 'videoFile', maxCount: 1 },
   ]),
   updateRecruiterAccount
 )
