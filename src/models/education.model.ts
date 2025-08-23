@@ -10,7 +10,7 @@ const educationSchema: Schema<IEducation> = new Schema<IEducation>(
     },
     instituteName: { type: String },
     city: { type: String },
-    state: { type: String },
+    country: { type: String },
     degree: { type: String },
     fieldOfStudy: { type: String },
     startDate: { type: Date,  },
