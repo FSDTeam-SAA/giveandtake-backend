@@ -38,14 +38,14 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
       const files = req.files as Record<string, Express.Multer.File[]>;
 
-    if (files?.photo?.[0]?.path) {
+    if (files?.photo) {
       const logoRes = await uploadToCloudinary(files.clogo[0].path);
       if (logoRes?.secure_url) {
         uploadFileUrl = logoRes.secure_url;
       }
     }
 
-        if (files?.banner?.[0]?.path) {
+        if (files?.banner) {
       const certRes = await uploadToCloudinary(files.banner[0].path);
       if (certRes?.secure_url) {
         banner = certRes.secure_url;
