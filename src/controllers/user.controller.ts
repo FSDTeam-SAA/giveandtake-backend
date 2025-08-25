@@ -843,13 +843,43 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
 // fetch all user without admin
 export const fetchAllUsers = catchAsync(async (req, res) => {
   const users = await User.find({ role: { $ne: "admin" } }).select(
-    "name avatar address phoneNum role "
+    "name avatar address phoneNum role"
+  );
+
+  // Enrich users with photo depending on role
+  const enrichedUsers = await Promise.all(
+    users.map(async (user) => {
+      let photoUrl: string | null = null;
+      let name1 = null
+
+      if (user.role === "candidate") {
+        const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
+        photoUrl = resume?.photo || null;
+      } else if (user.role === "recruiter") {
+        const recruiter = await RecruiterAccount.findOne({ userId: user._id }).select("photo");
+        photoUrl = recruiter?.photo || null;
+      } else if (user.role === "company") {
+        const company = await Company.findOne({ userId: user._id }).select("clogo cname");
+        photoUrl = company?.clogo || null;
+        name1 = company?.cname
+      }
+
+      // safely assign to avatar.url
+      return {
+        ...user.toObject(),
+        name: name1 ? name1 : user.name,
+        avatar: {
+          ...user.avatar,
+          url: photoUrl || user.avatar?.url || null,
+        },
+      };
+    })
   );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "All users fetched successfully",
-    data: users,
+    data: enrichedUsers,
   });
 });
