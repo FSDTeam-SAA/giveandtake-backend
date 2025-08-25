@@ -867,7 +867,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
       // safely assign to avatar.url
       return {
         ...user.toObject(),
-        name: name1 ? name : user.name,
+        name: name1 ? name1 : user.name,
         avatar: {
           ...user.avatar,
           url: photoUrl || user.avatar?.url || null,
