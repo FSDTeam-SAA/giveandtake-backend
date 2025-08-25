@@ -273,7 +273,7 @@ export const getAllElevatorPitches = catchAsync(
       )
     }
 
-    const allowedRoles = ['candidate', 'recruiter']
+    const allowedRoles = ['candidate', 'recruiter','company']
     if (!allowedRoles.includes(type)) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid user type')
     }
