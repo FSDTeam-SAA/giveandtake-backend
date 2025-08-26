@@ -38,7 +38,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     jobApprove: {
       type: String,
       enm: ['pending', 'approved', 'denied'],
-      default: 'pending',
+      default: 'approved',
     },
     adminApprove: {
       type: Boolean,
@@ -47,15 +47,23 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     publishDate: { type: Date },
     employement_Type: {
       type: String,
-      enum: ['full-time', 'part-time', 'internship','contract','temporary','freelance','volunteer'],
+      enum: [
+        'full-time',
+        'part-time',
+        'internship',
+        'contract',
+        'temporary',
+        'freelance',
+        'volunteer',
+      ],
     },
-    location_Type:{
+    location_Type: {
       type: String,
-      enum: ['onsite', 'remote', 'hybrid']
+      enum: ['onsite', 'remote', 'hybrid'],
     },
-    career_Stage:{
+    career_Stage: {
       type: String,
-      enum: ['New Entry', 'Experienced Professional', 'Career Returner']
+      enum: ['New Entry', 'Experienced Professional', 'Career Returner'],
     },
     website_Url: { type: String },
   },
