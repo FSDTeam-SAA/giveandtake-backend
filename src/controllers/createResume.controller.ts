@@ -157,13 +157,30 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
-  // Upload new photo if provided
-  if (req.file) {
-    const cloudinaryResult = await uploadToCloudinary(req.file.path)
-    if (cloudinaryResult) {
-      resume.photo = cloudinaryResult.secure_url
+  // // Upload new photo if provided
+  // if (req.file) {
+  //   const cloudinaryResult = await uploadToCloudinary(req.file.path)
+  //   if (cloudinaryResult) {
+  //     resume.photo = cloudinaryResult.secure_url
+  //   }
+  // }
+
+
+        const files = req.files as Record<string, Express.Multer.File[]>;
+
+    if (files?.photo) {
+      const logoRes = await uploadToCloudinary(files.photo[0].path);
+      if (logoRes?.secure_url) {
+        resume.photo = logoRes.secure_url;
+      }
     }
-  }
+
+        if (files?.banner) {
+      const certRes = await uploadToCloudinary(files.banner[0].path);
+      if (certRes?.secure_url) {
+        resume.banner = certRes.secure_url;
+      }
+    }
 
   // Update or create the main resume document
   const updatedResume = await CreateResume.findOneAndUpdate(

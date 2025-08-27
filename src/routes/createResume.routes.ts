@@ -17,7 +17,10 @@ router.post('/create-resume', upload.fields([
   ]), createResume)
 router.get('/get-resume', protect, resumeOfaUser)
 router.get('/get-resume/:userId', protect, resumeOfaUser1)
-router.patch('/resume/update', protect, upload.single('photo'), updateResume)
+router.patch('/resume/update', protect, upload.fields([
+    { name: "photo", maxCount: 1 },   // first file field
+    { name: "banner", maxCount: 1 }, // second file field
+  ]), updateResume)
 router.delete('/resume/delete', protect, deleteResume)
 
 export default router
