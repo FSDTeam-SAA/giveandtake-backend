@@ -112,13 +112,21 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
 
   const companyData ={...req.body} as any
 
-  // Upload new logo if provided
-  if (req.file?.path) {
-    const cloudinaryRes = await uploadToCloudinary(req.file.path);
-    if (cloudinaryRes?.secure_url) {
-      companyData.clogo = cloudinaryRes.secure_url;
+    const files = req.files as Record<string, Express.Multer.File[]>;
+
+    if (files?.clogo) {
+      const logoRes = await uploadToCloudinary(files.clogo[0].path);
+      if (logoRes?.secure_url) {
+        companyData.clogo = logoRes.secure_url;
+      }
     }
-  }
+
+        if (files?.banner) {
+      const certRes = await uploadToCloudinary(files.banner[0].path);
+      if (certRes?.secure_url) {
+        companyData.banner = certRes.secure_url;
+      }
+    }
 
       companyData.employeesId = JSON.parse(req.body.employeesId || "[]");
     companyData.links = JSON.parse(req.body.links || "[]");
