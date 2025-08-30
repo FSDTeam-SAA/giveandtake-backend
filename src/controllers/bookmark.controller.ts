@@ -33,12 +33,10 @@ export const createBookmark = catchAsync(
 
 
 export const updateBookmarked = catchAsync(async(req,res)=>{
-  const id = req.params.jobId
-  const userId = req.user?._id
 
-  const {bookmarked} = req.body;
+  const {bookmarked,userId,jobId} = req.body;
 
-  const update = await Bookmark.findOneAndUpdate({userId: userId, jobId: id},{bookmarked}, {new: true})
+  const update = await Bookmark.findOneAndUpdate({userId: userId, jobId: jobId},{bookmarked}, {new: true})
 
   sendResponse(res,{
     statusCode: 200,
