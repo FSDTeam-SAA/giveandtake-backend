@@ -24,7 +24,7 @@ export const checkVideoAccess = catchAsync(
     }
 
     // Check if the user is the owner
-    if (pitch.userId.toString() === userId.toString()) {
+    if (pitch.userId._id.toString() === userId.toString()) {
       return next()
     }
 

@@ -239,7 +239,12 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const resume = await CreateResume.findOne({ userId }).lean();
 
   if (!resume) {
-    throw new AppError(httpStatus.NOT_FOUND, "Resume not found");
+    sendResponse(res,{
+      statusCode: 200,
+      success: true,
+      message: "No resume found for the User",
+      data: { exactMatches: [], partialMatches:[]},
+    })
   }
 
   const { title, country, skills = [], jobCategoryId } = resume;
