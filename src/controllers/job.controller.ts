@@ -342,21 +342,31 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
   //   createAt: -1,
   // });
 
-  
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
 
   // const applicantCount = await AppliedJob.countDocuments({jobId: Jobs._id})
 
-  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({ createdAt: -1 });
+  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
+    createdAt: -1,
+  });
 
-if (!Jobs.length) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+  if (!Jobs.length) {
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "No jobs found",
+      data: [],
+    });
+  }
 
-const jobsWithApplicants = await Promise.all(
-  Jobs.map(async (job) => {
-    const applicantCount = await AppliedJob.countDocuments({ jobId: job._id });
-    return { ...job.toObject(), applicantCount };
-  })
-);
+  const jobsWithApplicants = await Promise.all(
+    Jobs.map(async (job) => {
+      const applicantCount = await AppliedJob.countDocuments({
+        jobId: job._id,
+      });
+      return { ...job.toObject(), applicantCount };
+    })
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -368,7 +378,11 @@ const jobsWithApplicants = await Promise.all(
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;
-  const Jobs = await Job.find({ companyId: userId, arcrivedJob: false, jobApprove: "approved" }).sort({
+  const Jobs = await Job.find({
+    companyId: userId,
+    arcrivedJob: false,
+    jobApprove: "approved",
+  }).sort({
     createAt: -1,
   });
 
@@ -446,7 +460,8 @@ export const getPendingJobsForCompany = catchAsync(
 export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
 
-  const jobs = await Job.find({ adminApprove: false, jobApprove : "approved" }).populate('companyId')
+  const jobs = await Job.find({ adminApprove: false, jobApprove: "approved" })
+    .populate("companyId")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
