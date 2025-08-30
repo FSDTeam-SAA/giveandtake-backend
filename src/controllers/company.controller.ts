@@ -238,7 +238,7 @@ export const getCompanyByUserId = catchAsync(
 
       data: {
         meta,
-        companiesWithPitch,
+        companies : companiesWithPitch,
         honors,
       },
     });
