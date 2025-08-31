@@ -22,7 +22,7 @@ router.post(
   createRecruiterAccount
 )
 
-router.get('/recruiter-account/:userId', protect, getRecruiterAccountByUserId)
+router.get('/recruiter-account/:userId', getRecruiterAccountByUserId)
 router.patch(
   '/recruiter-account/:userId',
   protect,

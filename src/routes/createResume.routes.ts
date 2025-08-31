@@ -16,7 +16,7 @@ router.post('/create-resume', upload.fields([
     { name: "banner", maxCount: 1 }, // second file field
   ]), createResume)
 router.get('/get-resume', protect, resumeOfaUser)
-router.get('/get-resume/:userId', protect, resumeOfaUser1)
+router.get('/get-resume/:userId', resumeOfaUser1)
 router.patch('/resume/update', protect, upload.fields([
     { name: "photo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
