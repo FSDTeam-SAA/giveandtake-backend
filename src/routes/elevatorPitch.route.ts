@@ -19,7 +19,7 @@ router.get('/stream/:userId/:segment', secureStream)
 
 router.delete('/video', protect, deleteResume)
 
-router.get('/stream/:id', protect, checkVideoAccess, streamElevatorPitch)
+router.get('/stream/:id', streamElevatorPitch)
 
 router.get('/key/:userId/:key', getEncryptionKey)
 

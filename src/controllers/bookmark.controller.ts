@@ -31,6 +31,22 @@ export const createBookmark = catchAsync(
   }
 )
 
+
+export const updateBookmarked = catchAsync(async(req,res)=>{
+
+  const {bookmarked,userId,jobId} = req.body;
+
+  const update = await Bookmark.findOneAndUpdate({userId: userId, jobId: jobId},{bookmarked}, {new: true})
+
+  sendResponse(res,{
+    statusCode: 200,
+    success: true,
+    message: bookmarked === true ? "Bookmarked Successfully" : "Bookmarked Removed",
+    data: update
+  })
+
+})
+
 /***********************
  * GET ALL BY USER ID
  ***********************/

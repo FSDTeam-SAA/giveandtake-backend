@@ -9,6 +9,10 @@ const bookmarkSchema: Schema<IBookmark> = new Schema(
       required: true,
     },
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
+    bookmarked: {
+      type: Boolean,
+      default: true
+    }
   },
   { timestamps: true }
 )

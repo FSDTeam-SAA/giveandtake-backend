@@ -9,7 +9,7 @@ import { Job } from '../models/job.model'
 export const checkVideoAccess = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params // ElevatorPitch ID
-    const userId = req.user?.id // From auth middleware
+    const userId = req.user?._id // From auth middleware
 
     const pitch = await ElevatorPitch.findById(id).populate('userId', 'role') // populate role
     if (!pitch) {
@@ -24,7 +24,7 @@ export const checkVideoAccess = catchAsync(
     }
 
     // Check if the user is the owner
-    if (pitch.userId.toString() === userId) {
+    if (pitch.userId._id.toString() === userId.toString()) {
       return next()
     }
 

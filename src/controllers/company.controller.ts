@@ -14,6 +14,7 @@ import {
 } from "../utils/pagination";
 import { CreateResume } from "../models/createResume.model";
 import { User } from "../models/user.model";
+import { ElevatorPitch } from "../models/elevatorPitch.model";
 
 /******************
  * CREATE COMPANY *
@@ -42,7 +43,7 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
       }
     }
 
-        if (files?.banner?.[0]?.path) {
+    if (files?.banner?.[0]?.path) {
       const certRes = await uploadToCloudinary(files.banner[0].path);
       if (certRes?.secure_url) {
         companyData.banner = certRes.secure_url;
@@ -110,37 +111,37 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
 export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const companyData ={...req.body} as any
+  const companyData = { ...req.body } as any
 
-    const files = req.files as Record<string, Express.Multer.File[]>;
+  const files = req.files as Record<string, Express.Multer.File[]>;
 
-    if (files?.clogo) {
-      const logoRes = await uploadToCloudinary(files.clogo[0].path);
-      if (logoRes?.secure_url) {
-        companyData.clogo = logoRes.secure_url;
-      }
+  if (files?.clogo) {
+    const logoRes = await uploadToCloudinary(files.clogo[0].path);
+    if (logoRes?.secure_url) {
+      companyData.clogo = logoRes.secure_url;
     }
+  }
 
-        if (files?.banner) {
-      const certRes = await uploadToCloudinary(files.banner[0].path);
-      if (certRes?.secure_url) {
-        companyData.banner = certRes.secure_url;
-      }
+  if (files?.banner) {
+    const certRes = await uploadToCloudinary(files.banner[0].path);
+    if (certRes?.secure_url) {
+      companyData.banner = certRes.secure_url;
     }
+  }
 
-      companyData.employeesId = JSON.parse(req.body.employeesId || "[]");
-    companyData.links = JSON.parse(req.body.links || "[]");
-    companyData.service = JSON.parse(req.body.service || "[]");
+  companyData.employeesId = JSON.parse(req.body.employeesId || "[]");
+  companyData.links = JSON.parse(req.body.links || "[]");
+  companyData.service = JSON.parse(req.body.service || "[]");
 
   const updated = await Company.findByIdAndUpdate(id, companyData, {
     new: true,
     runValidators: true,
   })
-    const honors = JSON.parse(req.body.honors || "[]"); // expecting array
-    let results
-    if(honors.length > 0){
+  const honors = JSON.parse(req.body.honors || "[]"); // expecting array
+  let results
+  if (honors.length > 0) {
 
-     results = await Promise.all(
+    results = await Promise.all(
       honors.map(async (item: any) => {
         if (item.type === "create") {
           const newHonor = new AwardsAndHonor({
@@ -187,7 +188,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Company updated successfully',
-    data: {updated,results},
+    data: { updated, results },
   })
 })
 
@@ -210,6 +211,19 @@ export const getCompanyByUserId = catchAsync(
       .limit(limit)
       .sort({ createdAt: -1 });
 
+    let companiesWithPitch = await Promise.all(
+      companies.map(async (company) => {
+        // Find related pitch by companyId
+        const pitch = await ElevatorPitch.findOne({ userId: userId });
+
+        // Merge pitch into company object
+        return {
+          ...company.toObject(),
+          elevatorPitch: pitch || null, // add pitch data or null
+        };
+      })
+    );
+
     // Get related AwardsAndHonor (if any), for all companies by user
     const honors = await AwardsAndHonor.find({ userId }).sort({
       programeDate: -1,
@@ -224,7 +238,7 @@ export const getCompanyByUserId = catchAsync(
 
       data: {
         meta,
-        companies,
+        companies : companiesWithPitch,
         honors,
       },
     });
