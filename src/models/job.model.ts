@@ -23,6 +23,12 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       default: 'active',
     },
     jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCategory' },
+    name: {
+      type: String
+    },
+    role: {
+      type: String
+    },
     compensation: { type: String },
     arcrivedJob: { type: Boolean, default: false },
     applicationRequirement: [

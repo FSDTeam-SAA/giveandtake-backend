@@ -42,6 +42,8 @@ export interface IJob extends Document {
   website_Url: string
   location_Type: string
   career_Stage: string
+  name: string,
+  role: string
 }
 
 export interface JobModel extends Model<IJob> {}
