@@ -41,6 +41,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     publishDate,
     career_Stage,
     location_Type,
+    name,
+    role
   } = req.body;
 
   if (!userId || !title || !description) {
@@ -109,6 +111,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     publishDate,
     location_Type,
     career_Stage,
+    name,
+    role
   });
 
   await job.save();
@@ -239,11 +243,11 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const resume = await CreateResume.findOne({ userId }).lean();
 
   if (!resume) {
-    sendResponse(res,{
+    sendResponse(res, {
       statusCode: 200,
       success: true,
       message: "No resume found for the User",
-      data: { exactMatches: [], partialMatches:[]},
+      data: { exactMatches: [], partialMatches: [] },
     })
   }
 
