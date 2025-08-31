@@ -388,8 +388,8 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
     arcrivedJob: false,
     jobApprove: "approved",
   }).sort({
-    createAt: -1,
-  });
+    createdAt: -1,
+  }).populate("companyId");
 
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
 
