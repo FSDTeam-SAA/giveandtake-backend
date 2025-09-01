@@ -448,7 +448,6 @@ export const getPendingJobsForCompany = catchAsync(
     // FIND ALL pending JOBS POSTED BY THESE RECRUITERS
     const pendingJobs = await Job.find({
       userId: { $in: recruiterUserIds },
-      jobApprove: "pending",
     })
       .sort({ createdAt: -1 })
       .populate("userId", "name role avatar")
