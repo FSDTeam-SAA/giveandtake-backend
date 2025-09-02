@@ -389,23 +389,28 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 //   });
 // });
 
-export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
+export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
-  // const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
-  //   createAt: -1,
-  // });
 
-  // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+  // Get the company document for this user, if any
+  const company = await Company.findOne({ userId })
 
-  // const applicantCount = await AppliedJob.countDocuments({jobId: Jobs._id})
-
-  const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
-    createdAt: -1,
-  })
+  // Match jobs where:
+  // 1. job.userId === logged-in user
+  // 2. job.companyId === logged-in user (if user is a company)
+  // 3. job.companyId === company._id (if user has a company record)
+  const Jobs = await Job.find({
+    $or: [
+      { userId }, // jobs created by the user
+      { companyId: userId }, // user account itself is a company
+      ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
+    ],
+    arcrivedJob: false,
+  }).sort({ createdAt: -1 })
 
   if (!Jobs.length) {
-    sendResponse(res, {
+    return sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'No jobs found',
@@ -415,9 +420,7 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({
-        jobId: job._id,
-      })
+      const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
       return { ...job.toObject(), applicantCount }
     })
   )
@@ -425,10 +428,11 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'jobs fetched successfully',
+    message: 'Jobs fetched successfully',
     data: jobsWithApplicants,
   })
 })
+
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id

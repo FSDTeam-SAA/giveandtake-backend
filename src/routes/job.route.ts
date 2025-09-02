@@ -7,7 +7,7 @@ import {
   getSingleJob,
   recommendJobs,
   getArchivedJobs,
-  getRicruitercompanyJobs,
+  getRecruiterCompanyJobs,
   getPendingJobsForCompany,
   getRicruitercompanyJobs1,
   adminApproveJobs,
@@ -29,7 +29,7 @@ router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
-router.route('/jobs/recruiter/company').get(protect, getRicruitercompanyJobs)
+router.route('/jobs/recruiter/company').get(protect, getRecruiterCompanyJobs)
 router.route('/all-jobs/company/:id').get( getRicruitercompanyJobs1)
 
 /*************************************
