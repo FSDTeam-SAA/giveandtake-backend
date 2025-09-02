@@ -17,6 +17,8 @@ export interface IUser {
   avatar?: {
     url: string
   }
+
+  dateOfbirth?: Date
   role: 'admin' | 'candidate' | 'recruiter' | 'company'
   verificationInfo: {
     verified: boolean

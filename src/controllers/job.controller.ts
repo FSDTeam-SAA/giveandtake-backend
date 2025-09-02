@@ -344,9 +344,52 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 /************************************************
  * FETCH JOBS THAT RICRUTER AND COMPANY CREATED *
  ************************************************/
+// export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
+//   const userId = req.user?._id;
+//   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
+//   // const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
+//   //   createAt: -1,
+//   // });
+
+//   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
+
+//   // const applicantCount = await AppliedJob.countDocuments({jobId: Jobs._id})
+
+//   const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
+//     createdAt: -1,
+//   });
+
+//   if (!Jobs.length) {
+//     sendResponse(res, {
+//       statusCode: httpStatus.OK,
+//       success: true,
+//       message: "No jobs found",
+//       data: [],
+//     });
+//   }
+
+//   const jobsWithApplicants = await Promise.all(
+//     Jobs.map(async (job) => {
+//       const applicantCount = await AppliedJob.countDocuments({
+//         jobId: job._id,
+//       });
+//       return { ...job.toObject(), applicantCount };
+//     })
+//   );
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.OK,
+//     success: true,
+//     message: "jobs fetched successfully",
+//     data: jobsWithApplicants,
+//   });
+// });
+
+
+
 export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
+  const userId = req.user?._id
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
   // const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
   //   createAt: -1,
   // });
@@ -357,33 +400,35 @@ export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
 
   const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
     createdAt: -1,
-  });
+  })
 
   if (!Jobs.length) {
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: "No jobs found",
+      message: 'No jobs found',
       data: [],
-    });
+    })
   }
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
       const applicantCount = await AppliedJob.countDocuments({
         jobId: job._id,
-      });
-      return { ...job.toObject(), applicantCount };
+      })
+      return { ...job.toObject(), applicantCount }
     })
-  );
+  )
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "jobs fetched successfully",
+    message: 'jobs fetched successfully',
     data: jobsWithApplicants,
-  });
-});
+  })
+})
+
+
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;

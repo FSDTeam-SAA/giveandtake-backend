@@ -25,6 +25,7 @@ const userSchema: Schema = new Schema<IUser>(
         answer: { type: String, default: '' },
       },
     ],
+    dateOfbirth: { type: Date },
 
     verificationInfo: {
       verified: { type: Boolean, default: false },
