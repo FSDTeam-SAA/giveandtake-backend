@@ -519,13 +519,13 @@ export const getPendingJobsForCompany = catchAsync(
 export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query)
 
-  const jobs = await Job.find({ adminApprove: false, jobApprove: 'approved' })
+  const jobs = await Job.find({ jobApprove: 'approved' })
     .populate('companyId')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
 
-  const total = await Job.countDocuments({ adminApprove: false })
+  const total = await Job.countDocuments({  })
 
   const meta = buildMetaPagination(total, page, limit)
 
