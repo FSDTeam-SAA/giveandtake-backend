@@ -5,6 +5,7 @@ import { Newsletter } from '../models/newsletter.model'
 import sendResponse from '../utils/sendResponse'
 import AppError from '../errors/AppError'
 import { sendEmail } from '../utils/sendEmail'
+import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 
 /**********************************
  * CREATE NEWSLETTER SUBSCRIPTION *
@@ -64,13 +65,20 @@ export const deleteNewsletterSubscription = catchAsync(
  ************************/
 export const getAllSubscribers = catchAsync(
   async (req: Request, res: Response) => {
+    const { page, limit, skip } = getPaginationParams(req.query)
     const subscribers = await Newsletter.find().select('email createdAt')
+    .skip(skip)
+    .limit(limit)
+
+      const total = await Newsletter.countDocuments({  })
+
+  const meta = buildMetaPagination(total, page, limit)
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'Subscribers retrieved successfully',
-      data: subscribers,
+      data: {subscribers,meta}
     })
   }
 )

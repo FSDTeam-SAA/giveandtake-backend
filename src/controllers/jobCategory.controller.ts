@@ -5,6 +5,7 @@ import sendResponse from "../utils/sendResponse";
 import httpStatus from "http-status";
 import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary";
 import AppError from "../errors/AppError";
+import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 
 // create category
 export const createJobCategory = catchAsync(
@@ -46,14 +47,21 @@ export const createJobCategory = catchAsync(
 // get all categorys
 export const getAllCategorys = catchAsync(
   async (req: Request, res: Response) => {
-    const category = await JobCategory.find().sort({ createdAt: -1 });
+    const { page, limit, skip } = getPaginationParams(req.query)
+    const category = await JobCategory.find().sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
     console.log("first");
+
+      const total = await JobCategory.countDocuments({  })
+    
+      const meta = buildMetaPagination(total, page, limit)
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: "Job category fetched successfully",
-      data: category,
+      data: {category ,meta},
     });
   }
 );
@@ -101,7 +109,7 @@ export const updateJobCategory = catchAsync(
 
     category.name = name;
     category.categoryIcon = newIcon;
-    category.role = role;
+    category.role = JSON.parse(role);
     await category.save();
 
     sendResponse(res, {

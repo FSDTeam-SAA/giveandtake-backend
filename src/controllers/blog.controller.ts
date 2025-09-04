@@ -6,6 +6,7 @@ import AppError from '../errors/AppError'
 import sendResponse from '../utils/sendResponse'
 import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
 import fs from 'fs'
+import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 
 /***************
  * CREATE BLOG *
@@ -59,13 +60,21 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
  * GET ALL BLOGS (OPTIONAL FILTER BY USERID) *
  *********************************************/
 export const getAllBlogs = catchAsync(async (req: Request, res: Response) => {
+
+  const { page, limit, skip } = getPaginationParams(req.query)
   const blogs = await Blog.find().sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+
+      const total = await Blog.countDocuments({  })
+
+  const meta = buildMetaPagination(total, page, limit)
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Blogs fetched successfully',
-    data: blogs,
+    data: {blogs,meta},
   })
 })
 
