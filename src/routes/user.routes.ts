@@ -21,6 +21,7 @@ import {
   getCompaniesWithAccounts,
   fetchAllUsers,
   getAllCompanies,
+  softDeactivateUser,
 } from "../controllers/user.controller";
 import { protect } from "../middlewares/auth.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
@@ -34,6 +35,7 @@ router.post("/user/forget", forgetPassword),
   router.post("/user/reset-password", resetPassword);
 router.post("/user/change-password", protect, changePassword);
 router.patch("/user/deactivate", protect, deactivateUser);
+router.patch("/user/disable", protect, softDeactivateUser);
 
 /**********************
  * SECURITY QUESTIONS *

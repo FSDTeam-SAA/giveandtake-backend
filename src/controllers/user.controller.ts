@@ -442,6 +442,26 @@ export const deactivateUser = catchAsync(async (req, res) => {
   });
 });
 
+//actual deactivate user without 30 days
+export const softDeactivateUser = catchAsync(async (req, res) => {
+  const userId = req.user?._id;
+
+  const user = await User.findById(userId);
+  if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+  user.deactivate = true;
+  user.dateOfdeactivate = undefined; // no scheduled deletion
+  await user.save();
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Account soft deactivated indefinitely. You can reactivate anytime.",
+    data: null,
+  });
+});
+
+
 /**********************************
  * GET ALL THE USER EMAIL AND _ID *
  **********************************/
