@@ -189,12 +189,12 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     { new: true, upsert: true }
   )
 
-  // Delete old related documents
-  await Promise.all([
-    Experience.deleteMany({ userId }),
-    Education.deleteMany({ userId }),
-    AwardsAndHonor.deleteMany({ userId }),
-  ])
+  // // Delete old related documents
+  // await Promise.all([
+  //   Experience.deleteMany({ userId }),
+  //   Education.deleteMany({ userId }),
+  //   AwardsAndHonor.deleteMany({ userId }),
+  // ])
 
   // Insert new related documents
   // const [updatedExperiences, updatedEducation, updatedAwards] =
