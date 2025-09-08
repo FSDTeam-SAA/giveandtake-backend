@@ -11,6 +11,7 @@ import { User } from '../models/user.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import { Company } from '../models/company.model'
 import { AppliedJob } from '../models/appliedJob.model'
+import { sendEmail } from '../utils/sendEmail'
 
 /*******************
  * // CREATE A JOB *
@@ -179,6 +180,25 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
 
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
+
+
+  const job = await Job.findById(id).populate("userId")
+
+  if(req.body.adminApprove){
+        // const recruiterName = (job.userId as any)?.name || 'Recruiter'
+
+    const emailSubject = `Job Post Approved By Admin`
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0;">Application Confirmation</h2>
+        <p>Dear ${job?.userId?.name || 'Company'},</p> 
+        <p>Your post has been approved by Admin and will be posted at your scheduled time’,</br> Best regards, EVP Admin</p>
+      </div>
+    `
+
+    await sendEmail(job?.userId?.email, emailSubject, emailBody)
+  }
+
   const updated = await Job.findByIdAndUpdate(id, req.body, { new: true })
 
   if (!updated) throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
