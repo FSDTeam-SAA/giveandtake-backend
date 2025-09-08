@@ -5,6 +5,7 @@ import {
   updateSubscriptionPlan,
   deleteSubscriptionPlan,
   getSingleSubscriptionPlans,
+  unSubscribePlan,
 } from '../controllers/subscriptionPlan.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -15,5 +16,6 @@ router.get('/plans', getAllSubscriptionPlans)
 router.patch('/plans/:id', protect, updateSubscriptionPlan)
 router.get('/plans/:id', protect, getSingleSubscriptionPlans)
 router.delete('/plans/:id', protect, deleteSubscriptionPlan)
+router.post('/plans/unsubscribe', protect, unSubscribePlan)
 
 export default router

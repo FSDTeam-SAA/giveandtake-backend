@@ -4,6 +4,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
+import path from 'path'
 
 /***********************
  * CREATE RESUME ENTRY *
@@ -16,11 +17,30 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.BAD_REQUEST, 'No resume files uploaded')
   }
 
-  const fileData = req.files.map((file: any) => ({
+  // const fileData = req.files.map((file: any) => ({
+  //   filename: file.originalname,
+  //   url: `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`,
+  //   uploadedAt: new Date(),
+  // }))
+  const fileData = req.files.map((file: any) => {
+  let fileUrl;
+
+  if (process.env.NODE_ENV === "development") {
+    // Absolute local path on your PC
+    fileUrl = path.resolve("uploads/resumes", file.filename);
+  } else {
+    // Production → use SERVER_URL
+    fileUrl = `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`;
+  }
+
+  return {
     filename: file.originalname,
-    url: `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`,
+    url: fileUrl,
     uploadedAt: new Date(),
-  }))
+  };
+});
+
+ await Resume.deleteMany({userId})
 
   const resume = await Resume.create({
     userId,

@@ -4,6 +4,8 @@ import catchAsync from '../utils/catchAsync'
 import sendResponse from '../utils/sendResponse'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
+import { paymentInfo } from '../models/paymentInfo.model'
+import { ElevatorPitch } from '../models/elevatorPitch.model'
 
 // CREATE
 export const createSubscriptionPlan = catchAsync(
@@ -102,3 +104,19 @@ export const deleteSubscriptionPlan = catchAsync(
     })
   }
 )
+
+
+
+export const unSubscribePlan = catchAsync(async(req,res)=>{
+  const userId = req.user?._id
+
+  const deletePayment = await paymentInfo.deleteMany({userId})
+  const deleteElevatorPitch = await ElevatorPitch.deleteMany({userId})
+
+  sendResponse(res,{
+    statusCode: 200,
+    success:  true,
+    message: "You are Successfully unsubscribe this plan",
+    data: ""
+  })
+})
