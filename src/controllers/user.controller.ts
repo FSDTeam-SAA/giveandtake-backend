@@ -331,6 +331,36 @@ export const submitSecurityAnswers = catchAsync(
   }
 );
 
+export const checkSubmitSecurityAnswers = catchAsync(
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
+    // console.log("securityQuestions", securityQuestions)
+
+    if (!email) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
+    }
+
+    const user = await User.findOne({ email });
+    // console.log("first", user)
+    if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
+
+
+    if (!user.securityQuestions) {
+      res.status(httpStatus.OK).json({
+        success: true,
+        message: "Security questions not Found",
+        data: {security: false}
+      });
+    }
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: "Security questions Found",
+      data: {security: true}
+    });
+  }
+);
+
 /***************************
  * VERIFY SECURITY ANSWERS *
  ***************************/

@@ -22,6 +22,7 @@ import {
   fetchAllUsers,
   getAllCompanies,
   softDeactivateUser,
+  checkSubmitSecurityAnswers,
 } from "../controllers/user.controller";
 import { protect } from "../middlewares/auth.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
@@ -42,6 +43,7 @@ router.patch("/user/disable", protect, softDeactivateUser);
  **********************/
 router.get("/default-security-questions", getDefaultSecurityQuestions);
 router.post("/security-answers", submitSecurityAnswers);
+router.post("/security-answers/check", checkSubmitSecurityAnswers);
 router.post("/verify-security-answers", verifySecurityAnswers);
 router.post("/security-answers/reset-password", securityResetPassword);
 
