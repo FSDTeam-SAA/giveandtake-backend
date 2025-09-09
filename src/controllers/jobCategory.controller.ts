@@ -44,27 +44,43 @@ export const createJobCategory = catchAsync(
   }
 );
 
-// get all categorys
+// get all categories
 export const getAllCategorys = catchAsync(
   async (req: Request, res: Response) => {
-    const { page, limit, skip } = getPaginationParams(req.query)
-    const category = await JobCategory.find().sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-    console.log("first");
+    const { page, limit, skip } = getPaginationParams(req.query);
+    const search = req.query.search ? String(req.query.search) : ''
 
-      const total = await JobCategory.countDocuments({  })
-    
-      const meta = buildMetaPagination(total, page, limit)
+    // Build search filter
+    let filter: any = {};
+    if (search) {
+      filter = {
+        $or: [
+          { name: { $regex: search, $options: "i" } }, // case-insensitive search for name
+          { role: { $in: [new RegExp(search, "i")] } }, // search inside role array
+        ],
+      };
+    }
+
+    // Fetch categories
+    const category = await JobCategory.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Count total for pagination
+    const total = await JobCategory.countDocuments(filter);
+
+    const meta = buildMetaPagination(total, page, limit);
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: "Job category fetched successfully",
-      data: {category ,meta},
+      message: "Job categories fetched successfully",
+      data: { category, meta },
     });
   }
 );
+
 // get all categorys
 export const getSingleCategorys = catchAsync(
   async (req: Request, res: Response) => {

@@ -34,6 +34,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     applicationRequirement: [
       {
         requirement: { type: String },
+        status: {type: String}
       },
     ],
     customQuestion: [

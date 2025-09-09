@@ -3,8 +3,8 @@ import { Document, Model, Types } from 'mongoose'
 export type JobStatus = 'active' | 'deactivate'
 
 export interface IApplicationRequirement {
-  label: string
-  value: string
+  requirement: string
+  status: string
 }
 
 export interface ICustomQuestion {
