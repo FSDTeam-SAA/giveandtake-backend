@@ -923,7 +923,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
         const experience = await Experience.findOne({ userId: user._id }).sort({"createdAt": -1}).select("position")
-        position = experience?.position
+        position = experience?.position || null
         photoUrl = resume?.photo || null;
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({ userId: user._id }).select("photo");
