@@ -38,6 +38,7 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
       },
     ],
     skills: [{ type: String }],
+    immediatelyAvailable: {type: Boolean}
   },
   { timestamps: true }
 )

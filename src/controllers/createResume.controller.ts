@@ -10,13 +10,18 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import path from 'path'
+import { User } from '../models/user.model'
 
 /********************
  * CREATE RESUME *
  ********************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
 
-  const {userId} = req.body
+  const { userId } = req.body
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(400, "User Not Found")
+  }
 
   const resume = JSON.parse(req.body.resume || '{}')
   const experiences = JSON.parse(req.body.experiences || '[]')
@@ -36,21 +41,27 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   //   }
   // }
 
-      const files = req.files as Record<string, Express.Multer.File[]>;
+  const files = req.files as Record<string, Express.Multer.File[]>;
 
-    if (files?.photo) {
-      const logoRes = await uploadToCloudinary(files.photo[0].path);
-      if (logoRes?.secure_url) {
-        uploadFileUrl = logoRes.secure_url;
+  if (files?.photo) {
+    const logoRes = await uploadToCloudinary(files.photo[0].path);
+    if (logoRes?.secure_url) {
+      uploadFileUrl = logoRes.secure_url;
+      if (!user.avatar) {
+        user.avatar = { url: "" }; // initialize if missing
       }
-    }
+      user.avatar.url = logoRes.secure_url || "";
+      await user?.save()
 
-        if (files?.banner) {
-      const certRes = await uploadToCloudinary(files.banner[0].path);
-      if (certRes?.secure_url) {
-        banner = certRes.secure_url;
-      }
     }
+  }
+
+  if (files?.banner) {
+    const certRes = await uploadToCloudinary(files.banner[0].path);
+    if (certRes?.secure_url) {
+      banner = certRes.secure_url;
+    }
+  }
   const resumeDoc = await CreateResume.create({
     ...resume,
     userId,
@@ -149,12 +160,15 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   //   awardsAndHonors = [],
   // } = req.body
 
-
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(400, "User Not Found")
+  }
   const resume = JSON.parse(req.body.resume || '{}')
   const experiences = JSON.parse(req.body.experiences || '[]')
   const educationList = JSON.parse(req.body.educationList || '[]')
   const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]')
-  
+
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
   // // Upload new photo if provided
@@ -166,21 +180,26 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   // }
 
 
-        const files = req.files as Record<string, Express.Multer.File[]>;
+  const files = req.files as Record<string, Express.Multer.File[]>;
 
-    if (files?.photo) {
-      const logoRes = await uploadToCloudinary(files.photo[0].path);
-      if (logoRes?.secure_url) {
-        resume.photo = logoRes.secure_url;
+  if (files?.photo) {
+    const logoRes = await uploadToCloudinary(files.photo[0].path);
+    if (logoRes?.secure_url) {
+      resume.photo = logoRes.secure_url;
+      if (!user.avatar) {
+        user.avatar = { url: "" }; // initialize if missing
       }
+      user.avatar.url = logoRes.secure_url || "";
+      await user?.save()
     }
+  }
 
-        if (files?.banner) {
-      const certRes = await uploadToCloudinary(files.banner[0].path);
-      if (certRes?.secure_url) {
-        resume.banner = certRes.secure_url;
-      }
+  if (files?.banner) {
+    const certRes = await uploadToCloudinary(files.banner[0].path);
+    if (certRes?.secure_url) {
+      resume.banner = certRes.secure_url;
     }
+  }
 
   // Update or create the main resume document
   const updatedResume = await CreateResume.findOneAndUpdate(
@@ -217,66 +236,66 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   //   ])
 
   const [updatedExperiences, updatedEducation, updatedAwards] = await Promise.all([
-  // 🔹 Experiences
-  Promise.all(
-    experiences.map(async (exp: any) => {
-      if (exp.type === "create") {
-        return await Experience.create({ ...exp, userId });
-      }
-      if (exp.type === "update" && exp._id) {
-        return await Experience.findByIdAndUpdate(
-          exp._id,
-          { ...exp, userId },
-          { new: true }
-        );
-      }
-      if (exp.type === "delete" && exp._id) {
-        return await Experience.findByIdAndDelete(exp._id);
-      }
-      return null;
-    })
-  ),
+    // 🔹 Experiences
+    Promise.all(
+      experiences.map(async (exp: any) => {
+        if (exp.type === "create") {
+          return await Experience.create({ ...exp, userId });
+        }
+        if (exp.type === "update" && exp._id) {
+          return await Experience.findByIdAndUpdate(
+            exp._id,
+            { ...exp, userId },
+            { new: true }
+          );
+        }
+        if (exp.type === "delete" && exp._id) {
+          return await Experience.findByIdAndDelete(exp._id);
+        }
+        return null;
+      })
+    ),
 
-  // 🔹 Education
-  Promise.all(
-    educationList.map(async (edu: any) => {
-      if (edu.type === "create") {
-        return await Education.create({ ...edu, userId });
-      }
-      if (edu.type === "update" && edu._id) {
-        return await Education.findByIdAndUpdate(
-          edu._id,
-          { ...edu, userId },
-          { new: true }
-        );
-      }
-      if (edu.type === "delete" && edu._id) {
-        return await Education.findByIdAndDelete(edu._id);
-      }
-      return null;
-    })
-  ),
+    // 🔹 Education
+    Promise.all(
+      educationList.map(async (edu: any) => {
+        if (edu.type === "create") {
+          return await Education.create({ ...edu, userId });
+        }
+        if (edu.type === "update" && edu._id) {
+          return await Education.findByIdAndUpdate(
+            edu._id,
+            { ...edu, userId },
+            { new: true }
+          );
+        }
+        if (edu.type === "delete" && edu._id) {
+          return await Education.findByIdAndDelete(edu._id);
+        }
+        return null;
+      })
+    ),
 
-  // 🔹 Awards & Honors
-  Promise.all(
-    awardsAndHonors.map(async (honor: any) => {
-      if (honor.type === "create") {
-        return await AwardsAndHonor.create({ ...honor, userId });
-      }
-      if (honor.type === "update" && honor._id) {
-        return await AwardsAndHonor.findByIdAndUpdate(
-          honor._id,
-          { ...honor, userId },
-          { new: true }
-        );
-      }
-      if (honor.type === "delete" && honor._id) {
-        return await AwardsAndHonor.findByIdAndDelete(honor._id);
-      }
-      return null;
-    })
-  ),
-]);
+    // 🔹 Awards & Honors
+    Promise.all(
+      awardsAndHonors.map(async (honor: any) => {
+        if (honor.type === "create") {
+          return await AwardsAndHonor.create({ ...honor, userId });
+        }
+        if (honor.type === "update" && honor._id) {
+          return await AwardsAndHonor.findByIdAndUpdate(
+            honor._id,
+            { ...honor, userId },
+            { new: true }
+          );
+        }
+        if (honor.type === "delete" && honor._id) {
+          return await AwardsAndHonor.findByIdAndDelete(honor._id);
+        }
+        return null;
+      })
+    ),
+  ]);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

@@ -10,7 +10,7 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 // CREATE
 export const createSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
-    const { title, description, price, features, for: planFor } = req.body
+    const { title, description, price, features, for: planFor, valid } = req.body
 
     if (!title || !description || !price || !planFor) {
       throw new AppError(
@@ -25,6 +25,7 @@ export const createSubscriptionPlan = catchAsync(
       price,
       features,
       for: planFor,
+      valid
     })
 
     sendResponse(res, {

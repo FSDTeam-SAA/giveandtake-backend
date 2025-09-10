@@ -8,6 +8,7 @@ export interface ISubscriptionPlan extends Document {
   price: number
   features: string[]
   for: SubscriptionTarget
+  valid: String
 }
 
 export interface SubscriptionPlanModel extends Model<ISubscriptionPlan> {}

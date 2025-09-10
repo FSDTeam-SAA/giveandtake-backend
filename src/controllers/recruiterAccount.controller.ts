@@ -5,6 +5,7 @@ import AppError from '../errors/AppError'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
+import { User } from '../models/user.model'
 
 /****************************
  * CREATE RECRUITER ACCOUNT *
@@ -12,6 +13,11 @@ import { uploadToCloudinary } from '../utils/cloudinary'
 export const createRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
     const { userId, ...rest } = req.body
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError(400, "User Not Found")
+    }
 
     const existing = await RecruiterAccount.findOne({ userId })
     if (existing) {
@@ -35,10 +41,20 @@ export const createRecruiterAccount = catchAsync(
 
     if (files?.photo?.[0]) {
       const uploaded = await uploadToCloudinary(files.photo[0].path)
-      if (uploaded) photoUrl = uploaded.secure_url
+      if (uploaded) {
+        photoUrl = uploaded.secure_url
+
+        if (!user.avatar) {
+          user.avatar = { url: "" }; // initialize if missing
+        }
+        user.avatar.url = uploaded.secure_url || "";
+        await user?.save()
+
+
+      }
     }
 
-        if (files?.banner?.[0]?.path) {
+    if (files?.banner?.[0]?.path) {
       const certRes = await uploadToCloudinary(files.banner[0].path);
       if (certRes?.secure_url) {
         banner = certRes.secure_url;
@@ -95,6 +111,11 @@ export const updateRecruiterAccount = catchAsync(
     const { userId } = req.params
     const updates = { ...req.body }
 
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError(400, "User Not Found")
+    }
+
     // @ts-ignore
     const files = req.files as { [fieldname: string]: Express.Multer.File[] }
 
@@ -104,7 +125,7 @@ export const updateRecruiterAccount = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
 
-        if (files?.videoFile) {
+    if (files?.videoFile) {
       const uploaded = await uploadToCloudinary(files.videoFile[0].path)
       if (uploaded) updates.videoFile = uploaded.secure_url
     }
@@ -124,6 +145,11 @@ export const updateRecruiterAccount = catchAsync(
       if (uploadedPhoto?.secure_url) {
         updates.photo = uploadedPhoto.secure_url
         // Optional: delete old photo from Cloudinary if storing public_id
+        if (!user.avatar) {
+          user.avatar = { url: "" }; // initialize if missing
+        }
+        user.avatar.url = uploadedPhoto.secure_url || "";
+        await user?.save()
       }
     }
 

@@ -32,6 +32,7 @@ export interface ICreateResume extends Document {
   jobCategoryId: string
   certifications: [string]
   languages: [string]
+  immediatelyAvailable: boolean
 }
 
 export interface CreateResumeModel extends Model<ICreateResume> { }
