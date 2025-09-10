@@ -922,14 +922,17 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
 
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
+        if (!resume) return null;
         const experience = await Experience.findOne({ userId: user._id }).sort({"createdAt": -1}).select("position")
         position = experience?.position || null
         photoUrl = resume?.photo || null;
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({ userId: user._id }).select("photo");
+        if (!recruiter) return null;
         photoUrl = recruiter?.photo || null;
       } else if (user.role === "company") {
         const company = await Company.findOne({ userId: user._id }).select("clogo cname");
+        if (!company) return null;
         photoUrl = company?.clogo || null;
         name1 = company?.cname
       }
