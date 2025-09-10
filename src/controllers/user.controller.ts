@@ -18,6 +18,8 @@ import { deleteFromCloudinary, uploadToCloudinary } from "../utils/cloudinary";
 import { CreateResume } from "../models/createResume.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
+import { paymentInfo } from "../models/paymentInfo.model";
+import moment from "moment";
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body;
@@ -115,6 +117,19 @@ export const login = catchAsync(async (req, res) => {
 
   let _user = await user.save();
 
+  const checkPayment = await paymentInfo.findOne({ userId: user._id }).sort({ "updatedAt": -1 }).populate('planId')
+
+  let expiryDate: Date | null = null;
+
+  if (checkPayment?.planId?.valid === "monthly") {
+    expiryDate = moment(checkPayment?.updatedAt).add(1, "month").toDate();
+  } else if (checkPayment?.planId?.valid === "yearly") {
+    expiryDate = moment(checkPayment?.updatedAt).add(1, "year").toDate();
+  }
+
+  const isValid = expiryDate ? new Date() <= expiryDate : false;
+
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -124,6 +139,7 @@ export const login = catchAsync(async (req, res) => {
       role: user.role,
       _id: user._id,
       refreshToken,
+      isValid
     },
   });
 });
@@ -349,14 +365,14 @@ export const checkSubmitSecurityAnswers = catchAsync(
       res.status(httpStatus.OK).json({
         success: true,
         message: "Security questions not Found",
-        data: {security: false}
+        data: { security: false }
       });
     }
 
     res.status(httpStatus.OK).json({
       success: true,
       message: "Security questions Found",
-      data: {security: true}
+      data: { security: true }
     });
   }
 );

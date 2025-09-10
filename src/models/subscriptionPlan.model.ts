@@ -16,6 +16,10 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
         enum: ['candidate', 'recruiter', 'company'],
         required: true,
       },
+      valid:{
+        type: String,
+        enum: ["monthly","yearly"]
+      }
     },
     { timestamps: true }
   )
