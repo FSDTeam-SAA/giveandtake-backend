@@ -20,6 +20,7 @@ import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
 import { paymentInfo } from "../models/paymentInfo.model";
 import moment from "moment";
+import { Experience } from "../models/experience.model";
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body;
@@ -917,9 +918,12 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
     users.map(async (user) => {
       let photoUrl: string | null = null;
       let name1 = null
+      let position = null
 
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
+        const experience = await Experience.findOne({ userId: user._id }).sort({"createdAt": -1}).select("position")
+        position = experience?.position
         photoUrl = resume?.photo || null;
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({ userId: user._id }).select("photo");
@@ -938,6 +942,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           ...user.avatar,
           url: photoUrl || user.avatar?.url || null,
         },
+        position: position
       };
     })
   );
