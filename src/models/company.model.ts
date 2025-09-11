@@ -1,9 +1,9 @@
-import mongoose, { Schema } from 'mongoose'
-import { ICompany, CompanyModel } from '../interface/company.interface'
+import mongoose, { Schema } from "mongoose";
+import { ICompany, CompanyModel } from "../interface/company.interface";
 
 const companySchema: Schema<ICompany> = new Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     clogo: { type: String },
     banner: { type: String },
     aboutUs: { type: String },
@@ -13,20 +13,17 @@ const companySchema: Schema<ICompany> = new Schema(
     zipcode: { type: String },
     cemail: { type: String, required: true },
     cPhoneNumber: { type: String, required: true },
-    links: [{
-      label: { type: String },
-      url: { type: String },
-    },],
+    links: [{ type: String }],
     industry: { type: String },
     service: [{ type: String }],
-    employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,
   }
-)
+);
 
 export const Company = mongoose.model<ICompany, CompanyModel>(
-  'Company',
+  "Company",
   companySchema
-)
+);
