@@ -26,6 +26,7 @@ import createResumeRoutes from "./routes/createResume.routes";
 import companyRoutes from "./routes/company.route";
 import newsLetterRoutes from "./routes/newsletter.routes";
 import resumeRoutes from "./routes/resume.route";
+import skillRoutes from "./routes/skill.route";
 
 const app = express();
 
@@ -133,6 +134,7 @@ app.use("/api/v1/newsletter", newsLetterRoutes);
  * APIS FOR RESUME *
  ********************/
 app.use("/api/v1/resume", resumeRoutes);
+app.use("/api/v1/skill", skillRoutes);
 
 
 app.use(notFound as never);
