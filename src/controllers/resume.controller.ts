@@ -26,6 +26,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   let fileUrl;
 
   if (process.env.NODE_ENV === "development") {
+    console.log("vgbdsrthnj")
     // Absolute local path on your PC
     fileUrl = path.resolve("uploads/resumes", file.filename);
   } else {
