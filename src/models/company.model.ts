@@ -5,7 +5,7 @@ const companySchema: Schema<ICompany> = new Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     clogo: { type: String },
-    banner:{type: String},
+    banner: { type: String },
     aboutUs: { type: String },
     cname: { type: String, required: true },
     country: { type: String, required: true },
@@ -13,7 +13,10 @@ const companySchema: Schema<ICompany> = new Schema(
     zipcode: { type: String },
     cemail: { type: String, required: true },
     cPhoneNumber: { type: String, required: true },
-    links: [{ type: String }],
+    links: [{
+      label: { type: String },
+      url: { type: String },
+    },],
     industry: { type: String },
     service: [{ type: String }],
     employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
