@@ -16,6 +16,7 @@ import { CreateResume } from '../models/createResume.model'
 import { User } from '../models/user.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
+import { ReqCompany } from '../models/assignCompanyReq.model'
 
 /******************
  * CREATE COMPANY *
@@ -454,6 +455,8 @@ export const getCompanyEmployeesWithSkills = catchAsync(
       skills: skillsMap.get(employee._id.toString()) || [],
     }))
 
+    const request = await ReqCompany.find({company: company._id, status: "pending"})
+
     // 6. Prepare the response data
     const responseData = {
       company: {
@@ -466,6 +469,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
         city: company.city,
       },
       employees: employeesWithSkills,
+      request,
       meta: buildMetaPagination(1, page, limit),
     }
 
