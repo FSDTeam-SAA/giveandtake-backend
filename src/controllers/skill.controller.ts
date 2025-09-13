@@ -122,3 +122,65 @@ export const deleteSkill = catchAsync(async (req: Request, res: Response) => {
     data: skill,
   });
 });
+
+import * as XLSX from "xlsx";
+import fs from "fs";
+import csvParser from "csv-parser";
+
+
+// Upload Excel/CSV
+export const uploadSkillsFile = catchAsync(async (req: Request, res: Response) => {
+  if (!req.file) {
+    throw new AppError(httpStatus.BAD_REQUEST, "No file uploaded");
+  }
+
+  const filePath = req.file.path;
+  const ext = filePath.split(".").pop()?.toLowerCase();
+
+  let skills: { name: string; categoryIcon?: string }[] = [];
+
+  // --- Handle Excel file ---
+  if (ext === "xlsx" || ext === "xls") {
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    skills = sheet.map((row: any) => ({
+      name: row.Skill,
+      categoryIcon: row.categoryIcon || "",
+    }));
+  }
+
+  // --- Handle CSV file ---
+  else if (ext === "csv") {
+    const rows: any[] = [];
+    await new Promise<void>((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(csvParser())
+        .on("data", (row) => rows.push(row))
+        .on("end", () => {
+          skills = rows.map((row: any) => ({
+            name: row.name,
+            categoryIcon: row.categoryIcon || "",
+          }));
+          resolve();
+        })
+        .on("error", (err) => reject(err));
+    });
+  } else {
+    throw new AppError(httpStatus.BAD_REQUEST, "Unsupported file format. Use .xlsx, .xls, or .csv");
+  }
+
+  // Insert into DB
+  if (skills.length > 0) {
+    await SkillModel.insertMany(skills);
+  }
+
+  // Cleanup uploaded file
+  fs.unlinkSync(filePath);
+
+  res.status(httpStatus.CREATED).json({
+    success: true,
+    message: `${skills.length} skills uploaded successfully`,
+    data: skills,
+  });
+});

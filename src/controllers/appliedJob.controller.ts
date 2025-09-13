@@ -65,7 +65,7 @@ import { User } from '../models/user.model'
 // })
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
-  const { jobId, userId, status, resumeId } = req.body
+  const { jobId, userId, status, resumeId,answer } = req.body
 
   // 🔹 Check if already applied
   const exists = await AppliedJob.findOne({ jobId, userId, resumeId })
@@ -79,6 +79,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     userId,
     status,
     resumeId,
+    answer
   })
 
   // 🔹 Fetch job details (with recruiter info)

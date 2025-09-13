@@ -7,4 +7,8 @@ export interface IAppliedJob extends Document {
   createdAt?: Date
   updatedAt?: Date,
   resumeId: mongoose.Types.ObjectId
+  answer: {
+    question: string,
+    ans: string
+  }
 }
