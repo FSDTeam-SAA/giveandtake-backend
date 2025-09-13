@@ -433,7 +433,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
     // 3. Fetch employee details from User model
     const employees = await User.find({
       _id: { $in: employeeIds },
-    }).select('_id name email phoneNum role')
+    }).select('_id name email phoneNum role avatar')
 
     // 4. Fetch skills from CreateResume model for these employees
     const resumes = await CreateResume.find({
@@ -452,6 +452,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
       email: employee.email,
       phoneNum: employee.phoneNum,
       role: employee.role,
+      photo:employee.avatar,
       skills: skillsMap.get(employee._id.toString()) || [],
     }))
 
