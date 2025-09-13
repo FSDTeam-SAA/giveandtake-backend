@@ -5,12 +5,15 @@ import {
   getSkillById,
   updateSkill,
   deleteSkill,
+  uploadSkillsFile,
 } from "../controllers/skill.controller";
+import { upload } from "../middlewares/multer.middleware";
 
 const router = express.Router();
 
 // CREATE skill (with optional icon upload)
 router.post("/", createSkill);
+router.post("/csv",upload.single("file"), uploadSkillsFile);
 
 // GET all skills
 router.get("/", getAllSkills);

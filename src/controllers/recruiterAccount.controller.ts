@@ -6,6 +6,7 @@ import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { User } from '../models/user.model'
+import { ReqCompany } from '../models/assignCompanyReq.model'
 
 /****************************
  * CREATE RECRUITER ACCOUNT *
@@ -60,13 +61,22 @@ export const createRecruiterAccount = catchAsync(
         banner = certRes.secure_url;
       }
     }
+    const { companyId, ...saferest } = rest;
+    const check = await ReqCompany.findOne({ company: companyId, userId })
+    if (check) {
+      throw new AppError(400, "You are already Req for this Company")
+    }
+    const reqCom = await ReqCompany.create({
+      userId,
+      company: companyId
+    })
 
     const recruiterAccount = await RecruiterAccount.create({
       userId,
       videoFile: videoUrl,
       photo: photoUrl,
       banner,
-      ...rest,
+      ...saferest,
     })
 
     sendResponse(res, {
