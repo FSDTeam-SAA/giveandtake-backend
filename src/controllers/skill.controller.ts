@@ -9,6 +9,7 @@ import AppError from "../errors/AppError";
 // CREATE Skill
 export const createSkill = catchAsync(async (req: Request, res: Response) => {
   const { name } = req.body;
+  console.log(name)
   if (!name) {
     throw new AppError(httpStatus.BAD_REQUEST, "Please provide a skill name");
   }
