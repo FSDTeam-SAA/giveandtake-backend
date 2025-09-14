@@ -456,7 +456,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
       skills: skillsMap.get(employee._id.toString()) || [],
     }))
 
-    const request = await ReqCompany.find({company: company._id, status: "pending"})
+    const request = await ReqCompany.find({company: company._id, status: "pending"}).populate('userId', '_id name email phoneNum role avatar')
 
     // 6. Prepare the response data
     const responseData = {

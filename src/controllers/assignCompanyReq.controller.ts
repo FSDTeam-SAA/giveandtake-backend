@@ -28,17 +28,22 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
     const id = req.params.id
     const { companyId, userId, status } = req.body;
 
-    const check = await ReqCompany.findOne({ company: companyId, userId: userId })
+    console.log(companyId, userId, status)
+    const check = await ReqCompany.findById(id)
     if (!check) {
         throw new AppError(400, "Not Found")
     }
 
     if (status === "accepted") {
+        const company1 = await Company.findById(companyId)
         const company = await Company.findByIdAndUpdate(
-            companyId,
+           
+            {_id:companyId},
             { $addToSet: { employeesId: userId } }, // avoids duplicates
             { new: true }
         );
+
+       
     }
     const reqCom = await ReqCompany.findByIdAndUpdate(id, {
         status: status
@@ -55,8 +60,8 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
 export const companyEmployeeAdd = catchAsync(async (req, res) => {
     const { employeeIds, companyId } = req.body;
 
-    const company = await Company.findByIdAndUpdate(
-        companyId,
+    const company = await Company.findOneAndUpdate(
+        {userId:companyId},
         { $addToSet: { employeesId: employeeIds } }, // avoids duplicates
         { new: true }
     );
