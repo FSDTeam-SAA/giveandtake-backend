@@ -62,14 +62,11 @@ export const createRecruiterAccount = catchAsync(
       }
     }
     const { companyId, ...saferest } = rest;
-    const check = await ReqCompany.findOne({ company: companyId, userId })
-    if (check) {
-      throw new AppError(400, "You are already Req for this Company")
-    }
-    const reqCom = await ReqCompany.create({
-      userId,
-      company: companyId
-    })
+    const reqCom = await ReqCompany.findOneAndUpdate(
+      { userId, company: companyId }, // match condition
+      { $setOnInsert: { userId, company: companyId } }, // insert only if not exists
+      { upsert: true, new: true } // create if not exists, return the doc
+    );
 
     const recruiterAccount = await RecruiterAccount.create({
       userId,
