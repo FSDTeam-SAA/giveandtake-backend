@@ -17,6 +17,7 @@ export interface ICustomQuestion {
 export interface IJob extends Document {
   userId: Types.ObjectId
   companyId: Types.ObjectId
+  recruiterId: Types.ObjectId
   title: string
   description: string
   companyName: string

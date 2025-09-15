@@ -31,7 +31,7 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       programName: { type: String },
       programDate: { type: String },
       awardDescription: { type: String },
-      companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
+      companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company'},
       sLink: [
         {
           label: { type: String },
