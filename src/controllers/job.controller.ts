@@ -63,6 +63,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   // ROLE BASE APPROVE LOGIC
   let jobApprove: 'pending' | 'approved' | 'denied' = 'approved'
   let companyId
+  let recruiterId
 
   if (user.role === 'company') {
     jobApprove = 'approved'
@@ -74,7 +75,11 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     jobApprove = 'approved'
     const a = await RecruiterAccount.findOne({ userId: userId })
     if (a) {
-      companyId = a.companyId
+      if(a.companyId){
+      companyId = a.companyId}
+      else{
+        recruiterId = a._id
+      }
     }
   } else {
     throw new AppError(
@@ -88,6 +93,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   const job = new Job({
     userId,
     companyId,
+    recruiterId,
     title,
     description,
     companyName,

@@ -5,6 +5,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
+    recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: 'RecruiterAccount' },
     title: { type: String, required: true },
     description: { type: String, required: true },
     companyName: { type: String },
@@ -19,7 +20,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     deadline: { type: Date },
     status: {
       type: String,
-      enum: ['active', 'deactivate'],
+      enum: ['pending','active', 'deactivate'],
       default: 'active',
     },
     jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCategory' },
@@ -73,6 +74,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       enum: ['New Entry', 'Experienced Professional', 'Career Returner'],
     },
     website_Url: { type: String },
+
   },
   { timestamps: true }
 )
