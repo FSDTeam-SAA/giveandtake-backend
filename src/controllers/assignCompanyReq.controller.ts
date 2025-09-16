@@ -81,3 +81,24 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
         data: company
     })
 })
+
+export const companyEmployeeRemove = catchAsync(async (req, res) => {
+  const { employeeId, companyId } = req.body
+
+  const company = await Company.findOneAndUpdate(
+    { userId: companyId },
+    { $pull: { employeesId: employeeId } }, // remove employeeId
+    { new: true }
+  )
+
+  if (!company) {
+    throw new AppError(404, "Company not found")
+  }
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: "Employee removed from the company",
+    data: company,
+  })
+})
