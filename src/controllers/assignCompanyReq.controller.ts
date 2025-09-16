@@ -1,6 +1,7 @@
 import AppError from "../errors/AppError";
 import { ReqCompany } from "../models/assignCompanyReq.model";
 import { Company } from "../models/company.model";
+import { RecruiterAccount } from "../models/recruiterAccount.model";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
 
@@ -40,6 +41,13 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
            
             {_id:companyId},
             { $addToSet: { employeesId: userId } }, // avoids duplicates
+            { new: true }
+        );
+
+
+        const recuirter = await RecruiterAccount.findOneAndUpdate(
+            { userId: userId },
+         { companyId: companyId } , // avoids duplicates
             { new: true }
         );
 

@@ -7,7 +7,7 @@ import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
-import { Schema } from 'mongoose'
+import mongoose, { Schema } from 'mongoose'
 
 /****************************
  * CREATE RECRUITER ACCOUNT *
@@ -63,12 +63,13 @@ export const createRecruiterAccount = catchAsync(
       }
     }
     const { companyId, ...saferest } = rest;
-    const reqCom = await ReqCompany.findOneAndUpdate(
+    if(companyId)
+{    const reqCom = await ReqCompany.findOneAndUpdate(
       { userId, company: companyId }, // match condition
-      { $setOnInsert: { userId, company: new Schema.Types.ObjectId(companyId) } }, // insert only if not exists
+      { $setOnInsert: { userId, company: new mongoose.Types.ObjectId(companyId) } }, // insert only if not exists
       { upsert: true, new: true } // create if not exists, return the doc
     );
-
+}
     const recruiterAccount = await RecruiterAccount.create({
       userId,
       videoFile: videoUrl,
