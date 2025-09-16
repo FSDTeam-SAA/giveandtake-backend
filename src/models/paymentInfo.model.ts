@@ -15,7 +15,6 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
     planId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SubscriptionPlan',
-      required: true,
     },
     planType: {
       type: String,

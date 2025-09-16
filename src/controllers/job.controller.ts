@@ -428,6 +428,50 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 //   });
 // });
 
+// export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
+//   const userId = req.user?._id
+//   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
+
+//   // Get the company document for this user, if any
+//   const company = await Company.findOne({ userId })
+
+//   // Match jobs where:
+//   // 1. job.userId === logged-in user
+//   // 2. job.companyId === logged-in user (if user is a company)
+//   // 3. job.companyId === company._id (if user has a company record)
+//   const Jobs = await Job.find({
+//     $or: [
+//       { userId }, // jobs created by the user
+//       { companyId: userId }, // user account itself is a company
+//       ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
+//     ],
+//     arcrivedJob: false,
+//   }).sort({ createdAt: -1 })
+
+//   if (!Jobs.length) {
+//     return sendResponse(res, {
+//       statusCode: httpStatus.OK,
+//       success: true,
+//       message: 'No jobs found',
+//       data: [],
+//     })
+//   }
+
+//   const jobsWithApplicants = await Promise.all(
+//     Jobs.map(async (job) => {
+//       const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
+//       return { ...job.toObject(), applicantCount }
+//     })
+//   )
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.OK,
+//     success: true,
+//     message: 'Jobs fetched successfully',
+//     data: jobsWithApplicants,
+//   })
+// })
+
 export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
@@ -436,9 +480,6 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const company = await Company.findOne({ userId })
 
   // Match jobs where:
-  // 1. job.userId === logged-in user
-  // 2. job.companyId === logged-in user (if user is a company)
-  // 3. job.companyId === company._id (if user has a company record)
   const Jobs = await Job.find({
     $or: [
       { userId }, // jobs created by the user
@@ -457,10 +498,31 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
     })
   }
 
+  const today = new Date()
+
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
       const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
-      return { ...job.toObject(), applicantCount }
+
+      let derivedStatus = 'Pending'
+
+      if (job.publishDate && job.adminApprove) {
+        if (job.publishDate <= today) {
+          derivedStatus = 'Live'
+        } else {
+          derivedStatus = 'Scheduled (Admin Approved)'
+        }
+      } else if (job.publishDate && !job.adminApprove) {
+        if (job.publishDate > today) {
+          derivedStatus = 'Scheduled'
+        }
+      }
+
+      return {
+        ...job.toObject(),
+        applicantCount,
+        derivedStatus, // 👈 new status field
+      }
     })
   )
 
@@ -471,6 +533,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
     data: jobsWithApplicants,
   })
 })
+
 
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
