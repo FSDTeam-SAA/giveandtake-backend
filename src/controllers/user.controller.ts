@@ -545,7 +545,7 @@ export const getAllUserEmails = catchAsync(
     const companyId = company?._id?.toString();
 
     // Fetch all users with selected fields
-    const users = await User.find({}, { _id: 1, email: 1, role: 1 }).lean();
+    const users = await User.find({}, { _id: 1, email: 1, role: 1, name: 1, avatar: 1 }).lean();
 
     // Get all employeesId and userId (company owner) from all companies
     const companies = await Company.find(
@@ -683,7 +683,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "User fetched successfully",
-    data: user1,
+    data: {...user1, isValid, payAsYouGo},
   });
 });
 
