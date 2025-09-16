@@ -21,6 +21,7 @@ import { Company } from "../models/company.model";
 import { paymentInfo } from "../models/paymentInfo.model";
 import moment from "moment";
 import { Experience } from "../models/experience.model";
+import { Job } from "../models/job.model";
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role } = req.body;
@@ -118,17 +119,40 @@ export const login = catchAsync(async (req, res) => {
 
   let _user = await user.save();
 
-  const checkPayment = await paymentInfo.findOne({ userId: user._id }).sort({ "updatedAt": -1 }).populate('planId')
+  const checkPayment = await paymentInfo
+    .findOne({ userId: user._id })
+    .sort({ updatedAt: -1 })
+    .populate('planId')
 
-  let expiryDate: Date | null = null;
+  let expiryDate: Date | null = null
+  let payAsYouGo: boolean | undefined = undefined
+  let isValid = false
 
-  if (checkPayment?.planId?.valid === "monthly") {
-    expiryDate = moment(checkPayment?.updatedAt).add(1, "month").toDate();
-  } else if (checkPayment?.planId?.valid === "yearly") {
-    expiryDate = moment(checkPayment?.updatedAt).add(1, "year").toDate();
+  if (checkPayment?.planId) {
+    if (checkPayment.planId.valid === 'monthly') {
+      expiryDate = moment(checkPayment.updatedAt).add(1, 'month').toDate()
+    } else if (checkPayment.planId.valid === 'yearly') {
+      expiryDate = moment(checkPayment.updatedAt).add(1, 'year').toDate()
+    }
+
+    isValid = expiryDate ? new Date() <= expiryDate : false
+  } else if (checkPayment) {
+    const jobExists = await Job.exists({
+      userId: user._id,
+      createdAt: { $gte: checkPayment.updatedAt },
+    })
+
+    if (jobExists) {
+      payAsYouGo = false // already posted a job after payment
+    } else {
+      payAsYouGo = true // can still post
+    }
+
+    isValid = false
+  } else {
+    payAsYouGo = true
+    isValid = false
   }
-
-  const isValid = expiryDate ? new Date() <= expiryDate : false;
 
 
   sendResponse(res, {
@@ -140,7 +164,8 @@ export const login = catchAsync(async (req, res) => {
       role: user.role,
       _id: user._id,
       refreshToken,
-      isValid
+      isValid,
+      payAsYouGo
     },
   });
 });
@@ -618,6 +643,42 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const user1: any = user.toObject();
   user1.sLink = resume?.sLink || null;
 
+    const checkPayment = await paymentInfo
+    .findOne({ userId: user._id })
+    .sort({ updatedAt: -1 })
+    .populate('planId')
+
+  let expiryDate: Date | null = null
+  let payAsYouGo: boolean | undefined = undefined
+  let isValid = false
+
+  if (checkPayment?.planId) {
+    if (checkPayment.planId.valid === 'monthly') {
+      expiryDate = moment(checkPayment.updatedAt).add(1, 'month').toDate()
+    } else if (checkPayment.planId.valid === 'yearly') {
+      expiryDate = moment(checkPayment.updatedAt).add(1, 'year').toDate()
+    }
+
+    isValid = expiryDate ? new Date() <= expiryDate : false
+  } else if (checkPayment) {
+    const jobExists = await Job.exists({
+      userId: user._id,
+      createdAt: { $gte: checkPayment.updatedAt },
+    })
+
+    if (jobExists) {
+      payAsYouGo = false // already posted a job after payment
+    } else {
+      payAsYouGo = true // can still post
+    }
+
+    isValid = false
+  } else {
+    payAsYouGo = true
+    isValid = false
+  }
+
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -923,7 +984,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
         if (!resume) return null;
-        const experience = await Experience.findOne({ userId: user._id }).sort({"createdAt": -1}).select("position")
+        const experience = await Experience.findOne({ userId: user._id }).sort({ "createdAt": -1 }).select("position")
         position = experience?.position || null
         photoUrl = resume?.photo || null;
       } else if (user.role === "recruiter") {

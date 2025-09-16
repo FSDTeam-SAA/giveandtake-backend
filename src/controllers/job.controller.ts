@@ -504,8 +504,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
     Jobs.map(async (job) => {
       const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
 
-      // 🟢 derive status dynamically
-      let derivedStatus = 'pending'
+      let derivedStatus = 'Pending'
 
       if (job.publishDate && job.adminApprove) {
         if (job.publishDate <= today) {
