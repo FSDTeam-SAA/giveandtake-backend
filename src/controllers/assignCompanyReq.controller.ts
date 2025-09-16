@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import AppError from "../errors/AppError";
 import { ReqCompany } from "../models/assignCompanyReq.model";
 import { Company } from "../models/company.model";
@@ -86,8 +87,8 @@ export const companyEmployeeRemove = catchAsync(async (req, res) => {
   const { employeeId, companyId } = req.body
 
   const company = await Company.findOneAndUpdate(
-    { userId: companyId },
-    { $pull: { employeesId: employeeId } }, // remove employeeId
+    { userId: new mongoose.Types.ObjectId(companyId) },
+    { $pull: { employeesId: new mongoose.Types.ObjectId(employeeId) } }, // remove employeeId
     { new: true }
   )
 
