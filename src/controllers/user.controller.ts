@@ -652,7 +652,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   let payAsYouGo: boolean | undefined = undefined
   let isValid = false
 
-  if (checkPayment?.planId) {
+  if (checkPayment?.planId?.valid != "PayAsYouGo") {
     if (checkPayment.planId.valid === 'monthly') {
       expiryDate = moment(checkPayment.updatedAt).add(1, 'month').toDate()
     } else if (checkPayment.planId.valid === 'yearly') {
@@ -660,7 +660,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     }
 
     isValid = expiryDate ? new Date() <= expiryDate : false
-  } else if (checkPayment) {
+  } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
     const jobExists = await Job.exists({
       userId: user._id,
       createdAt: { $gte: checkPayment.updatedAt },
