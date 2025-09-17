@@ -18,7 +18,7 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
       },
       valid:{
         type: String,
-        enum: ["monthly","yearly"]
+        enum: ["monthly","yearly","PayAsYouGo"]
       }
     },
     { timestamps: true }
