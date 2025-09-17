@@ -122,38 +122,37 @@ export const login = catchAsync(async (req, res) => {
   const checkPayment = await paymentInfo
     .findOne({ userId: user._id })
     .sort({ updatedAt: -1 })
-    .populate('planId')
+    .populate("planId");
 
-  let expiryDate: Date | null = null
-  let payAsYouGo: boolean | undefined = undefined
-  let isValid = false
+  let expiryDate: Date | null = null;
+  let payAsYouGo: boolean | undefined = undefined;
+  let isValid = false;
 
   if (checkPayment?.planId) {
-    if (checkPayment.planId.valid === 'monthly') {
-      expiryDate = moment(checkPayment.updatedAt).add(1, 'month').toDate()
-    } else if (checkPayment.planId.valid === 'yearly') {
-      expiryDate = moment(checkPayment.updatedAt).add(1, 'year').toDate()
+    if (checkPayment.planId.valid === "monthly") {
+      expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
+    } else if (checkPayment.planId.valid === "yearly") {
+      expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
     }
 
-    isValid = expiryDate ? new Date() <= expiryDate : false
+    isValid = expiryDate ? new Date() <= expiryDate : false;
   } else if (checkPayment) {
     const jobExists = await Job.exists({
       userId: user._id,
       createdAt: { $gte: checkPayment.updatedAt },
-    })
+    });
 
     if (jobExists) {
-      payAsYouGo = false // already posted a job after payment
+      payAsYouGo = false; // already posted a job after payment
     } else {
-      payAsYouGo = true // can still post
+      payAsYouGo = true; // can still post
     }
 
-    isValid = false
+    isValid = false;
   } else {
-    payAsYouGo = true
-    isValid = false
+    payAsYouGo = true;
+    isValid = false;
   }
-
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -165,7 +164,7 @@ export const login = catchAsync(async (req, res) => {
       _id: user._id,
       refreshToken,
       isValid,
-      payAsYouGo
+      payAsYouGo,
     },
   });
 });
@@ -386,19 +385,18 @@ export const checkSubmitSecurityAnswers = catchAsync(
     // console.log("first", user)
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
-
     if (!user.securityQuestions) {
       res.status(httpStatus.OK).json({
         success: true,
         message: "Security questions not Found",
-        data: { security: false }
+        data: { security: false },
       });
     }
 
     res.status(httpStatus.OK).json({
       success: true,
       message: "Security questions Found",
-      data: { security: true }
+      data: { security: true },
     });
   }
 );
@@ -528,11 +526,11 @@ export const softDeactivateUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Account soft deactivated indefinitely. You can reactivate anytime.",
+    message:
+      "Account soft deactivated indefinitely. You can reactivate anytime.",
     data: null,
   });
 });
-
 
 /**********************************
  * GET ALL THE USER EMAIL AND _ID *
@@ -545,7 +543,10 @@ export const getAllUserEmails = catchAsync(
     const companyId = company?._id?.toString();
 
     // Fetch all users with selected fields
-    const users = await User.find({}, { _id: 1, email: 1, role: 1, name: 1, avatar: 1 }).lean();
+    const users = await User.find(
+      {},
+      { _id: 1, email: 1, role: 1, name: 1, avatar: 1 }
+    ).lean();
 
     // Get all employeesId and userId (company owner) from all companies
     const companies = await Company.find(
@@ -643,47 +644,51 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const user1: any = user.toObject();
   user1.sLink = resume?.sLink || null;
 
-    const checkPayment = await paymentInfo
+  const checkPayment = await paymentInfo
     .findOne({ userId: user._id })
     .sort({ updatedAt: -1 })
-    .populate('planId')
+    .populate("planId");
 
-  let expiryDate: Date | null = null
-  let payAsYouGo: boolean | undefined = undefined
-  let isValid = false
-
-  if (checkPayment?.planId?.valid != "PayAsYouGo") {
-    if (checkPayment.planId.valid === 'monthly') {
-      expiryDate = moment(checkPayment.updatedAt).add(1, 'month').toDate()
-    } else if (checkPayment.planId.valid === 'yearly') {
-      expiryDate = moment(checkPayment.updatedAt).add(1, 'year').toDate()
-    }
-
-    isValid = expiryDate ? new Date() <= expiryDate : false
-  } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
-    const jobExists = await Job.exists({
-      userId: user._id,
-      createdAt: { $gte: checkPayment.updatedAt },
-    })
-
-    if (jobExists) {
-      payAsYouGo = false // already posted a job after payment
-    } else {
-      payAsYouGo = true // can still post
-    }
-
-    isValid = false
+  let expiryDate: Date | null = null;
+  let payAsYouGo: boolean | undefined = undefined;
+  let isValid = false;
+  console.log("checkPayment", checkPayment);
+  if (checkPayment?.planId === null || !checkPayment) {
+    payAsYouGo = false;
+    isValid = false;
   } else {
-    payAsYouGo = true
-    isValid = false
-  }
+    if (checkPayment?.planId?.valid != "PayAsYouGo") {
+      if (checkPayment.planId.valid === "monthly") {
+        expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
+      } else if (checkPayment.planId.valid === "yearly") {
+        expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
+      }
 
+      isValid = expiryDate ? new Date() <= expiryDate : false;
+    } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
+      const jobExists = await Job.exists({
+        userId: user._id,
+        createdAt: { $gte: checkPayment.updatedAt },
+      });
+
+      if (jobExists) {
+        payAsYouGo = false; // already posted a job after payment
+      } else {
+        payAsYouGo = true; // can still post
+      }
+
+      isValid = false;
+    } else {
+      payAsYouGo = true;
+      isValid = false;
+    }
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "User fetched successfully",
-    data: {...user1, isValid, payAsYouGo},
+    data: { ...user1, isValid, payAsYouGo },
   });
 });
 
@@ -978,24 +983,32 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
   const enrichedUsers = await Promise.all(
     users.map(async (user) => {
       let photoUrl: string | null = null;
-      let name1 = null
-      let position = null
+      let name1 = null;
+      let position = null;
 
       if (user.role === "candidate") {
-        const resume = await CreateResume.findOne({ userId: user._id }).select("photo");
+        const resume = await CreateResume.findOne({ userId: user._id }).select(
+          "photo"
+        );
         if (!resume) return null;
-        const experience = await Experience.findOne({ userId: user._id }).sort({ "createdAt": -1 }).select("position")
-        position = experience?.position || null
+        const experience = await Experience.findOne({ userId: user._id })
+          .sort({ createdAt: -1 })
+          .select("position");
+        position = experience?.position || null;
         photoUrl = resume?.photo || null;
       } else if (user.role === "recruiter") {
-        const recruiter = await RecruiterAccount.findOne({ userId: user._id }).select("photo");
+        const recruiter = await RecruiterAccount.findOne({
+          userId: user._id,
+        }).select("photo");
         if (!recruiter) return null;
         photoUrl = recruiter?.photo || null;
       } else if (user.role === "company") {
-        const company = await Company.findOne({ userId: user._id }).select("clogo cname");
+        const company = await Company.findOne({ userId: user._id }).select(
+          "clogo cname"
+        );
         if (!company) return null;
         photoUrl = company?.clogo || null;
-        name1 = company?.cname
+        name1 = company?.cname;
       }
 
       // safely assign to avatar.url
@@ -1006,7 +1019,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           ...user.avatar,
           url: photoUrl || user.avatar?.url || null,
         },
-        position: position
+        position: position,
       };
     })
   );
