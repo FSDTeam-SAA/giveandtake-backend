@@ -8,7 +8,7 @@ const messageSchema: Schema<IMessage> = new Schema<IMessage>(
       ref: 'User',
       required: true,
     },
-    message: { type: String, required: true },
+    message: { type: String },
     file: [
       {
         filename: { type: String },

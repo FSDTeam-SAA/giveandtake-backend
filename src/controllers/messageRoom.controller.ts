@@ -72,9 +72,9 @@ export const getMessageRooms = catchAsync(
 
     const rooms = await MessageRoom.find(filter)
       .sort({ createdAt: -1 })
-      .populate('userId', 'name email role')
-      .populate('recruiterId', 'name email role')
-      .populate('companyId', 'name email role')
+      .populate('userId', 'name email role avatar')
+      .populate('recruiterId', 'name email role avatar')
+      .populate('companyId', 'name email role avatar')
 
     res.status(httpStatus.OK).json({
       success: true,

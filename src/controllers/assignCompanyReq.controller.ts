@@ -86,6 +86,8 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
 export const companyEmployeeRemove = catchAsync(async (req, res) => {
   const { employeeId, companyId } = req.body
 
+  console.log(companyId, employeeId)
+
   const company = await Company.findOneAndUpdate(
     { userId: new mongoose.Types.ObjectId(companyId) },
     { $pull: { employeesId: new mongoose.Types.ObjectId(employeeId) } }, // remove employeeId

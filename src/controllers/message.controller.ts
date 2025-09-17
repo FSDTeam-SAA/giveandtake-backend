@@ -92,8 +92,13 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     { new: true }
   )
 
+  const message1 = await Message.findById(newMessage._id).populate(
+    'userId',
+    'name email avatar'
+  )
+
   // Emit socket event
-  io.to(roomId).emit('newMessage', newMessage)
+  io.to(roomId).emit('newMessage', message1)
 
   res.status(httpStatus.CREATED).json({
     success: true,
@@ -119,6 +124,7 @@ export const getMessagesByRoom = catchAsync(
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
+      .populate('userId', 'name email avatar')
 
     const total = await Message.countDocuments({ roomId })
 

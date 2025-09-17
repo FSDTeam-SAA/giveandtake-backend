@@ -24,8 +24,7 @@ const messageRoomSchema: Schema<IMessageRoom> = new Schema<IMessageRoom>(
       default: '',
     },
     lastMessageSender: {
-      type: mongoose.Schema.Types.ObjectId,
-      default: '',
+      type: mongoose.Schema.Types.ObjectId
     }
   },
   { timestamps: true }
