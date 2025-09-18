@@ -128,30 +128,35 @@ export const login = catchAsync(async (req, res) => {
   let payAsYouGo: boolean | undefined = undefined;
   let isValid = false;
 
-  if (checkPayment?.planId) {
-    if (checkPayment.planId.valid === "monthly") {
-      expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
-    } else if (checkPayment.planId.valid === "yearly") {
-      expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
-    }
-
-    isValid = expiryDate ? new Date() <= expiryDate : false;
-  } else if (checkPayment) {
-    const jobExists = await Job.exists({
-      userId: user._id,
-      createdAt: { $gte: checkPayment.updatedAt },
-    });
-
-    if (jobExists) {
-      payAsYouGo = false; // already posted a job after payment
-    } else {
-      payAsYouGo = true; // can still post
-    }
-
+  if (checkPayment?.planId === null || !checkPayment) {
+    payAsYouGo = false;
     isValid = false;
   } else {
-    payAsYouGo = true;
-    isValid = false;
+    if (checkPayment?.planId?.valid != "PayAsYouGo") {
+      if (checkPayment.planId.valid === "monthly") {
+        expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
+      } else if (checkPayment.planId.valid === "yearly") {
+        expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
+      }
+
+      isValid = expiryDate ? new Date() <= expiryDate : false;
+    } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
+      const jobExists = await Job.exists({
+        userId: user._id,
+        createdAt: { $gte: checkPayment.updatedAt },
+      });
+
+      if (jobExists) {
+        payAsYouGo = false; // already posted a job after payment
+      } else {
+        payAsYouGo = true; // can still post
+      }
+
+      isValid = false;
+    } else {
+      payAsYouGo = true;
+      isValid = false;
+    }
   }
 
   sendResponse(res, {
@@ -165,6 +170,7 @@ export const login = catchAsync(async (req, res) => {
       refreshToken,
       isValid,
       payAsYouGo,
+      plan: checkPayment?.planId
     },
   });
 });
@@ -688,7 +694,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "User fetched successfully",
-    data: { ...user1, isValid, payAsYouGo },
+    data: { ...user1, isValid, payAsYouGo, plan: checkPayment?.planId },
   });
 });
 
