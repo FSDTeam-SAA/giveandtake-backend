@@ -24,7 +24,7 @@ import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
 
 export const register = catchAsync(async (req, res) => {
-  const { name, email, password, address, phoneNum, role } = req.body;
+  const { name, email, password, address, phoneNum, role, dateOfbirth } = req.body;
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
@@ -47,6 +47,7 @@ export const register = catchAsync(async (req, res) => {
     address,
     role,
     verificationInfo: { token: otptoken },
+    dateOfbirth
   });
   await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
 
@@ -167,6 +168,7 @@ export const login = catchAsync(async (req, res) => {
       accessToken,
       role: user.role,
       _id: user._id,
+      name: user.name, email: email, address: user.address, phoneNum: user.phoneNum, dateOfbirth: user.dateOfbirth,
       refreshToken,
       isValid,
       payAsYouGo,

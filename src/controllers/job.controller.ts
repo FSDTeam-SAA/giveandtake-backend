@@ -12,6 +12,11 @@ import { RecruiterAccount } from '../models/recruiterAccount.model'
 import { Company } from '../models/company.model'
 import { AppliedJob } from '../models/appliedJob.model'
 import { sendEmail } from '../utils/sendEmail'
+import { io } from '../server'
+import { createNotification } from '../sockets/notification.service'
+import mongoose from 'mongoose'
+import { Notification } from '../models/notification.model'
+import { Following } from '../models/following.model'
 
 /*******************
  * // CREATE A JOB *
@@ -75,9 +80,10 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     jobApprove = 'approved'
     const a = await RecruiterAccount.findOne({ userId: userId })
     if (a) {
-      if(a.companyId){
-      companyId = a.companyId}
-      else{
+      if (a.companyId) {
+        companyId = a.companyId
+      }
+      else {
         recruiterId = a._id
       }
     }
@@ -123,6 +129,31 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   })
 
   await job.save()
+
+
+    // 🔹 Find followers
+  let followers: any[] = [];
+  if (companyId) {
+    followers = await Following.find({ companyId });
+  } else if (recruiterId) {
+    followers = await Following.find({ recruiterId });
+  }
+
+  if (followers.length > 0) {
+    const notifications = followers.map((f) => ({
+      userId: f.userId,
+      message: `New job posted: ${title}`,
+      jobId: job._id,
+      type: "job_post",
+    }));
+
+    const saved = await Notification.insertMany(notifications);
+
+    // 🔹 Emit via socket
+    saved.forEach((n) => {
+        io.to(n.userId.toString()).emit("newNotification", n);
+    });
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -189,9 +220,12 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
 
 
   const job = await Job.findById(id).populate("userId")
+  if (!job) {
+    throw new AppError(400, "job not found")
+  }
 
-  if(req.body.adminApprove){
-        // const recruiterName = (job.userId as any)?.name || 'Recruiter'
+  if (req.body.adminApprove) {
+    // const recruiterName = (job.userId as any)?.name || 'Recruiter'
 
     const emailSubject = `Job Post Approved By Admin`
     const emailBody = `
@@ -203,9 +237,17 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     `
 
     await sendEmail(job?.userId?.email, emailSubject, emailBody)
-  }else{
+    let notification = await createNotification({
+      to: job.userId._id as mongoose.Types.ObjectId,
+      message: 'Job Post Approved By Admin',
+      type: 'job_application_status',
+      id: job._id as mongoose.Types.ObjectId,
+    })
+    // Emit socket event
+    io.to(job.userId._id.toString()).emit('newNotification', notification)
+  } else {
 
-        const emailSubject = `Job Post Denied By Admin`
+    const emailSubject = `Job Post Denied By Admin`
     const emailBody = `
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Denied</h2>
@@ -215,6 +257,15 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     `
 
     await sendEmail(job?.userId?.email, emailSubject, emailBody)
+
+        let notification = await createNotification({
+      to: job.userId._id as mongoose.Types.ObjectId,
+      message: 'Job Post Denied By Admin',
+      type: 'job_application_status',
+      id: job._id as mongoose.Types.ObjectId,
+    })
+    // Emit socket event
+    io.to(job.userId._id.toString()).emit('newNotification', notification)
 
   }
 
@@ -627,7 +678,7 @@ export const adminApproveJobs = catchAsync(async (req, res) => {
     .skip(skip)
     .limit(limit)
 
-  const total = await Job.countDocuments({  })
+  const total = await Job.countDocuments({})
 
   const meta = buildMetaPagination(total, page, limit)
 
