@@ -14,6 +14,7 @@ import { createNotification } from '../sockets/notification.service'
 import { Job } from '../models/job.model'
 import { sendEmail } from '../utils/sendEmail'
 import { User } from '../models/user.model'
+import { io } from '../server'
 
 /***************
  * CREATE Application
@@ -101,6 +102,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     type: 'job_application',
     id: application._id,
   })
+    // Emit socket event
+    io.to(job.userId.toString()).emit('newNotification', { message: `A new candidate has applied for your job "${job.title}".`,})
 
   // ✅ Notify the Applicant
   await createNotification({
@@ -109,6 +112,9 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     type: 'job_application_confirmation',
     id: application._id,
   })
+
+    // Emit socket event
+  io.to(userId).emit('newNotification', { message: `You have successfully applied for the job "${job.title}".`,})
 
   // ✅ Send email to Applicant
   if (candidate.email) {
@@ -338,7 +344,7 @@ export const updateApplicationStatus = catchAsync(
     }
 
     // ✅ also send notification in-app
-    await createNotification({
+    let notification =await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
       message:
         status === 'shortlisted'
@@ -347,6 +353,8 @@ export const updateApplicationStatus = catchAsync(
       type: 'job_application_status',
       id: updated._id,
     })
+      // Emit socket event
+  io.to(updated.userId.toString()).emit('newNotification', notification)
 
     res.status(httpStatus.OK).json({
       success: true,
