@@ -1,4 +1,5 @@
 import { Document, Model, Types } from 'mongoose'
+import { IResumeLink } from './createResume.interface'
 
 export interface ICompany extends Document {
   userId?: number
@@ -11,7 +12,7 @@ export interface ICompany extends Document {
   zipcode?: string
   cemail: string
   cPhoneNumber: string
-  links?: string[]
+  sLink?: IResumeLink[]
   industry?: string
   service?: string[]
   employeesId: Types.ObjectId[] // references to User

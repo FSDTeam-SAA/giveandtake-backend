@@ -637,6 +637,71 @@ export const getAllCompanies = catchAsync(
 /***************************
  * GET A SINGLE USER BY ID *
  ***************************/
+// export const getUserById = catchAsync(async (req: Request, res: Response) => {
+//   const id = req.user?._id;
+
+//   const user = await User.findById(id).select(
+//     "-password -verificationInfo -password_reset_token"
+//   );
+
+//   if (!user) {
+//     throw new AppError(httpStatus.NOT_FOUND, "User not found");
+//   }
+
+//   const resume = await CreateResume.findOne({ userId: id }).select("sLink");
+//   const user1: any = user.toObject();
+//   user1.sLink = resume?.sLink || null;
+
+//   const checkPayment = await paymentInfo
+//     .findOne({ userId: user._id })
+//     .sort({ updatedAt: -1 })
+//     .populate("planId");
+
+//   let expiryDate: Date | null = null;
+//   let payAsYouGo: boolean | undefined = undefined;
+//   let isValid = false;
+//   console.log("checkPayment", checkPayment);
+//   if (checkPayment?.planId === null || !checkPayment) {
+//     payAsYouGo = false;
+//     isValid = false;
+//   } else {
+//     if (checkPayment?.planId?.valid != "PayAsYouGo") {
+//       if (checkPayment.planId.valid === "monthly") {
+//         expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
+//       } else if (checkPayment.planId.valid === "yearly") {
+//         expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
+//       }
+
+//       isValid = expiryDate ? new Date() <= expiryDate : false;
+//     } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
+//       const jobExists = await Job.exists({
+//         userId: user._id,
+//         createdAt: { $gte: checkPayment.updatedAt },
+//       });
+
+//       if (jobExists) {
+//         payAsYouGo = false; // already posted a job after payment
+//       } else {
+//         payAsYouGo = true; // can still post
+//       }
+
+//       isValid = false;
+//     } else {
+//       payAsYouGo = true;
+//       isValid = false;
+//     }
+//   }
+
+//   sendResponse(res, {
+//     statusCode: httpStatus.OK,
+//     success: true,
+//     message: "User fetched successfully",
+//     data: { ...user1, isValid, payAsYouGo, plan: checkPayment?.planId },
+//   });
+// });
+
+import { Following } from "../models/following.model"; // adjust path if needed
+
 export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const id = req.user?._id;
 
@@ -652,6 +717,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const user1: any = user.toObject();
   user1.sLink = resume?.sLink || null;
 
+  // ---- PLAN / PAYMENT LOGIC (unchanged) ----
   const checkPayment = await paymentInfo
     .findOne({ userId: user._id })
     .sort({ updatedAt: -1 })
@@ -660,7 +726,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   let expiryDate: Date | null = null;
   let payAsYouGo: boolean | undefined = undefined;
   let isValid = false;
-  console.log("checkPayment", checkPayment);
+
   if (checkPayment?.planId === null || !checkPayment) {
     payAsYouGo = false;
     isValid = false;
@@ -679,12 +745,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
         createdAt: { $gte: checkPayment.updatedAt },
       });
 
-      if (jobExists) {
-        payAsYouGo = false; // already posted a job after payment
-      } else {
-        payAsYouGo = true; // can still post
-      }
-
+      payAsYouGo = !jobExists;
       isValid = false;
     } else {
       payAsYouGo = true;
@@ -692,13 +753,31 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
+  // ---- FOLLOWING / FOLLOWERS LOGIC ----
+  const followingList = await Following.find({ userId: id }).populate("recruiterId companyId", "name email"); // Add other fields you want to expose
+  const followersList = await Following.find({
+    $or: [{ recruiterId: id }, { companyId: id }],
+  }).populate("userId", "name email");
+
+  const following = followingList.map((f) => f.recruiterId || f.companyId);
+  const followers = followersList.map((f) => f.userId);
+
+  // ---- SEND RESPONSE ----
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "User fetched successfully",
-    data: { ...user1, isValid, payAsYouGo, plan: checkPayment?.planId },
+    data: {
+      ...user1,
+      isValid,
+      payAsYouGo,
+      plan: checkPayment?.planId,
+      following,
+      followers,
+    },
   });
 });
+
 
 export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params;

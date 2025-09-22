@@ -130,7 +130,7 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     }
 
     companyData.employeesId = JSON.parse(companyData.employeesId || '[]')
-    companyData.links = JSON.parse(companyData.links || '[]')
+    companyData.sLink = JSON.parse(companyData.sLink || '[]')
     companyData.service = JSON.parse(companyData.service || '[]')
 
     // Optional: attach userId from req.user if available
@@ -221,7 +221,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   }
 
   companyData.employeesId = JSON.parse(req.body.employeesId || '[]')
-  companyData.links = JSON.parse(req.body.links || '[]')
+  companyData.sLink = JSON.parse(req.body.sLink || '[]')
   companyData.service = JSON.parse(req.body.service || '[]')
 
   const updated = await Company.findByIdAndUpdate(id, companyData, {

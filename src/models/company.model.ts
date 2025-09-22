@@ -13,7 +13,12 @@ const companySchema: Schema<ICompany> = new Schema(
     zipcode: { type: String },
     cemail: { type: String, required: true },
     cPhoneNumber: { type: String, required: true },
-    links: [{ type: String }],
+    sLink: [
+      {
+        label: { type: String },
+        url: { type: String },
+      },
+    ],
     industry: { type: String },
     service: [{ type: String }],
     employeesId: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
