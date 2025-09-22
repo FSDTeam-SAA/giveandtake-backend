@@ -145,16 +145,14 @@ export const createUniversity = async (req: Request, res: Response) => {
 
 export const listUniversities = async (req: Request, res: Response) => {
   try {
-    const page = Math.max(1, parseInt(String(req.query.page || "1")));
-    const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || "50"))));
-    const skip = (page - 1) * limit;
+
 
     const [items, total] = await Promise.all([
-      University.find().sort({ country: 1, name: 1 }).skip(skip).limit(limit),
+      University.find().sort({ country: 1, name: 1 }),
       University.countDocuments(),
     ]);
 
-   res.status(200).json({ status: "success", total, page, limit, data: items });
+   res.status(200).json({ status: "success", total, data: items });
   } catch (err: any) {
    res.status(500).json({ status: "error", message: err.message });
   }
