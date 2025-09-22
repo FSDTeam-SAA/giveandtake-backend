@@ -27,6 +27,9 @@ import companyRoutes from "./routes/company.route";
 import newsLetterRoutes from "./routes/newsletter.routes";
 import resumeRoutes from "./routes/resume.route";
 import skillRoutes from "./routes/skill.route";
+import courencyRoutes from "./routes/courency.routes";
+import languageRoutes from "./routes/language.routes";
+import universityRoutes from "./routes/university.routes";
 
 const app = express();
 
@@ -135,6 +138,9 @@ app.use("/api/v1/newsletter", newsLetterRoutes);
  ********************/
 app.use("/api/v1/resume", resumeRoutes);
 app.use("/api/v1/skill", skillRoutes);
+app.use("/api/v1/university", universityRoutes);
+app.use("/api/v1/language", languageRoutes);
+app.use("/api/v1/courency", courencyRoutes);
 
 
 app.use(notFound as never);

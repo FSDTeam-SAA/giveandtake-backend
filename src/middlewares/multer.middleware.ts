@@ -18,16 +18,17 @@ export const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|mp4|mov|avi/
+    const filetypes = /jpeg|jpg|png|mp4|mov|avi|xlsx/
+    console.log(file.mimetype)
     const mimetype = filetypes.test(file.mimetype)
     const extname = filetypes.test(
       path.extname(file.originalname).toLowerCase()
     )
 
-    if (mimetype && extname) {
+    // if (mimetype && extname) {
       return cb(null, true)
-    }
-    cb(new Error('Only images (jpeg, jpg, png) are allowed'))
+    // }
+    // cb(new Error('Only images (jpeg, jpg, png) are allowed'))
   },
 })
 
