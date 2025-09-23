@@ -8,6 +8,7 @@ import { uploadToCloudinary } from '../utils/cloudinary'
 import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
 import mongoose, { Schema } from 'mongoose'
+import { ElevatorPitch } from '../models/elevatorPitch.model'
 
 /****************************
  * CREATE RECRUITER ACCOUNT *
@@ -63,13 +64,13 @@ export const createRecruiterAccount = catchAsync(
       }
     }
     const { companyId, ...saferest } = rest;
-    if(companyId)
-{    const reqCom = await ReqCompany.findOneAndUpdate(
-      { userId, company: companyId }, // match condition
-      { $setOnInsert: { userId, company: new mongoose.Types.ObjectId(companyId) } }, // insert only if not exists
-      { upsert: true, new: true } // create if not exists, return the doc
-    );
-}
+    if (companyId) {
+      const reqCom = await ReqCompany.findOneAndUpdate(
+        { userId, company: companyId }, // match condition
+        { $setOnInsert: { userId, company: new mongoose.Types.ObjectId(companyId) } }, // insert only if not exists
+        { upsert: true, new: true } // create if not exists, return the doc
+      );
+    }
     const recruiterAccount = await RecruiterAccount.create({
       userId,
       videoFile: videoUrl,
@@ -103,11 +104,16 @@ export const getRecruiterAccountByUserId = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
 
+    const pitch = await ElevatorPitch.findOne({ userId: userId })
+
+
+
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'Recruiter account fetched successfully',
-      data: account,
+      data: {...account, elevatorPitch: pitch || null, // add pitch data or null
+      },
     })
   }
 )
