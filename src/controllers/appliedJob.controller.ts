@@ -73,6 +73,30 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   if (exists) {
     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
   }
+    // 🔹 Fetch job details (with recruiter info)
+  const job = await Job.findById(jobId).populate('userId', 'name email')
+  if (!job) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+  }
+  const resume = await CreateResume.findOne({userId}) 
+
+
+
+// 🔹 Find the requirement with key "noticePeriod"
+const noticePeriodReq = job.applicationRequirement.find(
+  (req: any) => req.requirement === "noticePeriod"
+);
+
+if (noticePeriodReq) {
+  // convert both to string/boolean properly before comparing
+  const resumeAvailable = resume?.immediatelyAvailable?.toString();
+
+  if (noticePeriodReq.status === resumeAvailable) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Requirement not matched");
+  }
+}
+
+
 
   // 🔹 Create application
   const application = await AppliedJob.create({
@@ -83,11 +107,6 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     answer
   })
 
-  // 🔹 Fetch job details (with recruiter info)
-  const job = await Job.findById(jobId).populate('userId', 'name email')
-  if (!job) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
-  }
 
   // 🔹 Fetch candidate info
   const candidate = await User.findById(userId).select('name email')
