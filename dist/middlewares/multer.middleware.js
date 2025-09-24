@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resumeUpload = exports.upload = void 0;
+exports.resumeFileUpload = exports.resumeUpload = exports.upload = void 0;
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const storage = multer_1.default.diskStorage({
@@ -19,16 +19,18 @@ exports.upload = (0, multer_1.default)({
     storage: storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|mp4|mov|avi/;
+        const filetypes = /jpeg|jpg|png|mp4|mov|avi|xlsx/;
+        console.log(file.mimetype);
         const mimetype = filetypes.test(file.mimetype);
         const extname = filetypes.test(path_1.default.extname(file.originalname).toLowerCase());
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('Only images (jpeg, jpg, png) are allowed'));
+        // if (mimetype && extname) {
+        return cb(null, true);
+        // }
+        // cb(new Error('Only images (jpeg, jpg, png) are allowed'))
     },
 });
 exports.resumeUpload = exports.upload.fields([
     { name: 'videoFile', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
 ]);
+exports.resumeFileUpload = (0, multer_1.default)({ storage }).array('resumes', 5);

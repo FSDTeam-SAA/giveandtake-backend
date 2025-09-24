@@ -41,7 +41,7 @@ const messageSchema = new mongoose_1.Schema({
         ref: 'User',
         required: true,
     },
-    message: { type: String, required: true },
+    message: { type: String },
     file: [
         {
             filename: { type: String },

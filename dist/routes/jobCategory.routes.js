@@ -12,4 +12,5 @@ router.get('/job-category', jobCategory_controller_1.getAllCategorys);
 router.post('/job-category', auth_middleware_1.protect, auth_middleware_1.isAdmin, multer_middleware_1.upload.single('categoryIcon'), jobCategory_controller_1.createJobCategory);
 router.patch('/job-category/:id', auth_middleware_1.protect, auth_middleware_1.isAdmin, multer_middleware_1.upload.single('categoryIcon'), jobCategory_controller_1.updateJobCategory);
 router.delete('/job-category/:id', auth_middleware_1.protect, auth_middleware_1.isAdmin, jobCategory_controller_1.deleteJobCategory);
+router.get('/job-category/:id', auth_middleware_1.protect, auth_middleware_1.isAdmin, jobCategory_controller_1.getSingleCategorys);
 exports.default = router;

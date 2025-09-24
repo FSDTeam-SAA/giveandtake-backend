@@ -44,9 +44,9 @@ const createResumeSchema = new mongoose_1.Schema({
     type: {
         type: String,
         enum: ['candidate', 'recruiter', 'admin'],
-        required: true,
     },
     photo: { type: String },
+    banner: { type: String },
     aboutUs: { type: String },
     title: { type: String },
     firstName: { type: String },
@@ -59,6 +59,8 @@ const createResumeSchema = new mongoose_1.Schema({
     email: { type: String },
     phoneNumber: { type: String },
     location: { type: String },
+    certifications: [{ type: String }],
+    languages: [{ type: String }],
     sLink: [
         {
             label: { type: String },
@@ -66,6 +68,7 @@ const createResumeSchema = new mongoose_1.Schema({
         },
     ],
     skills: [{ type: String }],
+    immediatelyAvailable: { type: Boolean }
 }, { timestamps: true });
-createResumeSchema.index({ title: 'text', country: 'text', skills: 1 });
+// createResumeSchema.index({ title: 'text', country: 'text', skills: 1 })
 exports.CreateResume = mongoose_1.default.model('CreateResume', createResumeSchema);

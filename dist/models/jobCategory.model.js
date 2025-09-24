@@ -37,6 +37,7 @@ exports.JobCategory = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const jobCategorySchema = new mongoose_1.Schema({
     name: { type: String, required: true },
+    role: [{ type: String }],
     categoryIcon: { type: String },
 }, { timestamps: true });
 exports.JobCategory = mongoose_1.default.model('JobCategory', jobCategorySchema);

@@ -14,7 +14,7 @@ const moment_1 = __importDefault(require("moment"));
  ****************************************************/
 exports.getAdminDashboardStats = (0, catchAsync_1.default)(async (req, res) => {
     const totalCandidates = await user_model_1.User.countDocuments({ role: 'candidate' });
-    const totalRecruiters = await user_model_1.User.countDocuments({ role: 'ricruiter' });
+    const totalRecruiters = await user_model_1.User.countDocuments({ role: 'recruiter ' });
     const totalAmountData = await paymentInfo_model_1.paymentInfo.aggregate([
         { $match: { paymentStatus: 'complete' } },
         {
@@ -40,7 +40,9 @@ exports.getAdminDashboardStats = (0, catchAsync_1.default)(async (req, res) => {
         { $sort: { '_id.year': 1, '_id.month': 1 } },
     ]);
     const monthlyDataFormatted = monthlyBarData.map((item) => {
-        const monthName = (0, moment_1.default)().month(item._id.month - 1).format('MMMM');
+        const monthName = (0, moment_1.default)()
+            .month(item._id.month - 1)
+            .format('MMMM');
         return {
             year: item._id.year,
             month: monthName,

@@ -10,5 +10,7 @@ const router = express_1.default.Router();
 router.post('/plans', auth_middleware_1.protect, subscriptionPlan_controller_1.createSubscriptionPlan);
 router.get('/plans', subscriptionPlan_controller_1.getAllSubscriptionPlans);
 router.patch('/plans/:id', auth_middleware_1.protect, subscriptionPlan_controller_1.updateSubscriptionPlan);
+router.get('/plans/:id', auth_middleware_1.protect, subscriptionPlan_controller_1.getSingleSubscriptionPlans);
 router.delete('/plans/:id', auth_middleware_1.protect, subscriptionPlan_controller_1.deleteSubscriptionPlan);
+router.post('/plans/unsubscribe', auth_middleware_1.protect, subscriptionPlan_controller_1.unSubscribePlan);
 exports.default = router;

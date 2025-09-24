@@ -42,7 +42,8 @@ const experienceSchema = new mongoose_1.Schema({
         required: true,
     },
     employer: { type: String, },
-    jobTitle: { type: String, },
+    company: { type: String },
+    position: { type: String },
     startDate: { type: Date, },
     endDate: { type: Date },
     country: { type: String },
@@ -51,6 +52,6 @@ const experienceSchema = new mongoose_1.Schema({
     jobDescription: { type: String },
     jobCategory: { type: String },
     careerField: { type: String },
-    careerSubfield: { type: String },
+    careerSubfield: { type: String }
 }, { timestamps: true });
 exports.Experience = mongoose_1.default.model('Experience', experienceSchema);

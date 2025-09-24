@@ -45,15 +45,24 @@ const paymentInfoSchema = new mongoose_1.Schema({
     planId: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: 'SubscriptionPlan',
-        required: true,
+    },
+    planType: {
+        type: String,
+        enum: ['payAsYouGo', 'basic', 'bronze', 'silver', 'gold', 'platinum'],
     },
     paymentStatus: {
         type: String,
         enum: ['complete', 'pending', 'failed'],
         default: 'pending',
     },
+    duration: { type: String, enum: ['monthly', 'yearly'] },
     seasonId: { type: String },
     transactionId: { type: String, required: true },
     paymentMethod: { type: String },
+    planStatus: {
+        type: String,
+        enum: ['active', 'deactivate'],
+        default: 'active',
+    },
 }, { timestamps: true });
 exports.paymentInfo = mongoose_1.default.model('PaymentInfo', paymentInfoSchema);

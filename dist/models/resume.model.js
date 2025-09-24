@@ -41,6 +41,7 @@ const resumeSchema = new mongoose_1.Schema({
         ref: 'User',
         required: true,
     },
+    visaSponsorship: { type: String, enum: ['yes', 'no'] },
     file: [
         {
             filename: { type: String, required: true },
@@ -49,6 +50,5 @@ const resumeSchema = new mongoose_1.Schema({
         },
     ],
     uploadDate: { type: Date, default: Date.now },
-    skills: [{ type: String }],
 }, { timestamps: true });
 exports.Resume = mongoose_1.default.model('Resume', resumeSchema);

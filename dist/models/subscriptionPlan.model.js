@@ -42,8 +42,12 @@ const subscriptionPlanSchema = new mongoose_1.Schema({
     features: [{ type: String }],
     for: {
         type: String,
-        enum: ['candidate', 'recruiter'],
+        enum: ['candidate', 'recruiter', 'company'],
         required: true,
     },
+    valid: {
+        type: String,
+        enum: ["monthly", "yearly", "PayAsYouGo"]
+    }
 }, { timestamps: true });
 exports.SubscriptionPlan = mongoose_1.default.model('SubscriptionPlan', subscriptionPlanSchema);

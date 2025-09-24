@@ -11,9 +11,43 @@ const AppError_1 = __importDefault(require("../errors/AppError"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const server_1 = require("../server");
 const cloudinary_1 = require("../utils/cloudinary"); // Adjust path
+const messageRoom_model_1 = require("../models/messageRoom.model");
 /***************
  * CREATE MESSAGE
  ***************/
+// export const createMessage = catchAsync(async (req: Request, res: Response) => {
+//   const { message, roomId, userId } = req.body
+//   const files = req.files as Express.Multer.File[]
+//   if (!mongoose.Types.ObjectId.isValid(roomId)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
+//   }
+//   // Upload all files to Cloudinary
+//   const fileData = await Promise.all(
+//     files.map(async (file) => {
+//       const result = await uploadToCloudinary(file.path)
+//       if (result) {
+//         return {
+//           filename: file.originalname,
+//           url: result.secure_url,
+//           public_id: result.public_id, // save this if you want to support deletion
+//           uploadedAt: new Date(),
+//         }
+//       }
+//     })
+//   )
+//   const newMessage = await Message.create({
+//     message,
+//     roomId,
+//     userId,
+//     file: fileData.filter(Boolean), // remove nulls
+//   })
+//   io.to(roomId).emit('newMessage', newMessage)
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Message created',
+//     data: newMessage,
+//   })
+// })
 exports.createMessage = (0, catchAsync_1.default)(async (req, res) => {
     const { message, roomId, userId } = req.body;
     const files = req.files;
@@ -27,18 +61,26 @@ exports.createMessage = (0, catchAsync_1.default)(async (req, res) => {
             return {
                 filename: file.originalname,
                 url: result.secure_url,
-                public_id: result.public_id, // save this if you want to support deletion
+                public_id: result.public_id,
                 uploadedAt: new Date(),
             };
         }
     }));
+    // Create message
     const newMessage = await message_model_1.Message.create({
         message,
         roomId,
         userId,
         file: fileData.filter(Boolean), // remove nulls
     });
-    server_1.io.to(roomId).emit('newMessage', newMessage);
+    // ✅ Update lastMessage in MessageRoom
+    await messageRoom_model_1.MessageRoom.findByIdAndUpdate(roomId, {
+        lastMessage: message || (fileData.length ? '📎 Attachment' : ''),
+        lastMessageSender: userId,
+    }, { new: true });
+    const message1 = await message_model_1.Message.findById(newMessage._id).populate('userId', 'name email avatar');
+    // Emit socket event
+    server_1.io.to(roomId).emit('newMessage', message1);
     res.status(http_status_1.default.CREATED).json({
         success: true,
         message: 'Message created',
@@ -58,7 +100,8 @@ exports.getMessagesByRoom = (0, catchAsync_1.default)(async (req, res) => {
     const messages = await message_model_1.Message.find({ roomId })
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
-        .limit(limit);
+        .limit(limit)
+        .populate('userId', 'name email avatar');
     const total = await message_model_1.Message.countDocuments({ roomId });
     res.status(http_status_1.default.OK).json({
         success: true,

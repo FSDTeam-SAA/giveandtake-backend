@@ -7,23 +7,18 @@ const express_1 = __importDefault(require("express"));
 const recruiterAccount_controller_1 = require("../controllers/recruiterAccount.controller");
 // import { protect } from '../middlewares/auth.middleware'
 const multer_middleware_1 = require("../middlewares/multer.middleware");
+const auth_middleware_1 = require("../middlewares/auth.middleware");
 const router = express_1.default.Router();
-router.post('/recruiter-account', 
-//   protect,
-multer_middleware_1.upload.fields([
-    { name: 'videoFile', maxCount: 1 },
+router.post('/recruiter-account', auth_middleware_1.protect, multer_middleware_1.upload.fields([
     { name: 'photo', maxCount: 1 },
+    { name: 'banner', maxCount: 1 },
+    { name: 'videoFile', maxCount: 1 }
 ]), recruiterAccount_controller_1.createRecruiterAccount);
-router.get('/recruiter-account/:userId', 
-// protect,
-recruiterAccount_controller_1.getRecruiterAccountByUserId);
-router.patch('/recruiter-account/:userId', 
-//   protect,
-multer_middleware_1.upload.fields([
-    { name: 'videoFile', maxCount: 1 },
+router.get('/recruiter-account/:userId', recruiterAccount_controller_1.getRecruiterAccountByUserId);
+router.patch('/recruiter-account/:userId', auth_middleware_1.protect, multer_middleware_1.upload.fields([
+    { name: 'banner', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
+    { name: 'videoFile', maxCount: 1 },
 ]), recruiterAccount_controller_1.updateRecruiterAccount);
-router.delete('/recruiter-account/:userId', 
-// protect,
-recruiterAccount_controller_1.deleteRecruiterAccount);
+router.delete('/recruiter-account/:userId', auth_middleware_1.protect, recruiterAccount_controller_1.deleteRecruiterAccount);
 exports.default = router;

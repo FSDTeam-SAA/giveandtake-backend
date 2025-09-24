@@ -42,5 +42,9 @@ const bookmarkSchema = new mongoose_1.Schema({
         required: true,
     },
     jobId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Job', required: true },
+    bookmarked: {
+        type: Boolean,
+        default: true
+    }
 }, { timestamps: true });
 exports.Bookmark = mongoose_1.default.model('Bookmark', bookmarkSchema);

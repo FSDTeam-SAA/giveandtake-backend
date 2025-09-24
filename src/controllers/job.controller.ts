@@ -199,7 +199,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
-    .populate('companyId')
+    .populate('companyId recruiterId')
 
   const meta = buildMetaPagination(totalJobs, page, limit)
 
@@ -223,6 +223,7 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   if (!job) {
     throw new AppError(400, "job not found")
   }
+  const user  = job.userId as any
 
   if (req.body.adminApprove) {
     // const recruiterName = (job.userId as any)?.name || 'Recruiter'
@@ -231,12 +232,12 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     const emailBody = `
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Confirmation</h2>
-        <p>Dear ${job?.userId?.name || 'Company'},</p> 
+        <p>Dear ${user?.name || 'Company'},</p> 
         <p>Your post has been approved by Admin and will be posted at your scheduled time’,</br> Best regards, EVP Admin</p>
       </div>
     `
 
-    await sendEmail(job?.userId?.email, emailSubject, emailBody)
+    await sendEmail(user?.email, emailSubject, emailBody)
     let notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: 'Job Post Approved By Admin',
@@ -251,12 +252,12 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     const emailBody = `
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Denied</h2>
-        <p>Dear ${job?.userId?.name || 'Company'},</p>  
+        <p>Dear ${user?.name || 'Company'},</p>  
         <p>‘Please reach out to Admin for support regarding your job post’ on Info@evp.com</p>
       </div>
     `
 
-    await sendEmail(job?.userId?.email, emailSubject, emailBody)
+    await sendEmail(user?.email, emailSubject, emailBody)
 
         let notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
@@ -305,7 +306,7 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
-  const job = await Job.findById(id).populate('companyId')
+  const job = await Job.findById(id).populate('companyId recruiterId')
 
   if (!job) {
     throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
@@ -673,7 +674,7 @@ export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query)
 
   const jobs = await Job.find({ jobApprove: 'approved' })
-    .populate('companyId')
+    .populate('companyId recruiterId')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)

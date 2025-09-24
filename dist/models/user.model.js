@@ -46,7 +46,7 @@ const userSchema = new mongoose_1.Schema({
     password: { type: String, select: 0, required: true },
     role: {
         type: String,
-        enum: ['candidate', 'ricruiter', 'company', 'admin'],
+        enum: ['candidate', 'recruiter', 'company', 'admin'],
         default: 'candidate',
     },
     avatar: {
@@ -61,6 +61,7 @@ const userSchema = new mongoose_1.Schema({
             answer: { type: String, default: '' },
         },
     ],
+    dateOfbirth: { type: Date },
     verificationInfo: {
         verified: { type: Boolean, default: false },
         token: { type: String, default: '' },
@@ -69,6 +70,7 @@ const userSchema = new mongoose_1.Schema({
     password_reset_token: { type: String, default: '' },
     deactivate: { type: Boolean, default: false },
     dateOfdeactivate: { type: Date },
+    refresh_token: { type: String },
 }, { timestamps: true });
 // Pre save middleware / hook : will work on create() save()
 userSchema.pre('save', async function (next) {

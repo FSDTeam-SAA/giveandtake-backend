@@ -4,21 +4,21 @@ import path from "path";
 import xlsx from "xlsx";
 import csvParser from "csv-parser";
 
-export async function parseUniversityFile(filePath: string): Promise<{ country: string; name: string }[]> {
+
+export async function parseUniversityFile(
+  filePath: string
+): Promise<{ country: string; name: string }[]> {
   const ext = path.extname(filePath).toLowerCase();
 
   if (ext === ".csv") {
-   new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const rows: { country: string; name: string }[] = [];
       fs.createReadStream(filePath)
         .pipe(csvParser())
         .on("data", (row) => {
-          // assuming CSV has headers like "Country", "Name" or similar
-          // adjust keys to your header names, or fallback if no header
           let country = "";
           let name = "";
 
-          // If headers exist
           if (row.Country !== undefined && row.University !== undefined) {
             country = String(row.Country).trim();
             name = String(row.University).trim();
@@ -26,7 +26,6 @@ export async function parseUniversityFile(filePath: string): Promise<{ country: 
             country = String(row.country).trim();
             name = String(row.name).trim();
           } else {
-            // fallback: use first/second columns
             const vals = Object.values(row);
             if (vals.length >= 2) {
               country = String(vals[0]).trim();
@@ -45,13 +44,11 @@ export async function parseUniversityFile(filePath: string): Promise<{ country: 
     const wb = xlsx.readFile(filePath);
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(ws, { header: 0 }); //s array of objects with header row
+    const data = xlsx.utils.sheet_to_json(ws, { header: 0 });
 
     const rows: { country: string; name: string }[] = [];
 
-    for (const obj of data) {
-      // e.g. obj might be { Country: 'UAE', University: 'Abu Dhabi University' }
-      // adjust keys
+    for (const obj of data as any[]) {
       let country = "";
       let name = "";
 
@@ -62,7 +59,6 @@ export async function parseUniversityFile(filePath: string): Promise<{ country: 
         country = String(obj["country"]).trim();
         name = String(obj["name"]).trim();
       } else {
-        // If headers are weird or no header, skip or try fallback
         continue;
       }
 
@@ -71,7 +67,7 @@ export async function parseUniversityFile(filePath: string): Promise<{ country: 
       }
     }
 
-   return rows;
+    return rows;
   } else {
     throw new Error("Unsupported file type");
   }

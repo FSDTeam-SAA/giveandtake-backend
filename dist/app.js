@@ -27,88 +27,96 @@ const awardAndHonor_route_1 = __importDefault(require("./routes/awardAndHonor.ro
 const elevatorPitch_route_1 = __importDefault(require("./routes/elevatorPitch.route"));
 const createResume_routes_1 = __importDefault(require("./routes/createResume.routes"));
 const company_route_1 = __importDefault(require("./routes/company.route"));
-const path_1 = __importDefault(require("path"));
+const newsletter_routes_1 = __importDefault(require("./routes/newsletter.routes"));
+const resume_route_1 = __importDefault(require("./routes/resume.route"));
+const skill_route_1 = __importDefault(require("./routes/skill.route"));
+const courency_routes_1 = __importDefault(require("./routes/courency.routes"));
+const language_routes_1 = __importDefault(require("./routes/language.routes"));
+const university_routes_1 = __importDefault(require("./routes/university.routes"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: '*', //  frontend origin
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: "*", //  frontend origin
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
 }));
-// Serve static files with directory listing disabled
-app.use('/storage', express_1.default.static(path_1.default.join(__dirname, '../storage'), {
-    dotfiles: 'deny', // Prevent access to dotfiles (.env, etc.)
-    index: false, // Disable directory index
-    redirect: false, // Disable path redirects
-}));
 app.use(express_1.default.json());
-app.use('/api/v1', user_routes_1.default);
-/*****************
- * APIS FOR JOBS *
- *****************/
-app.use('/api/v1', job_route_1.default);
-app.use('/api/v1/category', jobCategory_routes_1.default);
-app.use('/api/v1/subscription', subscriptionPlan_route_1.default);
-app.use('/api/v1/experiences', exprience_route_1.default);
+app.use("/api/v1", user_routes_1.default);
+app.use("/api/v1", job_route_1.default);
+app.use("/api/v1/category", jobCategory_routes_1.default);
+app.use("/api/v1/subscription", subscriptionPlan_route_1.default);
+app.use("/api/v1/experiences", exprience_route_1.default);
 /********************
  * APIS FOR CONTACT *
  ********************/
-app.use('/api/v1/contact', contactUs_route_1.default);
+app.use("/api/v1/contact", contactUs_route_1.default);
 /**************************
  * APIS FOR RECRUITER APP *
  **************************/
-app.use('/api/v1/recruiter', recruiterAccount_routes_1.default);
+app.use("/api/v1/recruiter", recruiterAccount_routes_1.default);
 /*****************************
  * APIS FOR FcompanyRoutesOLLOWING SYSTEM *
  *****************************/
-app.use('/api/v1/following', following_route_1.default);
+app.use("/api/v1/following", following_route_1.default);
 /****************************
  * APIS FOR MESSAGING ROOMS *
  ****************************/
-app.use('/api/v1/message-room', messageRoom_route_1.default);
+app.use("/api/v1/message-room", messageRoom_route_1.default);
 /*****************************
  * APIS FOR MESSAGING SYSTEM *
  *****************************/
-app.use('/api/v1/message', message_route_1.default);
+app.use("/api/v1/message", message_route_1.default);
 /*************************
  * APIS FOR APPLIED JOBS *
  *************************/
-app.use('/api/v1/applied-jobs', appliedJob_route_1.default);
+app.use("/api/v1/applied-jobs", appliedJob_route_1.default);
 /********************************
  * APIS FOR NOTIFICATION SYSTEM *
  ********************************/
-app.use('/api/v1/notifications', notification_route_1.default);
+app.use("/api/v1/notifications", notification_route_1.default);
 /*********************
  * APIS FOR PAYMENTS *
  *********************/
-app.use('/api/v1/payments', payment_route_1.default);
+app.use("/api/v1/payments", payment_route_1.default);
 /****************************
  * APIS FOR ADMIN DASHBOARD *
  ****************************/
-app.use('/api/v1/admin', adminDashboard_routes_1.default);
+app.use("/api/v1/admin", adminDashboard_routes_1.default);
 /********************
  * APIS FOR BOOKING *
  ********************/
-app.use('/api/v1/bookmarks', bookmark_routes_1.default);
+app.use("/api/v1/bookmarks", bookmark_routes_1.default);
 /******************
  * APIS FOR BLOGS *
  ******************/
-app.use('/api/v1/blogs', blog_route_1.default);
+app.use("/api/v1/blogs", blog_route_1.default);
 /******************************
  * APIS FOR AWARDS AND HONORS *
  ******************************/
-app.use('/api/v1/awards', awardAndHonor_route_1.default);
+app.use("/api/v1/awards", awardAndHonor_route_1.default);
 /**********************************
  * APIS FOR CREATE elevator pitch *
  **********************************/
-app.use('/api/v1/elevator-pitch', elevatorPitch_route_1.default);
+app.use("/api/v1/elevator-pitch", elevatorPitch_route_1.default);
 /**************************
  * APIS FOR CREATE RESUME *
  **************************/
-app.use('/api/v1/create-resume', createResume_routes_1.default);
+app.use("/api/v1/create-resume", createResume_routes_1.default);
 /*********************
  * APIS FOR COMPANYS *
  *********************/
-app.use('/api/v1/company', company_route_1.default);
+app.use("/api/v1/company", company_route_1.default);
+/************************
+ * APIS FOR NEWSLETTERS *
+ ************************/
+app.use("/api/v1/newsletter", newsletter_routes_1.default);
+/********************
+ * APIS FOR RESUME *
+ ********************/
+app.use("/api/v1/resume", resume_route_1.default);
+app.use("/api/v1/skill", skill_route_1.default);
+app.use("/api/v1/university", university_routes_1.default);
+app.use("/api/v1/language", language_routes_1.default);
+app.use("/api/v1/courency", courency_routes_1.default);
 app.use(notFound_1.notFound);
 app.use(globalErrorHandler_1.globalErrorHandler);
 exports.default = app;

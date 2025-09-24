@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AwardsAndHonor = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
-const awarenessAndHonorSchema = new mongoose_1.Schema({
+const AwardsAndHonorSchema = new mongoose_1.Schema({
     userId: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: 'User',
@@ -52,8 +52,12 @@ const awarenessAndHonorSchema = new mongoose_1.Schema({
     programeDate: {
         type: Date,
     },
+    issuer: {
+        type: String,
+        trim: true,
+    },
     description: {
         type: String,
     },
 }, { timestamps: true });
-exports.AwardsAndHonor = mongoose_1.default.model('AwarenessAndHonor', awarenessAndHonorSchema);
+exports.AwardsAndHonor = mongoose_1.default.model('AwardsAndHonor', AwardsAndHonorSchema);

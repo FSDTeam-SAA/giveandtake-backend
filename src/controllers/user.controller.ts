@@ -133,15 +133,16 @@ export const login = catchAsync(async (req, res) => {
     payAsYouGo = false;
     isValid = false;
   } else {
-    if (checkPayment?.planId?.valid != "PayAsYouGo") {
-      if (checkPayment.planId.valid === "monthly") {
+    const plan = checkPayment?.planId as any
+    if (plan?.valid != "PayAsYouGo") {
+      if (plan.valid === "monthly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
-      } else if (checkPayment.planId.valid === "yearly") {
+      } else if (plan.valid === "yearly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
       }
 
       isValid = expiryDate ? new Date() <= expiryDate : false;
-    } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
+    } else if (plan?.valid === "PayAsYouGo") {
       const jobExists = await Job.exists({
         userId: user._id,
         createdAt: { $gte: checkPayment.updatedAt },
@@ -731,15 +732,16 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     payAsYouGo = false;
     isValid = false;
   } else {
-    if (checkPayment?.planId?.valid != "PayAsYouGo") {
-      if (checkPayment.planId.valid === "monthly") {
+    const plan = checkPayment?.planId as any
+    if (plan?.valid != "PayAsYouGo") {
+      if (plan.valid === "monthly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
-      } else if (checkPayment.planId.valid === "yearly") {
+      } else if (plan.valid === "yearly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
       }
 
       isValid = expiryDate ? new Date() <= expiryDate : false;
-    } else if (checkPayment?.planId?.valid === "PayAsYouGo") {
+    } else if (plan?.valid === "PayAsYouGo") {
       const jobExists = await Job.exists({
         userId: user._id,
         createdAt: { $gte: checkPayment.updatedAt },

@@ -48,7 +48,7 @@ exports.getMessageRooms = (0, catchAsync_1.default)(async (req, res) => {
         case 'candidate':
             filter = { userId: objectId };
             break;
-        case 'ricruiter':
+        case 'recruiter':
             filter = { recruiterId: objectId };
             break;
         case 'company':
@@ -58,9 +58,10 @@ exports.getMessageRooms = (0, catchAsync_1.default)(async (req, res) => {
             throw new AppError_1.default(http_status_1.default.BAD_REQUEST, 'Invalid type');
     }
     const rooms = await messageRoom_model_1.MessageRoom.find(filter)
-        .populate('userId', 'name email role')
-        .populate('recruiterId', 'name email role')
-        .populate('companyId', 'name email role');
+        .sort({ createdAt: -1 })
+        .populate('userId', 'name email role avatar')
+        .populate('recruiterId', 'name email role avatar')
+        .populate('companyId', 'name email role avatar');
     res.status(http_status_1.default.OK).json({
         success: true,
         message: 'Message rooms fetched',

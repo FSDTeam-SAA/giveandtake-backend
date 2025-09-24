@@ -36,8 +36,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Company = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const companySchema = new mongoose_1.Schema({
-    userId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User" },
     clogo: { type: String },
+    banner: { type: String },
     aboutUs: { type: String },
     cname: { type: String, required: true },
     country: { type: String, required: true },
@@ -45,11 +46,16 @@ const companySchema = new mongoose_1.Schema({
     zipcode: { type: String },
     cemail: { type: String, required: true },
     cPhoneNumber: { type: String, required: true },
-    links: [{ type: String }],
+    sLink: [
+        {
+            label: { type: String },
+            url: { type: String },
+        },
+    ],
     industry: { type: String },
     service: [{ type: String }],
-    employeesId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User' }],
+    employeesId: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: "User" }],
 }, {
     timestamps: true,
 });
-exports.Company = mongoose_1.default.model('Company', companySchema);
+exports.Company = mongoose_1.default.model("Company", companySchema);

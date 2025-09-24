@@ -52,5 +52,9 @@ const elevatorPitchSchema = new mongoose_1.Schema({
             key: String,
         },
     },
+    status: {
+        type: String,
+        enum: ['active', 'deactivate']
+    }
 }, { timestamps: true });
 exports.ElevatorPitch = mongoose_1.default.model('ElevatorPitch', elevatorPitchSchema);

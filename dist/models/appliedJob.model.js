@@ -48,8 +48,16 @@ const appliedJobSchema = new mongoose_1.Schema({
     },
     status: {
         type: String,
-        enum: ['padding', 'rejected', 'shortlisted'],
-        default: 'padding',
+        enum: ['pending', 'rejected', 'shortlisted'],
+        default: 'pending',
     },
+    answer: [{
+            question: { type: String },
+            ans: { type: String }
+        }],
+    resumeId: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: 'Resume',
+    }
 }, { timestamps: true });
 exports.AppliedJob = mongoose_1.default.model('AppliedJob', appliedJobSchema);

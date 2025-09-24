@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getEncryptionKey = exports.secureStream = exports.streamElevatorPitch = exports.deleteResume = exports.createResume = void 0;
+exports.getAllElevatorPitches = exports.getEncryptionKey = exports.secureStream = exports.streamElevatorPitch = exports.deleteResume = exports.createResume = void 0;
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const elevatorPitch_model_1 = require("../models/elevatorPitch.model");
@@ -14,6 +14,8 @@ const ffmpeg_service_1 = require("../services/ffmpeg.service");
 const paymentInfo_model_1 = require("../models/paymentInfo.model");
 const cloudinary_1 = require("../utils/cloudinary");
 const axios_1 = __importDefault(require("axios"));
+const validateElevatorPitchAccess_1 = require("../helper/validateElevatorPitchAccess");
+const user_model_1 = require("../models/user.model");
 /*************************************
  * ADD RESUME VIDEO (ELEVATOR PITCH) *
  *************************************/
@@ -38,6 +40,8 @@ exports.createResume = (0, catchAsync_1.default)(async (req, res) => {
         throw new AppError_1.default(http_status_1.default.BAD_REQUEST, 'You already have an elevator pitch');
     }
     const metadata = await (0, ffmpeg_service_1.getVideoMetadata)(tempPath);
+    // VALIDATE UPLOAD PERMISSION
+    await (0, validateElevatorPitchAccess_1.validateElevatorPitchAccess)(userId, metadata.duration);
     if (metadata.duration > 30) {
         const hasActivePlan = await paymentInfo_model_1.paymentInfo.findOne({
             userId,
@@ -196,4 +200,32 @@ exports.getEncryptionKey = (0, catchAsync_1.default)(async (req, res) => {
     catch (err) {
         throw new AppError_1.default(http_status_1.default.NOT_FOUND, 'Failed to fetch encryption key from Cloudinary');
     }
+});
+/**********************
+ * ALL ELEVATOR PITCH *
+ **********************/
+exports.getAllElevatorPitches = (0, catchAsync_1.default)(async (req, res) => {
+    const { type } = req.query;
+    if (!type || typeof type !== 'string') {
+        throw new AppError_1.default(http_status_1.default.BAD_REQUEST, 'Query param "type" is required');
+    }
+    const allowedRoles = ['candidate', 'recruiter', 'company'];
+    if (!allowedRoles.includes(type)) {
+        throw new AppError_1.default(http_status_1.default.BAD_REQUEST, 'Invalid user type');
+    }
+    // Step 1: Get users with the requested role
+    const users = await user_model_1.User.find({ role: type }, '_id name email');
+    console.log(users);
+    const userIds = users.map((u) => u._id);
+    console.log(userIds);
+    // Step 2: Get Elevator Pitches of those users
+    const pitches = await elevatorPitch_model_1.ElevatorPitch.find({
+        userId: { $in: userIds },
+    }).populate('userId', 'name email role');
+    console.log(pitches);
+    res.status(http_status_1.default.OK).json({
+        success: true,
+        total: pitches.length,
+        data: pitches,
+    });
 });

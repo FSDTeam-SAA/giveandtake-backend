@@ -43,9 +43,10 @@ const educationSchema = new mongoose_1.Schema({
     },
     instituteName: { type: String },
     city: { type: String },
-    state: { type: String },
+    country: { type: String },
     degree: { type: String },
     fieldOfStudy: { type: String },
+    startDate: { type: Date, },
     graduationDate: { type: Date },
 }, { timestamps: true });
 exports.Education = mongoose_1.default.model('Education', educationSchema);

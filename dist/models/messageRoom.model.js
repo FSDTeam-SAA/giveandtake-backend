@@ -53,5 +53,8 @@ const messageRoomSchema = new mongoose_1.Schema({
         type: String,
         default: '',
     },
+    lastMessageSender: {
+        type: mongoose_1.default.Schema.Types.ObjectId
+    }
 }, { timestamps: true });
 exports.MessageRoom = mongoose_1.default.model('MessageRoom', messageRoomSchema);

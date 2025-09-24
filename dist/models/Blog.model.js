@@ -40,5 +40,6 @@ const blogSchema = new mongoose_1.Schema({
     description: { type: String, required: true },
     image: { type: String },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    imagePublicId: { type: String },
 }, { timestamps: true });
 exports.Blog = mongoose_1.default.model('Blog', blogSchema);

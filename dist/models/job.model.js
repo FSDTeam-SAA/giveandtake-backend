@@ -38,6 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const jobSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User' },
     companyId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Company' },
+    recruiterId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'RecruiterAccount' },
     title: { type: String, required: true },
     description: { type: String, required: true },
     companyName: { type: String },
@@ -50,13 +51,24 @@ const jobSchema = new mongoose_1.Schema({
     vacancy: { type: Number, default: 1 },
     experience: { type: Number },
     deadline: { type: Date },
-    status: { type: String, enum: ['active', 'deactive'], default: 'active' },
+    status: {
+        type: String,
+        enum: ['pending', 'active', 'deactivate'],
+        default: 'active',
+    },
     jobCategoryId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'JobCategory' },
+    name: {
+        type: String
+    },
+    role: {
+        type: String
+    },
     compensation: { type: String },
     arcrivedJob: { type: Boolean, default: false },
     applicationRequirement: [
         {
             requirement: { type: String },
+            status: { type: String }
         },
     ],
     customQuestion: [
@@ -64,6 +76,37 @@ const jobSchema = new mongoose_1.Schema({
             question: { type: String },
         },
     ],
+    jobApprove: {
+        type: String,
+        enm: ['pending', 'approved', 'denied'],
+        default: 'approved',
+    },
+    adminApprove: {
+        type: Boolean,
+        default: false,
+    },
+    publishDate: { type: Date },
+    employement_Type: {
+        type: String,
+        enum: [
+            'full-time',
+            'part-time',
+            'internship',
+            'contract',
+            'temporary',
+            'freelance',
+            'volunteer',
+        ],
+    },
+    location_Type: {
+        type: String,
+        enum: ['onsite', 'remote', 'hybrid'],
+    },
+    career_Stage: {
+        type: String,
+        enum: ['New Entry', 'Experienced Professional', 'Career Returner'],
+    },
+    website_Url: { type: String },
 }, { timestamps: true });
 jobSchema.index({ title: 'text', location: 'text', description: 'text' });
 exports.Job = mongoose_1.default.model('Job', jobSchema);

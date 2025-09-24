@@ -14,6 +14,7 @@ export interface IPaymentInfo extends Document {
   paymentMethod: string
   planStatus: string
   createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface PaymentInfoModel extends Model<IPaymentInfo> {}
