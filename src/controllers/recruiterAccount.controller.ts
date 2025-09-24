@@ -112,7 +112,7 @@ export const getRecruiterAccountByUserId = catchAsync(
       statusCode: httpStatus.OK,
       success: true,
       message: 'Recruiter account fetched successfully',
-      data: {...account, elevatorPitch: pitch || null, // add pitch data or null
+      data: {...account.toObject(), elevatorPitch: pitch || null, // add pitch data or null
       },
     })
   }

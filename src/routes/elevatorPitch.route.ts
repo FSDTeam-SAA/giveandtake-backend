@@ -23,6 +23,6 @@ router.get('/stream/:id', streamElevatorPitch)
 
 router.get('/key/:userId/:key', getEncryptionKey)
 
-router.get('/all/elevator-pitches', protect, getAllElevatorPitches)
+router.get('/all/elevator-pitches', getAllElevatorPitches)
 
 export default router
