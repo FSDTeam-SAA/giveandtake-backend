@@ -114,11 +114,17 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
   try {
     const { AwardsAndHonors, ...companyData } = req.body
     const files = req.files as Record<string, Express.Multer.File[]>
+    const user = await User.findById(req?.user?._id) as any
 
     if (files?.clogo?.[0]?.path) {
       const logoRes = await uploadToCloudinary(files.clogo[0].path)
       if (logoRes?.secure_url) {
         companyData.clogo = logoRes.secure_url
+                if (!user.avatar) {
+          user.avatar = { url: "" }; // initialize if missing
+        }
+        user.avatar.url = logoRes.secure_url || "";
+        await user?.save()
       }
     }
 
