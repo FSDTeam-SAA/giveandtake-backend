@@ -16,7 +16,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     educationExperience: [{ type: String }],
     benefits: [{ type: String }],
     vacancy: { type: Number, default: 1 },
-    experience: { type: Number },
+    experience: { type: String },
     deadline: { type: Date },
     status: {
       type: String,
