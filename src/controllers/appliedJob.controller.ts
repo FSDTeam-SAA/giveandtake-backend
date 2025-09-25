@@ -89,10 +89,11 @@ const noticePeriodReq = job.applicationRequirement.find(
 
 if (noticePeriodReq) {
   // convert both to string/boolean properly before comparing
-  const resumeAvailable = resume?.immediatelyAvailable?.toString();
+  const resumeAvailable = resume?.immediatelyAvailable;
+  const check = noticePeriodReq.status === "Immediate" ? true: false
 
-  if (noticePeriodReq.status === resumeAvailable) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Requirement not matched");
+  if (check == resumeAvailable) {
+    throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
   }
 }
 
