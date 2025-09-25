@@ -85,20 +85,6 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     (req: any) => req.requirement === "noticePeriod"
   );
 
-  if (noticePeriodReq) {
-    // convert both to string/boolean properly before comparing
-    const resumeAvailable = resume?.immediatelyAvailable?.toString();
-
-<<<<<<< HEAD
-    if (noticePeriodReq.status === resumeAvailable) {
-      throw new AppError(httpStatus.BAD_REQUEST, "Requirement not matched");
-    }
-=======
-// 🔹 Find the requirement with key "noticePeriod"
-const noticePeriodReq = job.applicationRequirement.find(
-  (req: any) => req.requirement === "noticePeriod"
-);
-
 if (noticePeriodReq) {
   // convert both to string/boolean properly before comparing
   const resumeAvailable = resume?.immediatelyAvailable;
@@ -106,8 +92,8 @@ if (noticePeriodReq) {
 
   if (check == resumeAvailable) {
     throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
->>>>>>> b7664cf83a240af241dd6d4e3c8aa3f43e6259b0
   }
+}
 
   // 🔹 Create application
   const application = await AppliedJob.create({
@@ -201,10 +187,20 @@ export const getApplicationsByJob = catchAsync(
       .limit(limit)
       .sort({ createdAt: -1 }); // optional: newest first
 
+          const applicationsWithResume = await Promise.all(
+      applications.map(async (app) => {
+        const resume = await CreateResume.findOne({ userId: app.userId._id });
+        return {
+          ...app.toObject(),
+          resume,
+        };
+      })
+    );
+
     res.status(httpStatus.OK).json({
       success: true,
       message: "Applications fetched by job",
-      data: applications,
+      data: applicationsWithResume,
       pagination: {
         total,
         page,
