@@ -352,18 +352,18 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   // VALIDATE UPLOAD PERMISSION
   await validateElevatorPitchAccess(userId, metadata.duration);
 
-  if (metadata.duration > 30) {
-    const hasActivePlan = await paymentInfo.findOne({
-      userId,
-      paymentStatus: "complete",
-    });
-    if (!hasActivePlan) {
-      fs.unlinkSync(tempPath);
+  if (metadata.duration > 60 ) {
+    // const hasActivePlan = await paymentInfo.findOne({
+    //   userId,
+    //   paymentStatus: "complete",
+    // });
+    // if (!hasActivePlan) {
+    //   fs.unlinkSync(tempPath);
       throw new AppError(
         httpStatus.PAYMENT_REQUIRED,
-        "Video duration exceeds 30 seconds. Please purchase a plan."
+        "Video duration exceeds 60 seconds."
       );
-    }
+    // }
   }
 
   // ✅ Process video to HLS
