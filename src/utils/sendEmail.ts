@@ -8,7 +8,7 @@ export const sendEmail = async (
 ): Promise<void> => {
   try {
     const transporter = nodemailer.createTransport({
-      host: "smtps.udag.de",
+      host: "mail.evpitch.com",
       port: 465,
       secure: true,
       auth: {
