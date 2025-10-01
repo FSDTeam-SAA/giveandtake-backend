@@ -15,6 +15,7 @@ import { Job } from "../models/job.model";
 import { sendEmail } from "../utils/sendEmail";
 import { User } from "../models/user.model";
 import { io } from "../server";
+import { Notification } from "../models/notification.model";
 
 /***************
  * CREATE Application
@@ -69,7 +70,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, userId, status, resumeId, answer } = req.body;
 
   // 🔹 Check if already applied
-  const exists = await AppliedJob.findOne({ jobId, userId, resumeId });
+  const exists = await AppliedJob.findOne({ jobId, userId });
   if (exists) {
     throw new AppError(httpStatus.CONFLICT, "Already applied to this job");
   }
@@ -117,9 +118,11 @@ if (noticePeriodReq) {
     type: "job_application",
     id: application._id,
   });
+  const count = await Notification.countDocuments({to: job.userId, isViewed: false})
   // Emit socket event
   io.to(job.userId.toString()).emit("newNotification", {
     message: `A new candidate has applied for your job "${job.title}".`,
+    count: count
   });
 
   // ✅ Notify the Applicant
@@ -129,10 +132,12 @@ if (noticePeriodReq) {
     type: "job_application_confirmation",
     id: application._id,
   });
+  const count1 = await Notification.countDocuments({to: userId, isViewed: false})
 
   // Emit socket event
   io.to(userId).emit("newNotification", {
     message: `You have successfully applied for the job "${job.title}".`,
+    count: count1
   });
 
   // ✅ Send email to Applicant
@@ -379,8 +384,9 @@ export const updateApplicationStatus = catchAsync(
       type: "job_application_status",
       id: updated._id,
     });
+  const count = await Notification.countDocuments({to: updated.userId, isViewed: false})
     // Emit socket event
-    io.to(updated.userId.toString()).emit("newNotification", notification);
+    io.to(updated.userId.toString()).emit("newNotification", {notification, count});
 
     res.status(httpStatus.OK).json({
       success: true,
