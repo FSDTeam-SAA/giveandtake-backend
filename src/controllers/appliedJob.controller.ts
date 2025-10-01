@@ -89,24 +89,9 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     // convert both to string/boolean properly before comparing
     const resumeAvailable = resume?.immediatelyAvailable?.toString();
 
-<<<<<<< HEAD
     if (noticePeriodReq.status === resumeAvailable) {
       throw new AppError(httpStatus.BAD_REQUEST, "Requirement not matched");
     }
-=======
-// 🔹 Find the requirement with key "noticePeriod"
-const noticePeriodReq = job.applicationRequirement.find(
-  (req: any) => req.requirement === "noticePeriod"
-);
-
-if (noticePeriodReq) {
-  // convert both to string/boolean properly before comparing
-  const resumeAvailable = resume?.immediatelyAvailable;
-  const check = noticePeriodReq.status === "Immediate" ? true: false
-
-  if (check == resumeAvailable) {
-    throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
->>>>>>> b7664cf83a240af241dd6d4e3c8aa3f43e6259b0
   }
 
   // 🔹 Create application

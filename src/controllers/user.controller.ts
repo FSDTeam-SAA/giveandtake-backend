@@ -24,7 +24,8 @@ import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
 
 export const register = catchAsync(async (req, res) => {
-  const { name, email, password, address, phoneNum, role, dateOfbirth } = req.body;
+  const { name, email, password, address, phoneNum, role, dateOfbirth } =
+    req.body;
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
@@ -47,7 +48,7 @@ export const register = catchAsync(async (req, res) => {
     address,
     role,
     verificationInfo: { token: otptoken },
-    dateOfbirth
+    dateOfbirth,
   });
   await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
 
@@ -133,7 +134,7 @@ export const login = catchAsync(async (req, res) => {
     payAsYouGo = false;
     isValid = false;
   } else {
-    const plan = checkPayment?.planId as any
+    const plan = checkPayment?.planId as any;
     if (plan?.valid != "PayAsYouGo") {
       if (plan.valid === "monthly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
@@ -169,11 +170,15 @@ export const login = catchAsync(async (req, res) => {
       accessToken,
       role: user.role,
       _id: user._id,
-      name: user.name, email: email, address: user.address, phoneNum: user.phoneNum, dateOfbirth: user.dateOfbirth,
+      name: user.name,
+      email: email,
+      address: user.address,
+      phoneNum: user.phoneNum,
+      dateOfbirth: user.dateOfbirth,
       refreshToken,
       isValid,
       payAsYouGo,
-      plan: checkPayment?.planId
+      plan: checkPayment?.planId,
     },
   });
 });
@@ -717,6 +722,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const resume = await CreateResume.findOne({ userId: id }).select("sLink");
   const user1: any = user.toObject();
   user1.sLink = resume?.sLink || null;
+  user1.title = resume?.title || null;
 
   // ---- PLAN / PAYMENT LOGIC (unchanged) ----
   const checkPayment = await paymentInfo
@@ -732,7 +738,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     payAsYouGo = false;
     isValid = false;
   } else {
-    const plan = checkPayment?.planId as any
+    const plan = checkPayment?.planId as any;
     if (plan?.valid != "PayAsYouGo") {
       if (plan.valid === "monthly") {
         expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
@@ -756,7 +762,10 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   }
 
   // ---- FOLLOWING / FOLLOWERS LOGIC ----
-  const followingList = await Following.find({ userId: id }).populate("recruiterId companyId", "name email"); // Add other fields you want to expose
+  const followingList = await Following.find({ userId: id }).populate(
+    "recruiterId companyId",
+    "name email"
+  ); // Add other fields you want to expose
   const followersList = await Following.find({
     $or: [{ recruiterId: id }, { companyId: id }],
   }).populate("userId", "name email");
@@ -779,7 +788,6 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
     },
   });
 });
-
 
 export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params;
