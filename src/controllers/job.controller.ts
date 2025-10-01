@@ -656,15 +656,51 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
     .sort({
       createdAt: -1,
     })
-    .populate('companyId')
+    .populate('companyId recruiterId')
 
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
+  if (!Jobs.length) {
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'No jobs found',
+      data: [],
+    })
+  }
+
+  const today = new Date()
+
+  const jobsWithApplicants = await Promise.all(
+    Jobs.map(async (job) => {
+      const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
+
+      let derivedStatus = 'Pending'
+
+      if (job.publishDate && job.adminApprove) {
+        if (job.publishDate <= today) {
+          derivedStatus = 'Live'
+        } else {
+          derivedStatus = 'Scheduled (Admin Approved)'
+        }
+      } else if (job.publishDate && !job.adminApprove) {
+        if (job.publishDate > today) {
+          derivedStatus = 'Scheduled'
+        }
+      }
+
+      return {
+        ...job.toObject(),
+        applicantCount,
+        derivedStatus, // 👈 new status field
+      }
+    })
+  )
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: 'jobs fetched successfully',
-    data: Jobs,
+    data: jobsWithApplicants,
   })
 })
 
