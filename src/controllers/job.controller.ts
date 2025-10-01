@@ -367,6 +367,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   
 
   const jobs = await Job.find({ $or: matchConditions, status: 'active' })
+    .populate('companyId recruiterId')
     .limit(50)
     .lean()
 
@@ -407,7 +408,9 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   partialMatches.sort((a, b) => b.score - a.score)
 
   if (exactMatches.length === 0 && partialMatches.length === 0) {
-    const fallbackJobs = await Job.find({ status: 'active' }).limit(5)
+    const fallbackJobs = await Job.find({ status: 'active' })
+    .populate('companyId recruiterId')
+    .limit(5)
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
