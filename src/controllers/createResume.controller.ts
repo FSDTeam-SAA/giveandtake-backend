@@ -1,5 +1,4 @@
-import { Request, Response } from 'express'
-import catchAsync from '../utils/catchAsync'
+import { Request, Response, NextFunction, RequestHandler } from "express";
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { CreateResume } from '../models/createResume.model'
@@ -11,86 +10,115 @@ import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import path from 'path'
 import { User } from '../models/user.model'
+import fs from 'fs'
 
-/********************
- * CREATE RESUME *
- ********************/
+
+type AsyncRequestHandler = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => Promise<any>;
+
+const catchAsync = (fn: AsyncRequestHandler): RequestHandler => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
+// helper to move resume file to uploads/resumes
+const moveFileToUploads = async (tempPath: string, destRelative: string): Promise<string> => {
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  const finalPath = path.join(uploadsDir, destRelative);
+
+  await fs.promises.mkdir(path.dirname(finalPath), { recursive: true });
+  await fs.promises.rename(tempPath, finalPath);
+
+  // return relative URL for frontend usage
+  return "/" + destRelative.replace(/\\/g, "/");
+};
+
 export const createResume = catchAsync(async (req: Request, res: Response) => {
+  const { userId } = req.body;
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User ID is required");
 
-  const { userId } = req.body
   const user = await User.findById(userId);
-  if (!user) {
-    throw new AppError(400, "User Not Found")
-  }
+  if (!user) throw new AppError(httpStatus.BAD_REQUEST, "User Not Found");
 
-  const resume = JSON.parse(req.body.resume || '{}')
-  const experiences = JSON.parse(req.body.experiences || '[]')
-  const educationList = JSON.parse(req.body.educationList || '[]')
-  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]')
+  // parse JSON data
+  const resume = JSON.parse(req.body.resume || "{}");
+  const experiences = JSON.parse(req.body.experiences || "[]");
+  const educationList = JSON.parse(req.body.educationList || "[]");
+  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || "[]");
 
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
 
-  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+  let photoUrl: string | null = null;
+  let bannerUrl: string | null = null;
+  let resumeFileRelative: string | null = null;
 
-  // check if file was uplaod
-  let uploadFileUrl = null
-  let banner = null
-  // if (req.file) {
-  //   const cloudinaryResult = await uploadToCloudinary(req.file.path)
-  //   if (cloudinaryResult) {
-  //     uploadFileUrl = cloudinaryResult.secure_url
-  //   }
-  // }
-
-  const files = req.files as Record<string, Express.Multer.File[]>;
-
-  if (files?.photo) {
+  // handle photo
+  if (files?.photo && files.photo[0]) {
     const logoRes = await uploadToCloudinary(files.photo[0].path);
     if (logoRes?.secure_url) {
-      uploadFileUrl = logoRes.secure_url;
-      if (!user.avatar) {
-        user.avatar = { url: "" }; // initialize if missing
-      }
-      user.avatar.url = logoRes.secure_url || "";
-      await user?.save()
-
+      photoUrl = logoRes.secure_url;
+      if (!user.avatar) user.avatar = { url: "" };
+      user.avatar.url = photoUrl;
+      await user.save();
     }
+    fs.unlinkSync(files.photo[0].path); // cleanup
   }
 
-  if (files?.banner) {
+  // handle banner
+  if (files?.banner && files.banner[0]) {
     const certRes = await uploadToCloudinary(files.banner[0].path);
-    if (certRes?.secure_url) {
-      banner = certRes.secure_url;
-    }
+    if (certRes?.secure_url) bannerUrl = certRes.secure_url;
+    fs.unlinkSync(files.banner[0].path);
   }
+
+  // handle resume file (local storage)
+  if (files?.resume && files.resume[0]) {
+    const resumeFile = files.resume[0];
+    const safeName = `${Date.now()}-${resumeFile.originalname.replace(/\s+/g, "_")}`;
+    const destRelative = path.posix.join("resumes", safeName);
+    resumeFileRelative = await moveFileToUploads(resumeFile.path, destRelative);
+  }
+
+  // save main resume doc
   const resumeDoc = await CreateResume.create({
     ...resume,
     userId,
-    photo: uploadFileUrl,
-    banner
-  })
+    photo: photoUrl,
+    banner: bannerUrl,
+    file: resumeFileRelative
+      ? [{ filename: path.basename(resumeFileRelative), url: resumeFileRelative, uploadedAt: new Date() }]
+      : [],
+  });
 
-  const exparienceDocs = await Experience.insertMany(
-    experiences.map((exp: any) => ({ ...exp, userId }))
-  )
+  // save related docs
+  const experienceDocs = experiences.length
+    ? await Experience.insertMany(experiences.map((exp: any) => ({ ...exp, userId })))
+    : [];
 
-  const educationDocs = await Education.insertMany(
-    educationList.map((edu: any) => ({ ...edu, userId }))
-  )
+  const educationDocs = educationList.length
+    ? await Education.insertMany(educationList.map((edu: any) => ({ ...edu, userId })))
+    : [];
 
-  const awarenessDocs = await AwardsAndHonor.insertMany(
-    awardsAndHonors.map((honor: any) => ({ ...honor, userId }))
-  )
-  res.status(httpStatus.CREATED).json({
+  const awarenessDocs = awardsAndHonors.length
+    ? await AwardsAndHonor.insertMany(awardsAndHonors.map((honor: any) => ({ ...honor, userId })))
+    : [];
+
+  return res.status(httpStatus.CREATED).json({
     success: true,
-    message: 'Resume created successfully',
-    date: {
+    message: "Resume created successfully",
+    data: {
       resume: resumeDoc,
-      experiences: exparienceDocs,
+      experiences: experienceDocs,
       education: educationDocs,
       awardsAndHonors: awarenessDocs,
     },
-  })
-})
+  });
+});
+
 
 /*********************
  * GET A USER RESUME *

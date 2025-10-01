@@ -43,6 +43,9 @@ app.use(
 
 app.use(express.json());
 
+const uploadsDir = path.resolve(__dirname, "../uploads");
+app.use("/uploads", express.static(uploadsDir));
+
 app.use("/api/v1", userRoutes);
 
 app.use("/api/v1", jobRoutes);
@@ -141,7 +144,6 @@ app.use("/api/v1/skill", skillRoutes);
 app.use("/api/v1/university", universityRoutes);
 app.use("/api/v1/language", languageRoutes);
 app.use("/api/v1/courency", courencyRoutes);
-
 
 app.use(notFound as never);
 app.use(globalErrorHandler);
