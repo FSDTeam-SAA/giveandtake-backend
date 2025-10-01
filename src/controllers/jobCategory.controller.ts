@@ -64,8 +64,6 @@ export const getAllCategorys = catchAsync(
     // Fetch categories
     const category = await JobCategory.find(filter)
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
 
     // Count total for pagination
     const total = await JobCategory.countDocuments(filter);

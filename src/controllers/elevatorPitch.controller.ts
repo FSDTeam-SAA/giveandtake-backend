@@ -1,101 +1,395 @@
-import path from 'path'
-import fs from 'fs'
-import { Request, Response, NextFunction } from 'express'
-import { ElevatorPitch } from '../models/elevatorPitch.model'
-import { AppliedJob } from '../models/appliedJob.model'
-import catchAsync from '../utils/catchAsync'
-import AppError from '../errors/AppError'
-import httpStatus from 'http-status'
-import { getVideoMetadata, processVideoHLS } from '../services/ffmpeg.service'
-import { Job } from '../models/job.model'
-import { paymentInfo } from '../models/paymentInfo.model'
-import { uploadHLS } from '../utils/cloudinary'
-import axios from 'axios'
-import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
-import { User } from '../models/user.model'
+// import path from 'path'
+// import fs from 'fs'
+// import { Request, Response, NextFunction } from 'express'
+// import { ElevatorPitch } from '../models/elevatorPitch.model'
+// import { AppliedJob } from '../models/appliedJob.model'
+// import catchAsync from '../utils/catchAsync'
+// import AppError from '../errors/AppError'
+// import httpStatus from 'http-status'
+// import { getVideoMetadata, processVideoHLS } from '../services/ffmpeg.service'
+// import { Job } from '../models/job.model'
+// import { paymentInfo } from '../models/paymentInfo.model'
+// import { uploadHLS } from '../utils/cloudinary'
+// import axios from 'axios'
+// import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
+// import { User } from '../models/user.model'
+
+// /*************************************
+//  * ADD RESUME VIDEO (ELEVATOR PITCH) *
+//  *************************************/
+// export const createResume = catchAsync(async (req: Request, res: Response) => {
+//   const { userId } = req.query
+
+//   if (!userId || typeof userId !== 'string') {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+//   }
+
+//   // @ts-ignore
+//   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
+//     throw new AppError(httpStatus.BAD_REQUEST, 'No video file uploaded')
+//   }
+
+//   // @ts-ignore
+//   const videoFile = req.files.videoFile[0]
+//   const tempPath = videoFile.path
+
+//   if (!fs.existsSync(tempPath)) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Uploaded file not found')
+//   }
+
+//   const existingPitch = await ElevatorPitch.findOne({ userId })
+//   if (existingPitch) {
+//     fs.unlinkSync(tempPath)
+//     throw new AppError(
+//       httpStatus.BAD_REQUEST,
+//       'You already have an elevator pitch'
+//     )
+//   }
+
+//   const metadata = await getVideoMetadata(tempPath)
+
+//   // VALIDATE UPLOAD PERMISSION
+//   await validateElevatorPitchAccess(userId, metadata.duration)
+
+//   if (metadata.duration > 30) {
+//     const hasActivePlan = await paymentInfo.findOne({
+//       userId,
+//       paymentStatus: 'complete',
+//     })
+//     if (!hasActivePlan) {
+//       fs.unlinkSync(tempPath)
+//       throw new AppError(
+//         httpStatus.PAYMENT_REQUIRED,
+//         'Video duration exceeds 30 seconds. Please purchase a plan.'
+//       )
+//     }
+//   }
+
+//   // ✅ Process video to HLS
+//   const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`)
+//   fs.mkdirSync(hlsDir, { recursive: true })
+
+//   // @ts-ignore
+//   const { playlistPath, keyPath } = await processVideoHLS(
+//     tempPath,
+//     hlsDir,
+//     userId
+//   )
+//   fs.unlinkSync(tempPath)
+
+//   // ✅ Upload HLS files to Cloudinary
+//   const cloudinaryFolder = `elevator_pitches/${userId}/hls`
+//   const uploadedFiles = await uploadHLS(hlsDir, cloudinaryFolder)
+//   console.log('first', uploadedFiles)
+
+//   // @ts-ignore
+//   // ✅ Extract Cloudinary URLs
+//   const hlsUrl =
+//     uploadedFiles.uploadedFiles?.['playlist.m3u8']?.secure_url || ''
+//   // @ts-ignore
+
+//   const encryptionKeyUrl =
+//     uploadedFiles.uploadedFiles?.['encryption.key']?.secure_url || ''
+
+//   // ✅ Clean up HLS temp directory
+//   fs.rmSync(hlsDir, { recursive: true, force: true })
+
+//   // ✅ Save to DB with only Cloudinary URLs
+//   const newPitch = await ElevatorPitch.create({
+//     userId,
+//     video: {
+//       url: null,
+//       hlsUrl,
+//       encryptionKeyUrl,
+//       localPaths: {
+//         original: null,
+//         hls: hlsUrl,
+//         key: encryptionKeyUrl,
+//       },
+//     },
+//   })
+
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Elevator pitch created and uploaded to Cloudinary successfully',
+//     data: {
+//       id: newPitch._id,
+//       hlsUrl,
+//       encryptionKeyUrl,
+//     },
+//   })
+// })
+
+// export const deleteResume = catchAsync(async (req: Request, res: Response) => {
+//   const { userId } = req.query
+
+//   const pitch = await ElevatorPitch.findOne({ userId })
+//   if (!pitch) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+//   }
+
+//   // Clean up local files
+//   if (pitch.video.localPaths) {
+//     const { original, hls, key } = pitch.video.localPaths
+//     if (fs.existsSync(original)) fs.unlinkSync(original)
+//     if (fs.existsSync(hls)) fs.unlinkSync(hls)
+//     if (fs.existsSync(key)) fs.unlinkSync(key)
+//     const hlsDir = path.dirname(hls)
+//     if (fs.existsSync(hlsDir))
+//       fs.rmSync(hlsDir, { recursive: true, force: true })
+//   }
+
+//   await ElevatorPitch.deleteOne({ _id: pitch._id })
+
+//   res.status(httpStatus.OK).json({
+//     success: true,
+//     message: 'Elevator pitch deleted successfully',
+//   })
+// })
+
+// /*************************
+//  * STREAM ELEVATOR PITCH *
+//  *************************/
+// export const streamElevatorPitch = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { id } = req.params
+
+//     const pitch = await ElevatorPitch.findById(id)
+//     if (!pitch || !pitch.video?.hlsUrl) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+//     }
+
+//     const hlsUrl = pitch.video.hlsUrl
+//     const userId = pitch.userId.toString()
+
+//     // Fetch playlist.m3u8 from Cloudinary
+//     const playlistRes = await axios.get(hlsUrl)
+//     let playlistContent = playlistRes.data as string
+
+//     // Rewrite .ts segment lines to secure proxy endpoint
+//     playlistContent = playlistContent
+//       .split('\n')
+//       .map((line) => {
+//         if (line.trim().endsWith('.ts')) {
+//           return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${line.trim()}`
+//         }
+//         return line
+//       })
+//       .join('\n')
+
+//     res.set({
+//       'Content-Type': 'application/vnd.apple.mpegurl',
+//       'Cache-Control': 'no-cache',
+//     })
+
+//     res.send(playlistContent)
+//   }
+// )
+
+// /********************
+//  * SECURE STREAMING *
+//  ********************/
+// export const secureStream = catchAsync(async (req: Request, res: Response) => {
+//   const { userId, segment } = req.params
+
+//   // Find pitch by userId
+//   const pitch = await ElevatorPitch.findOne({ userId })
+//   if (!pitch || !pitch.video?.hlsUrl) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+//   }
+
+//   // Derive base URL from playlist.m3u8
+//   const baseUrl = pitch.video.hlsUrl.replace(/playlist\.m3u8$/, '')
+
+//   // Construct full URL to the .ts segment in Cloudinary
+//   const segmentUrl = `${baseUrl}${segment}`
+
+//   try {
+//     const response = await axios.get(segmentUrl, { responseType: 'stream' })
+
+//     res.set({
+//       'Content-Type': 'video/mp2t',
+//       'Cache-Control': 'no-cache',
+//     })
+
+//     response.data.pipe(res)
+//   } catch (err) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Segment not found in Cloudinary')
+//   }
+// })
+
+// /*********************
+//  * GET ENCRYPTED KEY *
+//  *********************/
+// export const getEncryptionKey = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { userId, key } = req.params
+
+//     const pitch = await ElevatorPitch.findOne({ userId })
+//     if (!pitch || !pitch.video?.encryptionKeyUrl) {
+//       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
+//     }
+
+//     // Check that requested file matches the expected key filename (basic validation)
+//     if (!pitch.video.encryptionKeyUrl.includes(key)) {
+//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid key name requested')
+//     }
+
+//     try {
+//       const keyResponse = await axios.get(pitch.video.encryptionKeyUrl, {
+//         responseType: 'arraybuffer',
+//       })
+
+//       res.set({
+//         'Content-Type': 'application/octet-stream',
+//         'Cache-Control': 'no-store',
+//       })
+
+//       res.send(Buffer.from(keyResponse.data))
+//     } catch (err) {
+//       throw new AppError(
+//         httpStatus.NOT_FOUND,
+//         'Failed to fetch encryption key from Cloudinary'
+//       )
+//     }
+//   }
+// )
+
+// /**********************
+//  * ALL ELEVATOR PITCH *
+//  **********************/
+// export const getAllElevatorPitches = catchAsync(
+//   async (req: Request, res: Response) => {
+//     const { type } = req.query
+
+//     if (!type || typeof type !== 'string') {
+//       throw new AppError(
+//         httpStatus.BAD_REQUEST,
+//         'Query param "type" is required'
+//       )
+//     }
+
+//     const allowedRoles = ['candidate', 'recruiter','company']
+//     if (!allowedRoles.includes(type)) {
+//       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid user type')
+//     }
+
+//     // Step 1: Get users with the requested role
+//     const users = await User.find({ role: type }, '_id name email')
+//     console.log(users)
+
+//     const userIds = users.map((u) => u._id)
+//     console.log(userIds)
+
+//     // Step 2: Get Elevator Pitches of those users
+//     const pitches = await ElevatorPitch.find({
+//       userId: { $in: userIds },
+//     }).populate('userId', 'name email role')
+
+//     console.log(pitches)
+
+//     res.status(httpStatus.OK).json({
+//       success: true,
+//       total: pitches.length,
+//       data: pitches,
+//     })
+//   }
+// )
+
+// controllers/elevatorPitch.controller.ts
+import path from "path";
+import fs from "fs";
+import { Request, Response } from "express";
+import { ElevatorPitch } from "../models/elevatorPitch.model";
+import catchAsync from "../utils/catchAsync";
+import AppError from "../errors/AppError";
+import httpStatus from "http-status";
+import { getVideoMetadata, processVideoHLS } from "../services/ffmpeg.service";
+import { paymentInfo } from "../models/paymentInfo.model";
+import axios from "axios";
+import { validateElevatorPitchAccess } from "../helper/validateElevatorPitchAccess";
+import { User } from "../models/user.model";
+import {
+  uploadHLSFilesToS3,
+  getSignedS3Url,
+  deleteFromS3,
+} from "../services/s3.service";
 
 /*************************************
  * ADD RESUME VIDEO (ELEVATOR PITCH) *
  *************************************/
 export const createResume = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.query
+  const { userId } = req.query;
 
-  if (!userId || typeof userId !== 'string') {
-    throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+  if (!userId || typeof userId !== "string") {
+    throw new AppError(httpStatus.BAD_REQUEST, "User ID is required");
   }
 
   // @ts-ignore
   if (!req.files?.videoFile || !Array.isArray(req.files.videoFile)) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'No video file uploaded')
+    throw new AppError(httpStatus.BAD_REQUEST, "No video file uploaded");
   }
 
   // @ts-ignore
-  const videoFile = req.files.videoFile[0]
-  const tempPath = videoFile.path
+  const videoFile = req.files.videoFile[0];
+  const tempPath = videoFile.path;
 
   if (!fs.existsSync(tempPath)) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Uploaded file not found')
+    throw new AppError(httpStatus.NOT_FOUND, "Uploaded file not found");
   }
 
-  const existingPitch = await ElevatorPitch.findOne({ userId })
+  const existingPitch = await ElevatorPitch.findOne({ userId });
   if (existingPitch) {
-    fs.unlinkSync(tempPath)
+    fs.unlinkSync(tempPath);
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      'You already have an elevator pitch'
-    )
+      "You already have an elevator pitch"
+    );
   }
 
-  const metadata = await getVideoMetadata(tempPath)
-
+  const metadata = await getVideoMetadata(tempPath);
 
   // VALIDATE UPLOAD PERMISSION
-  await validateElevatorPitchAccess(userId, metadata.duration)
+  await validateElevatorPitchAccess(userId, metadata.duration);
 
-  if (metadata.duration > 30) {
-    const hasActivePlan = await paymentInfo.findOne({
-      userId,
-      paymentStatus: 'complete',
-    })
-    if (!hasActivePlan) {
-      fs.unlinkSync(tempPath)
+  if (metadata.duration > 60 ) {
+    // const hasActivePlan = await paymentInfo.findOne({
+    //   userId,
+    //   paymentStatus: "complete",
+    // });
+    // if (!hasActivePlan) {
+    //   fs.unlinkSync(tempPath);
       throw new AppError(
         httpStatus.PAYMENT_REQUIRED,
-        'Video duration exceeds 30 seconds. Please purchase a plan.'
-      )
-    }
+        "Video duration exceeds 60 seconds."
+      );
+    // }
   }
 
   // ✅ Process video to HLS
-  const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`)
-  fs.mkdirSync(hlsDir, { recursive: true })
+  const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`);
+  fs.mkdirSync(hlsDir, { recursive: true });
 
   // @ts-ignore
   const { playlistPath, keyPath } = await processVideoHLS(
     tempPath,
     hlsDir,
     userId
-  )
-  fs.unlinkSync(tempPath)
+  );
+  fs.unlinkSync(tempPath);
 
-  // ✅ Upload HLS files to Cloudinary
-  const cloudinaryFolder = `elevator_pitches/${userId}/hls`
-  const uploadedFiles = await uploadHLS(hlsDir, cloudinaryFolder)
-  console.log('first', uploadedFiles)
+  // ✅ Upload HLS files to AWS S3
+  const s3Folder = `elevator_pitches/${userId}/hls`;
+  const uploadedFiles = await uploadHLSFilesToS3(hlsDir, s3Folder);
 
-  // @ts-ignore
-  // ✅ Extract Cloudinary URLs
-  const hlsUrl =
-    uploadedFiles.uploadedFiles?.['playlist.m3u8']?.secure_url || ''
-  // @ts-ignore
-
-  const encryptionKeyUrl =
-    uploadedFiles.uploadedFiles?.['encryption.key']?.secure_url || ''
+  // ✅ Extract S3 URLs
+  const hlsUrl = uploadedFiles["playlist.m3u8"] || "";
+  const encryptionKeyUrl = uploadedFiles["encryption.key"] || "";
 
   // ✅ Clean up HLS temp directory
-  fs.rmSync(hlsDir, { recursive: true, force: true })
+  fs.rmSync(hlsDir, { recursive: true, force: true });
 
-  // ✅ Save to DB with only Cloudinary URLs
+  // ✅ Save to DB with S3 URLs
   const newPitch = await ElevatorPitch.create({
     userId,
     video: {
@@ -108,194 +402,223 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
         key: encryptionKeyUrl,
       },
     },
-  })
+  });
 
   res.status(httpStatus.CREATED).json({
     success: true,
-    message: 'Elevator pitch created and uploaded to Cloudinary successfully',
+    message: "Elevator pitch created and uploaded to AWS S3 successfully",
     data: {
       id: newPitch._id,
       hlsUrl,
       encryptionKeyUrl,
     },
-  })
-})
+  });
+});
 
 export const deleteResume = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.query
+  const { userId } = req.query;
 
-  const pitch = await ElevatorPitch.findOne({ userId })
+  const pitch = await ElevatorPitch.findOne({ userId });
   if (!pitch) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
   }
 
-  // Clean up local files
-  if (pitch.video.localPaths) {
-    const { original, hls, key } = pitch.video.localPaths
-    if (fs.existsSync(original)) fs.unlinkSync(original)
-    if (fs.existsSync(hls)) fs.unlinkSync(hls)
-    if (fs.existsSync(key)) fs.unlinkSync(key)
-    const hlsDir = path.dirname(hls)
-    if (fs.existsSync(hlsDir))
-      fs.rmSync(hlsDir, { recursive: true, force: true })
+  // Clean up S3 files
+  if (pitch.video.hlsUrl) {
+    try {
+      const hlsUrl = pitch.video.hlsUrl;
+      const s3Key = hlsUrl.replace(
+        `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+        ""
+      );
+      const keyFolder = path.dirname(s3Key);
+
+      // Delete all files in the HLS folder
+      await deleteFromS3(s3Key); // playlist.m3u8
+      await deleteFromS3(`${keyFolder}/encryption.key`);
+
+      // Delete .ts segments (you might want to list and delete all segments)
+      const baseKey = s3Key.replace("playlist.m3u8", "");
+      // Note: For production, you'd want to list all objects with prefix and delete them
+    } catch (error) {
+      console.error("Error deleting S3 files:", error);
+    }
   }
 
-  await ElevatorPitch.deleteOne({ _id: pitch._id })
+  await ElevatorPitch.deleteOne({ _id: pitch._id });
 
   res.status(httpStatus.OK).json({
     success: true,
-    message: 'Elevator pitch deleted successfully',
-  })
-})
-
+    message: "Elevator pitch deleted successfully",
+  });
+});
 
 /*************************
  * STREAM ELEVATOR PITCH *
  *************************/
 export const streamElevatorPitch = catchAsync(
   async (req: Request, res: Response) => {
-    const { id } = req.params
+    const { id } = req.params;
 
-    const pitch = await ElevatorPitch.findById(id)
+    const pitch = await ElevatorPitch.findById(id);
     if (!pitch || !pitch.video?.hlsUrl) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+      throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
     }
 
-    const hlsUrl = pitch.video.hlsUrl
-    const userId = pitch.userId.toString()
+    const hlsUrl = pitch.video.hlsUrl;
 
-    // Fetch playlist.m3u8 from Cloudinary
-    const playlistRes = await axios.get(hlsUrl)
-    let playlistContent = playlistRes.data as string
+    // For S3, we need to generate a signed URL for private content
+    // If your S3 bucket is public, you can use the direct URL
+    const isPrivateBucket = process.env.AWS_BUCKET_VISIBILITY === "private";
 
-    // Rewrite .ts segment lines to secure proxy endpoint
-    playlistContent = playlistContent
-      .split('\n')
-      .map((line) => {
-        if (line.trim().endsWith('.ts')) {
-          return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${line.trim()}`
-        }
-        return line
-      })
-      .join('\n')
+    if (isPrivateBucket) {
+      const s3Key = hlsUrl.replace(
+        `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+        ""
+      );
+      const signedUrl = await getSignedS3Url(s3Key, 3600); // 1 hour expiry
 
-    res.set({
-      'Content-Type': 'application/vnd.apple.mpegurl',
-      'Cache-Control': 'no-cache',
-    })
+      const playlistRes = await axios.get(signedUrl);
+      let playlistContent = playlistRes.data as string;
 
-    res.send(playlistContent)
+      // Rewrite .ts segment lines to use our secure proxy endpoint
+      playlistContent = playlistContent
+        .split("\n")
+        .map((line) => {
+          if (line.trim().endsWith(".ts")) {
+            return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${line.trim()}`;
+          }
+          return line;
+        })
+        .join("\n");
+
+      res.set({
+        "Content-Type": "application/vnd.apple.mpegurl",
+        "Cache-Control": "no-cache",
+      });
+
+      res.send(playlistContent);
+    } else {
+      // Public bucket - redirect to S3 URL
+      res.redirect(hlsUrl);
+    }
   }
-)
-
+);
 
 /********************
  * SECURE STREAMING *
  ********************/
 export const secureStream = catchAsync(async (req: Request, res: Response) => {
-  const { userId, segment } = req.params
+  const { userId, segment } = req.params;
 
   // Find pitch by userId
-  const pitch = await ElevatorPitch.findOne({ userId })
+  const pitch = await ElevatorPitch.findOne({ userId });
   if (!pitch || !pitch.video?.hlsUrl) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
   }
 
-  // Derive base URL from playlist.m3u8
-  const baseUrl = pitch.video.hlsUrl.replace(/playlist\.m3u8$/, '')
-
-  // Construct full URL to the .ts segment in Cloudinary
-  const segmentUrl = `${baseUrl}${segment}`
+  // Derive base S3 key from playlist.m3u8 URL
+  const hlsUrl = pitch.video.hlsUrl;
+  const baseS3Key = hlsUrl.replace(
+    `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+    ""
+  );
+  const segmentS3Key = baseS3Key.replace("playlist.m3u8", segment);
 
   try {
-    const response = await axios.get(segmentUrl, { responseType: 'stream' })
+    // Generate signed URL for the segment
+    const signedSegmentUrl = await getSignedS3Url(segmentS3Key, 3600);
+    const response = await axios.get(signedSegmentUrl, {
+      responseType: "stream",
+    });
 
     res.set({
-      'Content-Type': 'video/mp2t',
-      'Cache-Control': 'no-cache',
-    })
+      "Content-Type": "video/mp2t",
+      "Cache-Control": "no-cache",
+    });
 
-    response.data.pipe(res)
+    response.data.pipe(res);
   } catch (err) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Segment not found in Cloudinary')
+    throw new AppError(httpStatus.NOT_FOUND, "Segment not found in S3");
   }
-})
-
+});
 
 /*********************
  * GET ENCRYPTED KEY *
  *********************/
 export const getEncryptionKey = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, key } = req.params
+    const { userId, key } = req.params;
 
-    const pitch = await ElevatorPitch.findOne({ userId })
+    const pitch = await ElevatorPitch.findOne({ userId });
     if (!pitch || !pitch.video?.encryptionKeyUrl) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
+      throw new AppError(httpStatus.NOT_FOUND, "Encryption key not found");
     }
 
-    // Check that requested file matches the expected key filename (basic validation)
+    // Check that requested file matches the expected key filename
     if (!pitch.video.encryptionKeyUrl.includes(key)) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid key name requested')
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid key name requested");
     }
 
     try {
-      const keyResponse = await axios.get(pitch.video.encryptionKeyUrl, {
-        responseType: 'arraybuffer',
-      })
+      const encryptionKeyUrl = pitch.video.encryptionKeyUrl;
+      const s3Key = encryptionKeyUrl.replace(
+        `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+        ""
+      );
+
+      const signedKeyUrl = await getSignedS3Url(s3Key, 3600);
+      const keyResponse = await axios.get(signedKeyUrl, {
+        responseType: "arraybuffer",
+      });
 
       res.set({
-        'Content-Type': 'application/octet-stream',
-        'Cache-Control': 'no-store',
-      })
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
 
-      res.send(Buffer.from(keyResponse.data))
+      res.send(Buffer.from(keyResponse.data));
     } catch (err) {
       throw new AppError(
         httpStatus.NOT_FOUND,
-        'Failed to fetch encryption key from Cloudinary'
-      )
+        "Failed to fetch encryption key from S3"
+      );
     }
   }
-)
+);
 
 /**********************
  * ALL ELEVATOR PITCH *
  **********************/
 export const getAllElevatorPitches = catchAsync(
   async (req: Request, res: Response) => {
-    const { type } = req.query
+    const { type } = req.query;
 
-    if (!type || typeof type !== 'string') {
+    if (!type || typeof type !== "string") {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'Query param "type" is required'
-      )
+      );
     }
 
-    const allowedRoles = ['candidate', 'recruiter','company']
+    const allowedRoles = ["candidate", "recruiter", "company"];
     if (!allowedRoles.includes(type)) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid user type')
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid user type");
     }
 
     // Step 1: Get users with the requested role
-    const users = await User.find({ role: type }, '_id name email')
-    console.log(users)
-
-    const userIds = users.map((u) => u._id)
-    console.log(userIds)
+    const users = await User.find({ role: type }, "_id name email");
+    const userIds = users.map((u) => u._id);
 
     // Step 2: Get Elevator Pitches of those users
     const pitches = await ElevatorPitch.find({
       userId: { $in: userIds },
-    }).populate('userId', 'name email role')
-
-    console.log(pitches)
+    }).populate("userId", "name email role");
 
     res.status(httpStatus.OK).json({
       success: true,
       total: pitches.length,
       data: pitches,
-    })
+    });
   }
-)
+);

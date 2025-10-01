@@ -17,6 +17,7 @@ import { createNotification } from '../sockets/notification.service'
 import mongoose from 'mongoose'
 import { Notification } from '../models/notification.model'
 import { Following } from '../models/following.model'
+import { compileFunction } from 'vm'
 
 /*******************
  * // CREATE A JOB *
@@ -150,8 +151,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     const saved = await Notification.insertMany(notifications);
 
     // 🔹 Emit via socket
-    saved.forEach((n) => {
-        io.to(n.userId.toString()).emit("newNotification", n);
+    saved.forEach(async (n) => {
+        const count = await Notification.countDocuments({to: n.userId, isViewed: false})
+        io.to(n.userId.toString()).emit("newNotification", {n,compileFunction});
     });
   }
 
@@ -244,8 +246,9 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       type: 'job_application_status',
       id: job._id as mongoose.Types.ObjectId,
     })
+      const count = await Notification.countDocuments({to: job.userId._id, isViewed: false})
     // Emit socket event
-    io.to(job.userId._id.toString()).emit('newNotification', notification)
+    io.to(job.userId._id.toString()).emit('newNotification', {notification,count})
   } else {
 
     const emailSubject = `Job Post Denied By Admin`
@@ -265,8 +268,10 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       type: 'job_application_status',
       id: job._id as mongoose.Types.ObjectId,
     })
+      const count = await Notification.countDocuments({to: job.userId._id, isViewed: false})
+
     // Emit socket event
-    io.to(job.userId._id.toString()).emit('newNotification', notification)
+    io.to(job.userId._id.toString()).emit('newNotification', {notification,count})
 
   }
 
@@ -356,7 +361,10 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
   if (skills.length > 0)
     matchConditions.push({ responsibilities: { $in: skills } })
+    matchConditions.push({ description: { $regex: new RegExp(skills, 'i') } })
+
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId })
+  
 
   const jobs = await Job.find({ $or: matchConditions, status: 'active' })
     .limit(50)
@@ -366,24 +374,33 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const partialMatches = [] as any[]
 
   jobs.forEach((job) => {
-    let score = 0
+  let score = 0;
 
-    if (title && job.title?.toLowerCase().includes(title.toLowerCase()))
-      score += 3
-    if (country && job.location?.toLowerCase().includes(country.toLowerCase()))
-      score += 2
-    if (
-      skills.length > 0 &&
-      job.responsibilities?.some((r: string) => skills.includes(r))
-    )
-      score += 1
+  const jobTitle = job.title?.toLowerCase() || '';
+  const jobLocation = job.location?.toLowerCase() || '';
+  const jobResponsibilities = job.responsibilities || [];
+  const jobDescription = job.description?.toLowerCase() || '';
 
-    if (score >= 5) {
-      exactMatches.push({ job, score })
-    } else {
-      partialMatches.push({ job, score })
-    }
-  })
+  if (title && jobTitle.includes(title.toLowerCase())) score += 3;
+  if (country && jobLocation.includes(country.toLowerCase())) score += 2;
+
+  const matchedSkillsInResponsibilities = skills.filter((skill :any) =>
+    jobResponsibilities.includes(skill)
+  );
+
+  const matchedSkillsInDescription = skills.filter((skill:any) =>
+    jobDescription.includes(skill.toLowerCase())
+  );
+
+  if (matchedSkillsInResponsibilities.length > 0) score += 1;
+  if (matchedSkillsInDescription.length > 0) score += 1; // ✅ new scoring rule
+
+  if (score >= 5) {
+    exactMatches.push({ job, score });
+  } else {
+    partialMatches.push({ job, score });
+  }
+});
 
   // Sort by score (highest first)
   exactMatches.sort((a, b) => b.score - a.score)
@@ -594,6 +611,47 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
     companyId: userId,
     arcrivedJob: false,
     jobApprove: 'approved',
+  })
+    .sort({
+      createdAt: -1,
+    })
+    .populate('companyId')
+
+  // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'jobs fetched successfully',
+    data: Jobs,
+  })
+})
+export const getRicruitercompanyJobs3 = catchAsync(async (req, res) => {
+  const userId = req.params.id
+  const Jobs = await Job.find({
+    recruiterId: userId,
+    arcrivedJob: false,
+  })
+    .sort({
+      createdAt: -1,
+    })
+    .populate('companyId')
+
+  // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'jobs fetched successfully',
+    data: Jobs,
+  })
+})
+
+export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
+  const userId = req.params.id
+  const Jobs = await Job.find({
+    companyId: userId,
+    arcrivedJob: false,
   })
     .sort({
       createdAt: -1,

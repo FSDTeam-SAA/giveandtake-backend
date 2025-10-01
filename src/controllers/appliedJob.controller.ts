@@ -15,6 +15,7 @@ import { Job } from "../models/job.model";
 import { sendEmail } from "../utils/sendEmail";
 import { User } from "../models/user.model";
 import { io } from "../server";
+import { Notification } from "../models/notification.model";
 
 /***************
  * CREATE Application
@@ -69,7 +70,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, userId, status, resumeId, answer } = req.body;
 
   // 🔹 Check if already applied
-  const exists = await AppliedJob.findOne({ jobId, userId, resumeId });
+  const exists = await AppliedJob.findOne({ jobId, userId });
   if (exists) {
     throw new AppError(httpStatus.CONFLICT, "Already applied to this job");
   }
@@ -85,6 +86,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     (req: any) => req.requirement === "noticePeriod"
   );
 
+<<<<<<< HEAD
   if (noticePeriodReq) {
     // convert both to string/boolean properly before comparing
     const resumeAvailable = resume?.immediatelyAvailable?.toString();
@@ -92,7 +94,17 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     if (noticePeriodReq.status === resumeAvailable) {
       throw new AppError(httpStatus.BAD_REQUEST, "Requirement not matched");
     }
+=======
+if (noticePeriodReq) {
+  // convert both to string/boolean properly before comparing
+  const resumeAvailable = resume?.immediatelyAvailable;
+  const check = noticePeriodReq.status === "Immediate" ? true: false
+
+  if (check == resumeAvailable) {
+    throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
+>>>>>>> ec4be2fc57288d291566de96d94d35add4fa9967
   }
+}
 
   // 🔹 Create application
   const application = await AppliedJob.create({
@@ -116,9 +128,11 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     type: "job_application",
     id: application._id,
   });
+  const count = await Notification.countDocuments({to: job.userId, isViewed: false})
   // Emit socket event
   io.to(job.userId.toString()).emit("newNotification", {
     message: `A new candidate has applied for your job "${job.title}".`,
+    count: count
   });
 
   // ✅ Notify the Applicant
@@ -128,10 +142,12 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     type: "job_application_confirmation",
     id: application._id,
   });
+  const count1 = await Notification.countDocuments({to: userId, isViewed: false})
 
   // Emit socket event
   io.to(userId).emit("newNotification", {
     message: `You have successfully applied for the job "${job.title}".`,
+    count: count1
   });
 
   // ✅ Send email to Applicant
@@ -186,10 +202,20 @@ export const getApplicationsByJob = catchAsync(
       .limit(limit)
       .sort({ createdAt: -1 }); // optional: newest first
 
+          const applicationsWithResume = await Promise.all(
+      applications.map(async (app) => {
+        const resume = await CreateResume.findOne({ userId: app.userId._id });
+        return {
+          ...app.toObject(),
+          resume,
+        };
+      })
+    );
+
     res.status(httpStatus.OK).json({
       success: true,
       message: "Applications fetched by job",
-      data: applications,
+      data: applicationsWithResume,
       pagination: {
         total,
         page,
@@ -368,8 +394,9 @@ export const updateApplicationStatus = catchAsync(
       type: "job_application_status",
       id: updated._id,
     });
+  const count = await Notification.countDocuments({to: updated.userId, isViewed: false})
     // Emit socket event
-    io.to(updated.userId.toString()).emit("newNotification", notification);
+    io.to(updated.userId.toString()).emit("newNotification", {notification, count});
 
     res.status(httpStatus.OK).json({
       success: true,

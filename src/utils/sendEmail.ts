@@ -8,17 +8,17 @@ export const sendEmail = async (
 ): Promise<void> => {
   try {
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
+      host: "mail.evpitch.com",
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.APP_USER || 'tahsin.bdcalling@gmail.com',
-        pass: process.env.APP_PASS || 'lcnt cxiw pcui vikv',
+        user: process.env.APP_USER,
+        pass: 'iUv5,dpY(Qp##3_#',
       },
     })
 
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || 'nm.bdcalling@gmail.com',
+      from: process.env.EMAIL_FROM,
       to,
       subject: subject || 'No subject',
       html,
