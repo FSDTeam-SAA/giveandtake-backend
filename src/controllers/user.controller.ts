@@ -1082,6 +1082,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
       let photoUrl: string | null = null;
       let name1 = null;
       let position = null;
+      let avaiable
 
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select(
@@ -1093,6 +1094,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           .select("position");
         position = experience?.position || null;
         photoUrl = resume?.photo || null;
+        avaiable = resume.immediatelyAvailable
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({
           userId: user._id,
@@ -1117,6 +1119,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           url: photoUrl || user.avatar?.url || null,
         },
         position: position,
+        avaiable,
       };
     })
   );
