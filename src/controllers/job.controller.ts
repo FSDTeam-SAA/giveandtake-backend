@@ -361,7 +361,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
   if (skills.length > 0)
     matchConditions.push({ responsibilities: { $in: skills } })
-    matchConditions.push({ description: { $regex: new RegExp(skills, 'i') } })
+    matchConditions.push({ description: { $regex: new RegExp(skills.join('|'), 'i') } })
 
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId })
   
