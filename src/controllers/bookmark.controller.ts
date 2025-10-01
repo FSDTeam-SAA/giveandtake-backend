@@ -63,7 +63,13 @@ export const getBookmarksByUser = catchAsync(
 
     const bookmarks = await Bookmark.find({ userId })
       .sort({ createdAt: -1 })
-      .populate("jobId")
+      .populate({
+        path: 'jobId',
+        populate: [
+          { path: 'companyId' },
+          { path: 'recruiterId' },
+        ],
+      })
       .skip(skip)
       .limit(limit);
 
