@@ -10,7 +10,7 @@ export const sendEmail = async (
     const transporter = nodemailer.createTransport({
       host: "mail.evpitch.com",
       port: 465,
-      secure: false,
+      secure: true,
       auth: {
         user: process.env.APP_USER,
         pass: process.env.APP_PASSWORD,

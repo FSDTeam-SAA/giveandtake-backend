@@ -1076,25 +1076,23 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
     "name avatar address phoneNum role"
   );
 
-  // Enrich users with photo depending on role
+  // Enrich users with photo and immediatelyAvailable (for candidates)
   const enrichedUsers = await Promise.all(
     users.map(async (user) => {
       let photoUrl: string | null = null;
       let name1 = null;
-      let position = null;
-      let avaiable
+      let immediatelyAvailable: boolean | null = null;
 
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select(
-          "photo"
+          "photo immediatelyAvailable"
         );
         if (!resume) return null;
-        const experience = await Experience.findOne({ userId: user._id })
-          .sort({ createdAt: -1 })
-          .select("position");
-        position = experience?.position || null;
         photoUrl = resume?.photo || null;
-        avaiable = resume.immediatelyAvailable
+        immediatelyAvailable =
+          typeof resume.immediatelyAvailable === "boolean"
+            ? resume.immediatelyAvailable
+            : null;
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({
           userId: user._id,
@@ -1110,7 +1108,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
         name1 = company?.cname;
       }
 
-      // safely assign to avatar.url
+      // safely assign to avatar.url and include immediatelyAvailable (only meaningful for candidates)
       return {
         ...user.toObject(),
         name: name1 ? name1 : user.name,
@@ -1118,8 +1116,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           ...user.avatar,
           url: photoUrl || user.avatar?.url || null,
         },
-        position: position,
-        avaiable,
+        immediatelyAvailable,
       };
     })
   );

@@ -1,23 +1,23 @@
-import { Request, Response } from 'express'
-import catchAsync from '../utils/catchAsync'
-import httpStatus from 'http-status'
-import AppError from '../errors/AppError'
-import { Job } from '../models/job.model'
-import { getPaginationParams, buildMetaPagination } from '../utils/pagination'
-import sendResponse from '../utils/sendResponse'
-import { CreateResume } from '../models/createResume.model'
-import { checkIfUserCanPostJob } from '../helper/canPostJob'
-import { User } from '../models/user.model'
-import { RecruiterAccount } from '../models/recruiterAccount.model'
-import { Company } from '../models/company.model'
-import { AppliedJob } from '../models/appliedJob.model'
-import { sendEmail } from '../utils/sendEmail'
-import { io } from '../server'
-import { createNotification } from '../sockets/notification.service'
-import mongoose from 'mongoose'
-import { Notification } from '../models/notification.model'
-import { Following } from '../models/following.model'
-import { compileFunction } from 'vm'
+import { Request, Response } from "express";
+import catchAsync from "../utils/catchAsync";
+import httpStatus from "http-status";
+import AppError from "../errors/AppError";
+import { Job } from "../models/job.model";
+import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
+import sendResponse from "../utils/sendResponse";
+import { CreateResume } from "../models/createResume.model";
+import { checkIfUserCanPostJob } from "../helper/canPostJob";
+import { User } from "../models/user.model";
+import { RecruiterAccount } from "../models/recruiterAccount.model";
+import { Company } from "../models/company.model";
+import { AppliedJob } from "../models/appliedJob.model";
+import { sendEmail } from "../utils/sendEmail";
+import { io } from "../server";
+import { createNotification } from "../sockets/notification.service";
+import mongoose from "mongoose";
+import { Notification } from "../models/notification.model";
+import { Following } from "../models/following.model";
+import { compileFunction } from "vm";
 
 /*******************
  * // CREATE A JOB *
@@ -50,49 +50,48 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     location_Type,
     name,
     role,
-  } = req.body
+  } = req.body;
 
   if (!userId || !title || !description) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      'Please fill in all required fields'
-    )
+      "Please fill in all required fields"
+    );
   }
 
   // CHECK THE USER
-  const user = await User.findById(userId)
+  const user = await User.findById(userId);
 
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+    throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
 
   // ROLE BASE APPROVE LOGIC
-  let jobApprove: 'pending' | 'approved' | 'denied' = 'approved'
-  let companyId
-  let recruiterId
+  let jobApprove: "pending" | "approved" | "denied" = "approved";
+  let companyId;
+  let recruiterId;
 
-  if (user.role === 'company') {
-    jobApprove = 'approved'
-    const a = await Company.findOne({ userId: userId })
+  if (user.role === "company") {
+    jobApprove = "approved";
+    const a = await Company.findOne({ userId: userId });
     if (a) {
-      companyId = a._id
+      companyId = a._id;
     }
-  } else if (user.role === 'recruiter') {
-    jobApprove = 'approved'
-    const a = await RecruiterAccount.findOne({ userId: userId })
+  } else if (user.role === "recruiter") {
+    jobApprove = "approved";
+    const a = await RecruiterAccount.findOne({ userId: userId });
     if (a) {
       if (a.companyId) {
-        companyId = a.companyId
-      }
-      else {
-        recruiterId = a._id
+        companyId = a.companyId;
+      } else {
+        recruiterId = a._id;
       }
     }
   } else {
     throw new AppError(
       httpStatus.FORBIDDEN,
-      'You are not authorized to create a job'
-    )
+      "You are not authorized to create a job"
+    );
   }
 
   // await checkIfUserCanPostJob(userId)
@@ -127,12 +126,11 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     career_Stage,
     name,
     role,
-  })
+  });
 
-  await job.save()
+  await job.save();
 
-
-    // 🔹 Find followers
+  // 🔹 Find followers
   let followers: any[] = [];
   if (companyId) {
     followers = await Following.find({ companyId });
@@ -152,317 +150,355 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
     // 🔹 Emit via socket
     saved.forEach(async (n) => {
-        const count = await Notification.countDocuments({to: n.userId, isViewed: false})
-        io.to(n.userId.toString()).emit("newNotification", {n,compileFunction});
+      const count = await Notification.countDocuments({
+        to: n.userId,
+        isViewed: false,
+      });
+      io.to(n.userId.toString()).emit("newNotification", {
+        n,
+        compileFunction,
+      });
     });
   }
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: 'Job created successfully',
+    message: "Job created successfully",
     data: job,
-  })
-})
+  });
+});
 
 /********************************************
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title, location, jobCategoryId } = req.query
+  const { title, location, jobCategoryId } = req.query;
+  console.log(title);
 
-  const filter: any = {}
+  const filter: any = {};
+  const andConditions: any[] = [];
+
+  // Title or description
   if (title) {
-  filter.$or = [
-    { title: { $regex: title, $options: "i" } },
-    { description: { $regex: title, $options: "i" } }
-  ];
-}
-  if (location) filter.location = { $regex: location, $options: 'i' }
-  if (jobCategoryId) filter.jobCategoryId = jobCategoryId // <-- filter by category
+    andConditions.push({
+      $or: [
+        { title: { $regex: title, $options: "i" } },
+        { description: { $regex: title, $options: "i" } },
+      ],
+    });
+  }
 
-  // Ensure publishDate is null OR publishDate <= today
-  filter.$or = [
-    { publishDate: { $exists: false } },
-    { publishDate: null },
-    { publishDate: { $lte: new Date() } },
-  ]
+  // Location
+  if (location) {
+    andConditions.push({ location: { $regex: location, $options: "i" } });
+  }
 
-  const { page, limit, skip } = getPaginationParams(req.query)
+  // Category
+  if (jobCategoryId) {
+    andConditions.push({ jobCategoryId });
+  }
+
+  // Publish date condition
+  andConditions.push({
+    $or: [
+      { publishDate: { $exists: false } },
+      { publishDate: null },
+      { publishDate: { $lte: new Date() } },
+    ],
+  });
+
+  // Final filter
+  if (andConditions.length > 0) {
+    filter.$and = andConditions;
+  }
+
+  console.log(JSON.stringify(filter, null, 2));
+
+  const { page, limit, skip } = getPaginationParams(req.query);
 
   const totalJobs = await Job.countDocuments({
     ...filter,
     arcrivedJob: false,
-    jobApprove: 'approved',
+    jobApprove: "approved",
     adminApprove: true,
-  })
+  });
 
   const jobs = await Job.find({
     ...filter,
     arcrivedJob: false,
     adminApprove: true,
-    jobApprove: 'approved',
+    jobApprove: "approved",
   })
     .skip(skip)
     .limit(limit)
     .sort({ createdAt: -1 })
-    .populate('companyId recruiterId')
+    .populate("companyId recruiterId");
 
-  const meta = buildMetaPagination(totalJobs, page, limit)
+  const meta = buildMetaPagination(totalJobs, page, limit);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Jobs fetched successfully',
+    message: "Jobs fetched successfully",
     data: { meta, jobs },
-  })
-})
+  });
+});
 
 /*******************
  * // UPDATE A JOB *
  *******************/
 
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params
+  const { id } = req.params;
 
-
-  const job = await Job.findById(id).populate("userId")
+  const job = await Job.findById(id).populate("userId");
   if (!job) {
-    throw new AppError(400, "job not found")
+    throw new AppError(400, "job not found");
   }
-  const user  = job.userId as any
+  const user = job.userId as any;
 
   if (req.body.adminApprove) {
     // const recruiterName = (job.userId as any)?.name || 'Recruiter'
 
-    const emailSubject = `Job Post Approved By Admin`
+    const emailSubject = `Job Post Approved By Admin`;
     const emailBody = `
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Confirmation</h2>
-        <p>Dear ${user?.name || 'Company'},</p> 
+        <p>Dear ${user?.name || "Company"},</p> 
         <p>Your post has been approved by Admin and will be posted at your scheduled time’,</br> Best regards, EVP Admin</p>
       </div>
-    `
+    `;
 
-    await sendEmail(user?.email, emailSubject, emailBody)
+    await sendEmail(user?.email, emailSubject, emailBody);
     let notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
-      message: 'Job Post Approved By Admin',
-      type: 'job_application_status',
+      message: "Job Post Approved By Admin",
+      type: "job_application_status",
       id: job._id as mongoose.Types.ObjectId,
-    })
-      const count = await Notification.countDocuments({to: job.userId._id, isViewed: false})
+    });
+    const count = await Notification.countDocuments({
+      to: job.userId._id,
+      isViewed: false,
+    });
     // Emit socket event
-    io.to(job.userId._id.toString()).emit('newNotification', {notification,count})
+    io.to(job.userId._id.toString()).emit("newNotification", {
+      notification,
+      count,
+    });
   } else {
-
-    const emailSubject = `Job Post Denied By Admin`
+    const emailSubject = `Job Post Denied By Admin`;
     const emailBody = `
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Denied</h2>
-        <p>Dear ${user?.name || 'Company'},</p>  
+        <p>Dear ${user?.name || "Company"},</p>  
         <p>‘Please reach out to Admin for support regarding your job post’ on Info@evp.com</p>
       </div>
-    `
+    `;
 
-    await sendEmail(user?.email, emailSubject, emailBody)
+    await sendEmail(user?.email, emailSubject, emailBody);
 
-        let notification = await createNotification({
+    let notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
-      message: 'Job Post Denied By Admin',
-      type: 'job_application_status',
+      message: "Job Post Denied By Admin",
+      type: "job_application_status",
       id: job._id as mongoose.Types.ObjectId,
-    })
-      const count = await Notification.countDocuments({to: job.userId._id, isViewed: false})
+    });
+    const count = await Notification.countDocuments({
+      to: job.userId._id,
+      isViewed: false,
+    });
 
     // Emit socket event
-    io.to(job.userId._id.toString()).emit('newNotification', {notification,count})
-
+    io.to(job.userId._id.toString()).emit("newNotification", {
+      notification,
+      count,
+    });
   }
 
-  const updated = await Job.findByIdAndUpdate(id, req.body, { new: true })
+  const updated = await Job.findByIdAndUpdate(id, req.body, { new: true });
 
-  if (!updated) throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+  if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Job updated successfully',
+    message: "Job updated successfully",
     data: updated,
-  })
-})
+  });
+});
 
 /*******************
  * // DELETE A JOB *
  *******************/
 
 export const deleteJob = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params
-  const deleted = await Job.findByIdAndDelete(id)
+  const { id } = req.params;
+  const deleted = await Job.findByIdAndDelete(id);
 
-  if (!deleted) throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+  if (!deleted) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Job deleted successfully',
+    message: "Job deleted successfully",
     data: deleted,
-  })
-})
+  });
+});
 
 /***************************
  *    // GET SINGLE JOB    *
  * // GET SINGLE JOB BY ID *
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params
-  const job = await Job.findById(id).populate('companyId recruiterId')
+  const { id } = req.params;
+  const job = await Job.findById(id).populate("companyId recruiterId");
 
   if (!job) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+    throw new AppError(httpStatus.NOT_FOUND, "Job not found");
   }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Job retrieved successfully',
+    message: "Job retrieved successfully",
     data: job,
-  })
-})
+  });
+});
 
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   // const { userId } = req.query
-  const userId = req.user?._id
+  const userId = req.user?._id;
 
   if (!userId) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'userId is required')
+    throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
   }
 
-  const resume = await CreateResume.findOne({ userId }).lean()
+  const resume = await CreateResume.findOne({ userId }).lean();
 
   if (!resume) {
     sendResponse(res, {
       statusCode: 200,
       success: true,
-      message: 'No resume found for the User',
+      message: "No resume found for the User",
       data: { exactMatches: [], partialMatches: [] },
-    })
+    });
   }
 
-  const title = resume?.title
-  const country = resume?.country
-  const skills = resume?.skills || []
-  const jobCategoryId = resume?.jobCategoryId
+  const title = resume?.title;
+  const country = resume?.country;
+  const skills = resume?.skills || [];
+  const jobCategoryId = resume?.jobCategoryId;
 
   // const { title, country, skills = [], jobCategoryId } = resume
 
-  const matchConditions = []
+  const matchConditions = [];
 
-  if (title) matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
+  if (title)
+    matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
   if (country)
-    matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
-  if (skills.length > 0){
-    matchConditions.push({ responsibilities: { $in: skills } })
-      matchConditions.push({
-    description: { $regex: new RegExp(skills.join('|'), 'i') }
-  })
+    matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
+  if (skills.length > 0) {
+    matchConditions.push({ responsibilities: { $in: skills } });
+    matchConditions.push({
+      description: { $regex: new RegExp(skills.join("|"), "i") },
+    });
   }
 
-  if (jobCategoryId as string) matchConditions.push({ jobCategoryId })
-  
+  if (jobCategoryId as string) matchConditions.push({ jobCategoryId });
 
-  const jobs = await Job.find({ $or: matchConditions, status: 'active' })
-    .populate('companyId recruiterId')
+  const jobs = await Job.find({ $or: matchConditions, status: "active" })
+    .populate("companyId recruiterId")
     .limit(50)
-    .lean()
+    .lean();
 
-  const exactMatches = [] as any[]
-  const partialMatches = [] as any[]
+  const exactMatches = [] as any[];
+  const partialMatches = [] as any[];
 
   jobs.forEach((job) => {
-  let score = 0;
+    let score = 0;
 
-  const jobTitle = job.title?.toLowerCase() || '';
-  const jobLocation = job.location?.toLowerCase() || '';
-  const jobResponsibilities = job.responsibilities || [];
-  const jobDescription = job.description?.toLowerCase() || '';
+    const jobTitle = job.title?.toLowerCase() || "";
+    const jobLocation = job.location?.toLowerCase() || "";
+    const jobResponsibilities = job.responsibilities || [];
+    const jobDescription = job.description?.toLowerCase() || "";
 
-  if (title && jobTitle.includes(title.toLowerCase())) score += 3;
-  if (country && jobLocation.includes(country.toLowerCase())) score += 2;
+    if (title && jobTitle.includes(title.toLowerCase())) score += 3;
+    if (country && jobLocation.includes(country.toLowerCase())) score += 2;
 
-  const matchedSkillsInResponsibilities = skills.filter((skill :any) =>
-    jobResponsibilities.includes(skill)
-  );
+    const matchedSkillsInResponsibilities = skills.filter((skill: any) =>
+      jobResponsibilities.includes(skill)
+    );
 
-  const matchedSkillsInDescription = skills.filter((skill:any) =>
-    jobDescription.includes(skill.toLowerCase())
-  );
+    const matchedSkillsInDescription = skills.filter((skill: any) =>
+      jobDescription.includes(skill.toLowerCase())
+    );
 
-  if (matchedSkillsInResponsibilities.length > 0) score += 1;
-  if (matchedSkillsInDescription.length > 0) score += 1; // ✅ new scoring rule
+    if (matchedSkillsInResponsibilities.length > 0) score += 1;
+    if (matchedSkillsInDescription.length > 0) score += 1; // ✅ new scoring rule
 
-  if (score >= 5) {
-    exactMatches.push({ job, score });
-  } else {
-    partialMatches.push({ job, score });
-  }
-});
+    if (score >= 5) {
+      exactMatches.push({ job, score });
+    } else {
+      partialMatches.push({ job, score });
+    }
+  });
 
   // Sort by score (highest first)
-  exactMatches.sort((a, b) => b.score - a.score)
-  partialMatches.sort((a, b) => b.score - a.score)
+  exactMatches.sort((a, b) => b.score - a.score);
+  partialMatches.sort((a, b) => b.score - a.score);
 
   if (exactMatches.length === 0 && partialMatches.length === 0) {
-    const fallbackJobs = await Job.find({ status: 'active' })
-    .populate('companyId recruiterId')
-    .limit(5)
+    const fallbackJobs = await Job.find({ status: "active" })
+      .populate("companyId recruiterId")
+      .limit(5);
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'No exact or partial matches found.',
+      message: "No exact or partial matches found.",
       data: {
         exactMatches,
         partialMatches,
         fallbackJobs,
       },
-    })
+    });
   }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Recommended jobs fetched successfully',
+    message: "Recommended jobs fetched successfully",
     data: {
       exactMatches,
       partialMatches,
     },
-  })
-})
+  });
+});
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
 export const getArchivedJobs = catchAsync(async (req, res) => {
-  const userId = req.user?._id
-  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
+  const userId = req.user?._id;
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
   const archivedJobs = await Job.find({ userId, arcrivedJob: true }).sort({
     createAt: -1,
-  })
+  });
 
   if (!archivedJobs)
-    throw new AppError(httpStatus.NOT_FOUND, 'No archived jobs found')
+    throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Archived jobs fetched successfully',
+    message: "Archived jobs fetched successfully",
     data: archivedJobs,
-  })
-})
+  });
+});
 
 /************************************************
  * FETCH JOBS THAT RICRUTER AND COMPANY CREATED *
@@ -553,11 +589,11 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 // })
 
 export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
-  const userId = req.user?._id
-  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
+  const userId = req.user?._id;
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
 
   // Get the company document for this user, if any
-  const company = await Company.findOne({ userId })
+  const company = await Company.findOne({ userId });
 
   // Match jobs where:
   const Jobs = await Job.find({
@@ -567,34 +603,36 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
     ],
     arcrivedJob: false,
-  }).sort({ createdAt: -1 })
+  }).sort({ createdAt: -1 });
 
   if (!Jobs.length) {
     return sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'No jobs found',
+      message: "No jobs found",
       data: [],
-    })
+    });
   }
 
-  const today = new Date()
+  const today = new Date();
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
+      const applicantCount = await AppliedJob.countDocuments({
+        jobId: job._id,
+      });
 
-      let derivedStatus = 'Pending'
+      let derivedStatus = "Pending";
 
       if (job.publishDate && job.adminApprove) {
         if (job.publishDate <= today) {
-          derivedStatus = 'Live'
+          derivedStatus = "Live";
         } else {
-          derivedStatus = 'Scheduled (Admin Approved)'
+          derivedStatus = "Scheduled (Admin Approved)";
         }
       } else if (job.publishDate && !job.adminApprove) {
         if (job.publishDate > today) {
-          derivedStatus = 'Scheduled'
+          derivedStatus = "Scheduled";
         }
       }
 
@@ -602,43 +640,41 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
         ...job.toObject(),
         applicantCount,
         derivedStatus, // 👈 new status field
-      }
+      };
     })
-  )
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Jobs fetched successfully',
+    message: "Jobs fetched successfully",
     data: jobsWithApplicants,
-  })
-})
-
-
+  });
+});
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
-  const userId = req.params.id
+  const userId = req.params.id;
   const Jobs = await Job.find({
     companyId: userId,
     arcrivedJob: false,
-    jobApprove: 'approved',
+    jobApprove: "approved",
   })
     .sort({
       createdAt: -1,
     })
-    .populate('companyId')
+    .populate("companyId");
 
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'jobs fetched successfully',
+    message: "jobs fetched successfully",
     data: Jobs,
-  })
-})
+  });
+});
 export const getRicruitercompanyJobs3 = catchAsync(async (req, res) => {
-  const userId = req.params.id
+  const userId = req.params.id;
   const Jobs = await Job.find({
     recruiterId: userId,
     arcrivedJob: false,
@@ -646,20 +682,20 @@ export const getRicruitercompanyJobs3 = catchAsync(async (req, res) => {
     .sort({
       createdAt: -1,
     })
-    .populate('companyId')
+    .populate("companyId");
 
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'jobs fetched successfully',
+    message: "jobs fetched successfully",
     data: Jobs,
-  })
-})
+  });
+});
 
 export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
-  const userId = req.params.id
+  const userId = req.params.id;
   const Jobs = await Job.find({
     companyId: userId,
     arcrivedJob: false,
@@ -667,35 +703,37 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
     .sort({
       createdAt: -1,
     })
-    .populate('companyId recruiterId')
+    .populate("companyId recruiterId");
 
   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, 'No jobs found')
   if (!Jobs.length) {
     return sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'No jobs found',
+      message: "No jobs found",
       data: [],
-    })
+    });
   }
 
-  const today = new Date()
+  const today = new Date();
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
+      const applicantCount = await AppliedJob.countDocuments({
+        jobId: job._id,
+      });
 
-      let derivedStatus = 'Pending'
+      let derivedStatus = "Pending";
 
       if (job.publishDate && job.adminApprove) {
         if (job.publishDate <= today) {
-          derivedStatus = 'Live'
+          derivedStatus = "Live";
         } else {
-          derivedStatus = 'Scheduled (Admin Approved)'
+          derivedStatus = "Scheduled (Admin Approved)";
         }
       } else if (job.publishDate && !job.adminApprove) {
         if (job.publishDate > today) {
-          derivedStatus = 'Scheduled'
+          derivedStatus = "Scheduled";
         }
       }
 
@@ -703,95 +741,95 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
         ...job.toObject(),
         applicantCount,
         derivedStatus, // 👈 new status field
-      }
+      };
     })
-  )
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'jobs fetched successfully',
+    message: "jobs fetched successfully",
     data: jobsWithApplicants,
-  })
-})
+  });
+});
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
 export const getPendingJobsForCompany = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id
+    const userId = req.user?._id;
     // ✅ Extract pagination params (default: page=1, limit=10)
-    const page = parseInt(req.query.page as string) || 1
-    const limit = parseInt(req.query.limit as string) || 10
-    const skip = (page - 1) * limit
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-    const company = await Company.findOne({ userId: userId })
-    const companyId = company?._id
-    console.log(1, companyId)
+    const company = await Company.findOne({ userId: userId });
+    const companyId = company?._id;
+    console.log(1, companyId);
 
     if (!companyId) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Company ID is required')
+      throw new AppError(httpStatus.BAD_REQUEST, "Company ID is required");
     }
 
     // FIND ALL RECRUITER CONNECTED TO THE COMPANY
     const recruiters = await RecruiterAccount.find({ companyId }).select(
-      'userId'
-    )
+      "userId"
+    );
 
-    console.log('recruiter', recruiters)
+    console.log("recruiter", recruiters);
 
     if (!recruiters || recruiters.length === 0) {
       sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: 'No recruiters found for this company',
+        message: "No recruiters found for this company",
         data: [],
-      })
-      return
+      });
+      return;
     }
 
     // EXTRACT RECRUITER USER IDs
-    const recruiterUserIds = recruiters.map((recruiter) => recruiter.userId)
-    console.log('recruiterUserIds', recruiterUserIds)
+    const recruiterUserIds = recruiters.map((recruiter) => recruiter.userId);
+    console.log("recruiterUserIds", recruiterUserIds);
 
     // FIND ALL pending JOBS POSTED BY THESE RECRUITERS
     const pendingJobs = await Job.find({
       userId: { $in: recruiterUserIds },
     })
       .sort({ createdAt: -1 })
-      .populate('userId', 'name role avatar')
-      .populate('jobCategoryId')
+      .populate("userId", "name role avatar")
+      .populate("jobCategoryId")
       .skip(skip)
-      .limit(limit)
+      .limit(limit);
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
-      message: 'Pending jobs fetched successfully',
+      message: "Pending jobs fetched successfully",
       data: pendingJobs,
-    })
+    });
   }
-)
+);
 
 // Api for fetch jobs that need to be admin approvals
 export const adminApproveJobs = catchAsync(async (req, res) => {
-  const { page, limit, skip } = getPaginationParams(req.query)
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const jobs = await Job.find({ jobApprove: 'approved' })
-    .populate('companyId recruiterId')
+  const jobs = await Job.find({ jobApprove: "approved" })
+    .populate("companyId recruiterId")
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit)
+    .limit(limit);
 
-  const total = await Job.countDocuments({})
+  const total = await Job.countDocuments({});
 
-  const meta = buildMetaPagination(total, page, limit)
+  const meta = buildMetaPagination(total, page, limit);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Pending jobs fetched successfully',
+    message: "Pending jobs fetched successfully",
     data: { jobs, meta },
-  })
-})
+  });
+});
