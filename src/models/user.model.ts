@@ -10,7 +10,7 @@ const userSchema: Schema = new Schema<IUser>(
     password: { type: String, select: 0, required: true },
     role: {
       type: String,
-      enum: ['candidate', 'recruiter', 'company', 'admin'],
+      enum: ['candidate', 'recruiter', 'company', 'admin','super-admin'],
       default: 'candidate',
     },
     avatar: {

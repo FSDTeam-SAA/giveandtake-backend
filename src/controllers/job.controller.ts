@@ -101,7 +101,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     userId,
     companyId,
     recruiterId,
-    title,
+    title: role,
     description,
     companyName,
     salaryRange,
@@ -172,7 +172,12 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   const { title, location, jobCategoryId } = req.query
 
   const filter: any = {}
-  if (title) filter.title = { $regex: title, $options: 'i' }
+  if (title) {
+  filter.$or = [
+    { title: { $regex: title, $options: "i" } },
+    { description: { $regex: title, $options: "i" } }
+  ];
+}
   if (location) filter.location = { $regex: location, $options: 'i' }
   if (jobCategoryId) filter.jobCategoryId = jobCategoryId // <-- filter by category
 
@@ -359,9 +364,12 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   if (title) matchConditions.push({ title: { $regex: new RegExp(title, 'i') } })
   if (country)
     matchConditions.push({ location: { $regex: new RegExp(country, 'i') } })
-  if (skills.length > 0)
+  if (skills.length > 0){
     matchConditions.push({ responsibilities: { $in: skills } })
-    matchConditions.push({ description: { $regex: new RegExp(skills.join('|'), 'i') } })
+      matchConditions.push({
+    description: { $regex: new RegExp(skills.join('|'), 'i') }
+  })
+  }
 
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId })
   
