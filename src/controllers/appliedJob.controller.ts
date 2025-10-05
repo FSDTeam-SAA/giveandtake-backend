@@ -81,6 +81,10 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   }
   const resume = await CreateResume.findOne({ userId });
 
+  if(!resume){
+    throw new AppError(404, "You need to Create Your Resume Before Apply the job")
+  }
+
   // 🔹 Find the requirement with key "noticePeriod"
   const noticePeriodReq = job.applicationRequirement.find(
     (req: any) => req.requirement === "noticePeriod"
