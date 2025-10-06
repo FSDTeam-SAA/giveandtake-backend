@@ -383,7 +383,7 @@ export const getDefaultSecurityQuestions = catchAsync(async (_req, res) => {
   res.status(200).json({
     success: true,
     message: "Default security questions fetched successfully",
-    date: defaultSecurityQuestions,
+    data: defaultSecurityQuestions,
   });
 });
 
