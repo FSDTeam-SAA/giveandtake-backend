@@ -23,6 +23,7 @@ import {
   getAllCompanies,
   softDeactivateUser,
   checkSubmitSecurityAnswers,
+  otpVerifyResetPassword,
 } from "../controllers/user.controller";
 import { protect } from "../middlewares/auth.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
@@ -32,6 +33,7 @@ const router = express.Router();
 router.post("/user/register", register);
 router.post("/user/login", login);
 router.post("/user/verify", verifyEmail);
+router.post("/user/verify-reset-otp", otpVerifyResetPassword);
 router.post("/user/forget", forgetPassword),
   router.post("/user/reset-password", resetPassword);
 router.post("/user/change-password", protect, changePassword);
