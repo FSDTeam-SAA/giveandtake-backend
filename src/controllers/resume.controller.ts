@@ -5,6 +5,7 @@ import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import path from 'path'
+import { uploadHLSFilesToS3 } from '../services/s3.service'
 
 /***********************
  * CREATE RESUME ENTRY *
@@ -32,6 +33,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   } else {
     // Production → use SERVER_URL
     fileUrl = `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`;
+    fileUrl =  uploadHLSFilesToS3 (path.resolve("uploads/resumes", file.filename), "uploads")
   }
 
   return {
