@@ -874,6 +874,25 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
     filteredData.avatar = {
       url: uploadResult?.secure_url,
     };
+    if(existingUser?.role === 'candidate'){
+      const resume = await CreateResume.findOne({userId:id})
+      if(resume){
+        resume.photo = uploadResult?.secure_url!
+        await resume.save()
+      }
+    }else if(existingUser?.role === 'recruiter'){
+      const resume = await RecruiterAccount.findOne({userId:id})
+      if(resume){
+        resume.photo = uploadResult?.secure_url!
+        await resume.save()
+      }
+    }else if(existingUser?.role ===  'company'){
+      const resume = await Company.findOne({userId:id})
+      if(resume){
+        resume.clogo = uploadResult?.secure_url!
+        await resume.save()
+      }
+    }
 
     // Delete local file
     fs.unlinkSync(photo.path);

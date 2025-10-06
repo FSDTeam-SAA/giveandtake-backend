@@ -100,7 +100,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     userId,
     companyId,
     recruiterId,
-    title: role,
+    title,
     description,
     companyName,
     salaryRange,
