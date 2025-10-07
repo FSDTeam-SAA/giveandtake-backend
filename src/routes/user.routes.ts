@@ -24,6 +24,8 @@ import {
   softDeactivateUser,
   checkSubmitSecurityAnswers,
   otpVerifyResetPassword,
+  getAllUser,
+  deleteUser,
 } from "../controllers/user.controller";
 import { protect } from "../middlewares/auth.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
@@ -50,6 +52,8 @@ router.post("/verify-security-answers", verifySecurityAnswers);
 router.post("/security-answers/reset-password", securityResetPassword);
 
 router.get("/all/user", getAllUserEmails);
+router.get("/all/all-user", getAllUser);
+router.delete("/delete/user/:id", deleteUser);
 router.get("/all/companies", getAllCompanies);
 
 router.get("/user/single", protect, getUserById);

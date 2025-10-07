@@ -735,6 +735,8 @@ export const getAllCompanies = catchAsync(
 // });
 
 import { Following } from "../models/following.model"; // adjust path if needed
+import { AwardsAndHonor } from "../models/awardsAndHonor.model";
+import { ElevatorPitch } from "../models/elevatorPitch.model";
 
 export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const id = req.user?._id;
@@ -1175,3 +1177,40 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
     data: enrichedUsers,
   });
 });
+
+
+export const getAllUser = catchAsync(async(req,res)=>{
+  const user = await User.find()
+  sendResponse(res,{
+    statusCode:200,
+    success: true,
+    message: "All User Fetched",
+    data: user
+  })
+})
+
+
+export const deleteUser = catchAsync(async(req,res)=>{
+  const id = req.params.id
+
+  const user = await User.findById(id)
+
+  if(!user){
+    throw  new AppError(400, "User Not Found")
+  }
+  if(user.role === "candidate"){
+    await CreateResume.findOneAndDelete({userId: user._id})
+    await Experience.deleteMany({userId: user._id})
+    await AwardsAndHonor.deleteMany({userId: user._id})
+    await ElevatorPitch.findOneAndDelete({userId: user._id})
+  }
+
+
+  const delet = await User.findByIdAndDelete(id)
+  sendResponse(res,{
+    statusCode: 200,
+    success: true,
+    message: "User Delete Successful",
+    data: ''
+  })
+})
