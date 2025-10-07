@@ -5,7 +5,7 @@ import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import path from 'path'
-import { uploadHLSFilesToS3 } from '../services/s3.service'
+import { uploadFileToS3, uploadHLSFilesToS3 } from '../services/s3.service'
 
 /***********************
  * CREATE RESUME ENTRY *
@@ -23,25 +23,22 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   //   url: `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`,
   //   uploadedAt: new Date(),
   // }))
-  const fileData = req.files.map((file: any) => {
-  let fileUrl;
+  const fileData = await Promise.all(
+    req.files.map(async (file: any) => {
+      const localPath = path.resolve("uploads/", file.filename);
 
-  if (process.env.NODE_ENV === "development") {
-    console.log("vgbdsrthnj")
-    // Absolute local path on your PC
-    fileUrl = path.resolve("uploads/resumes", file.filename);
-  } else {
-    // Production → use SERVER_URL
-    fileUrl = `${process.env.SERVER_URL}/uploads/resumes/${file.filename}`;
-    fileUrl =  uploadHLSFilesToS3 (path.resolve("uploads/resumes", file.filename), "uploads")
-  }
+      // Upload to S3 and get public + signed URL
+      const { fileUrl } = await uploadFileToS3(localPath, "uploads/");
 
-  return {
-    filename: file.originalname,
-    url: fileUrl,
-    uploadedAt: new Date(),
-  };
-});
+      return {
+        filename: file.originalname,
+        url: fileUrl, // public URL (use this for download)
+        uploadedAt: new Date(),
+      };
+    })
+  );
+
+  console.log(fileData)
 
  await Resume.deleteMany({userId})
 

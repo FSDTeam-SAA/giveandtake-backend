@@ -83,3 +83,36 @@ const getContentType = (filename: string): string => {
   };
   return contentTypes[ext] || "application/octet-stream";
 };
+
+export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
+  const fileContent = fs.readFileSync(localFilePath);
+  const fileName = path.basename(localFilePath);
+  const key = `${folder}/${Date.now()}-${fileName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: key,
+    Body: fileContent,
+    ContentType: "application/octet-stream",
+  });
+
+  await s3Client.send(command);
+
+  // Delete file from local after upload
+  fs.unlinkSync(localFilePath);
+
+  // Generate signed URL (valid for 7 days)
+  const signedUrl = await getSignedUrl(
+    s3Client,
+    new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME!,
+      Key: key,
+    }),
+    { expiresIn: 7 * 24 * 60 * 60 } // 7 days
+  );
+
+  // Return permanent S3 URL (not signed, public access if your bucket allows)
+  const fileUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+  return { key, fileUrl, signedUrl };
+};
