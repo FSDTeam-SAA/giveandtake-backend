@@ -81,7 +81,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   }
   const resume = await CreateResume.findOne({ userId });
 
-  if(!resume){
+  if (!resume) {
     throw new AppError(404, "You need to Create Your Resume Before Apply the job")
   }
 
@@ -90,15 +90,15 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     (req: any) => req.requirement === "noticePeriod"
   );
 
-if (noticePeriodReq) {
-  // convert both to string/boolean properly before comparing
-  const resumeAvailable = resume?.immediatelyAvailable;
-  const check = noticePeriodReq.status === "Immediate" ? true: false
+  if (noticePeriodReq) {
+    // convert both to string/boolean properly before comparing
+    const resumeAvailable = resume?.immediatelyAvailable;
+    const check = noticePeriodReq.status === "Immediate" ? true : false
 
-  if (check == resumeAvailable) {
-    throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
+    if (check == resumeAvailable) {
+      throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
+    }
   }
-}
 
   // 🔹 Create application
   const application = await AppliedJob.create({
@@ -122,7 +122,7 @@ if (noticePeriodReq) {
     type: "job_application",
     id: application._id,
   });
-  const count = await Notification.countDocuments({to: job.userId, isViewed: false})
+  const count = await Notification.countDocuments({ to: job.userId, isViewed: false })
   // Emit socket event
   io.to(job.userId.toString()).emit("newNotification", {
     message: `A new candidate has applied for your job "${job.title}".`,
@@ -136,7 +136,7 @@ if (noticePeriodReq) {
     type: "job_application_confirmation",
     id: application._id,
   });
-  const count1 = await Notification.countDocuments({to: userId, isViewed: false})
+  const count1 = await Notification.countDocuments({ to: userId, isViewed: false })
 
   // Emit socket event
   io.to(userId).emit("newNotification", {
@@ -196,7 +196,7 @@ export const getApplicationsByJob = catchAsync(
       .limit(limit)
       .sort({ createdAt: -1 }); // optional: newest first
 
-          const applicationsWithResume = await Promise.all(
+    const applicationsWithResume = await Promise.all(
       applications.map(async (app) => {
         const resume = await CreateResume.findOne({ userId: app.userId._id });
         return {
@@ -239,7 +239,13 @@ export const getApplicationsByUser = catchAsync(
     const totalItems = await AppliedJob.countDocuments(filter);
 
     const applications = await AppliedJob.find(filter)
-      .populate("jobId")
+      .populate({
+        path: "jobId",
+        populate: [
+          { path: "company" },       // populates jobId.company
+          { path: "recruiter" },     // populates jobId.recruiter
+        ],
+      })
       .populate("userId", "name email")
       .populate("resumeId")
       .skip(skip)
@@ -353,9 +359,8 @@ export const updateApplicationStatus = catchAsync(
       <p>Dear ${candidate.name?.split(" ")[0] || "Candidate"},</p>
       <p>I’m sorry to let you know your application has been <strong>unsuccessful</strong> on this occasion and, unfortunately, due to the sheer volume of applications we receive, we cannot give personalised feedback at this stage.</p>
       <p>Please keep applying and remain hopeful that the best of your career is yet to come!</p>
-      <p style="margin-top: 20px;">Best regards,<br/>${
-        recruiter?.name || "Recruiter"
-      }</p>
+      <p style="margin-top: 20px;">Best regards,<br/>${recruiter?.name || "Recruiter"
+        }</p>
     </div>
   `;
     }
@@ -381,16 +386,13 @@ export const updateApplicationStatus = catchAsync(
     // ✅ also send notification in-app
     let notification = await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
-      message:
-        status === "shortlisted"
-          ? `You have been shortlisted for the job "${jobTitle}".`
-          : `Unfortunately you are not selected for the job "${jobTitle}".`,
+      message: `"${jobTitle}" Application Status Updated Check Your Email.`,
       type: "job_application_status",
       id: updated._id,
     });
-  const count = await Notification.countDocuments({to: updated.userId, isViewed: false})
+    const count = await Notification.countDocuments({ to: updated.userId, isViewed: false })
     // Emit socket event
-    io.to(updated.userId.toString()).emit("newNotification", {notification, count});
+    io.to(updated.userId.toString()).emit("newNotification", { notification, count });
 
     res.status(httpStatus.OK).json({
       success: true,
