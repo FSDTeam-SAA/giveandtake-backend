@@ -242,8 +242,8 @@ export const getApplicationsByUser = catchAsync(
       .populate({
         path: "jobId",
         populate: [
-          { path: "company" },       // populates jobId.company
-          { path: "recruiter" },     // populates jobId.recruiter
+          { path: "companyId" },       // populates jobId.company
+          { path: "recruiterId" },     // populates jobId.recruiter
         ],
       })
       .populate("userId", "name email")

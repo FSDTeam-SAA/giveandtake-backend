@@ -867,7 +867,7 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
     const uploadResult = await uploadToCloudinary(photo.path, "avatars");
 
     // Remove old avatar from Cloudinary if needed (optional)
-    const existingUser = await User.findById(id).select("avatar");
+    const existingUser = await User.findById(id).select("avatar role");
     if (existingUser?.avatar?.url) {
       const publicId = path.basename(existingUser.avatar.url).split(".")[0];
       await deleteFromCloudinary(publicId);
@@ -876,20 +876,25 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
     filteredData.avatar = {
       url: uploadResult?.secure_url,
     };
+    console.log(existingUser)
     if(existingUser?.role === 'candidate'){
+      console.log('candidate')
       const resume = await CreateResume.findOne({userId:id})
+      console.log(resume)
       if(resume){
         resume.photo = uploadResult?.secure_url!
         await resume.save()
       }
     }else if(existingUser?.role === 'recruiter'){
       const resume = await RecruiterAccount.findOne({userId:id})
+      console.log(resume)
       if(resume){
         resume.photo = uploadResult?.secure_url!
         await resume.save()
       }
     }else if(existingUser?.role ===  'company'){
       const resume = await Company.findOne({userId:id})
+      console.log(resume)
       if(resume){
         resume.clogo = uploadResult?.secure_url!
         await resume.save()
