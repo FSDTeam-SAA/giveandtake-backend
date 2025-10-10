@@ -36,9 +36,9 @@ export const upload = multer({
       path.extname(file.originalname).toLowerCase()
     );
 
-    if (mimetype && extname) {
+    // if (mimetype && extname) {
       return cb(null, true);
-    }
+    // }
 
     // ✅ Better error message
     cb(
