@@ -860,6 +860,7 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       filteredData[field] = updateData[field];
     }
   }
+  console.log("filteredData", filteredData)
 
   // Handle avatar upload
   if (req.files && (req.files as any).photo) {
@@ -900,14 +901,15 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
         await resume.save()
       }
     }
+    console.log(photo.path)
 
     // Delete local file
     fs.unlinkSync(photo.path);
   }
+  console.log(filteredData)
 
   const updatedUser = await User.findByIdAndUpdate(id, filteredData, {
     new: true,
-    runValidators: true,
   }).select("-password -verificationInfo -password_reset_token");
 
   if (!updatedUser) {

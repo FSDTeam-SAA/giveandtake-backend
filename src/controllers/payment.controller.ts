@@ -126,7 +126,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
           <tr>
             <td style="padding:24px;">
               <p style="margin:0 0 12px;font-size:15px;color:#111;">
-                Dear <strong>{{FName}}</strong>,
+                Dear <strong>${user.name}</strong>,
               </p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
                 Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch© Ltd</strong>! Below is a copy of your receipt. You can also download this from your EVP profile.
@@ -185,8 +185,12 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 </html>
 `;
 
-    if (captureDetails.status === "complete") {
+console.log(captureDetails)
+
+    if (captureDetails.status === "COMPLETED") {
+      console.log("ami hoisi")
       await sendEmail(user.email, "Payment Complete", emailBody);
+      console.log("email sent")
     }
 
     res.status(200).json({
