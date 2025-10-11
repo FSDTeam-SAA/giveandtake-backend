@@ -233,7 +233,7 @@ export const getPaymentsByUserId = catchAsync(
     const [payments, total] = await Promise.all([
       paymentInfo
         .find({ userId })
-        .populate('planId', 'title price')
+        .populate('planId', 'title price valid')
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
