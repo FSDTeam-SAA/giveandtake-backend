@@ -737,6 +737,7 @@ export const getAllCompanies = catchAsync(
 import { Following } from "../models/following.model"; // adjust path if needed
 import { AwardsAndHonor } from "../models/awardsAndHonor.model";
 import { ElevatorPitch } from "../models/elevatorPitch.model";
+import { AppliedJob } from "../models/appliedJob.model";
 
 export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const id = req.user?._id;
@@ -1210,6 +1211,7 @@ export const deleteUser = catchAsync(async(req,res)=>{
     await Experience.deleteMany({userId: user._id})
     await AwardsAndHonor.deleteMany({userId: user._id})
     await ElevatorPitch.findOneAndDelete({userId: user._id})
+    await AppliedJob.findOneAndDelete({userId: user._id})
   }
 
 
