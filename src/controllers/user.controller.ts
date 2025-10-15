@@ -248,7 +248,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
 });
 
 export const otpVerifyResetPassword = catchAsync(async (req, res) => {
-  const {  otp, email } = req.body;
+  const { otp, email } = req.body;
   const user = await User.isUserExistsByEmail(email);
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -879,25 +879,25 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       url: uploadResult?.secure_url,
     };
     console.log(existingUser)
-    if(existingUser?.role === 'candidate'){
+    if (existingUser?.role === 'candidate') {
       console.log('candidate')
-      const resume = await CreateResume.findOne({userId:id})
+      const resume = await CreateResume.findOne({ userId: id })
       console.log(resume)
-      if(resume){
+      if (resume) {
         resume.photo = uploadResult?.secure_url!
         await resume.save()
       }
-    }else if(existingUser?.role === 'recruiter'){
-      const resume = await RecruiterAccount.findOne({userId:id})
+    } else if (existingUser?.role === 'recruiter') {
+      const resume = await RecruiterAccount.findOne({ userId: id })
       console.log(resume)
-      if(resume){
+      if (resume) {
         resume.photo = uploadResult?.secure_url!
         await resume.save()
       }
-    }else if(existingUser?.role ===  'company'){
-      const resume = await Company.findOne({userId:id})
+    } else if (existingUser?.role === 'company') {
+      const resume = await Company.findOne({ userId: id })
       console.log(resume)
-      if(resume){
+      if (resume) {
         resume.clogo = uploadResult?.secure_url!
         await resume.save()
       }
@@ -1221,25 +1221,47 @@ export const getAllUser = catchAsync(async (req, res) => {
 })
 
 
-export const deleteUser = catchAsync(async(req,res)=>{
+export const deleteUser = catchAsync(async (req, res) => {
   const id = req.params.id
 
   const user = await User.findById(id)
 
-  if(!user){
-    throw  new AppError(400, "User Not Found")
+  if (!user) {
+    throw new AppError(400, "User Not Found")
   }
-  if(user.role === "candidate"){
-    await CreateResume.findOneAndDelete({userId: user._id})
-    await Experience.deleteMany({userId: user._id})
-    await AwardsAndHonor.deleteMany({userId: user._id})
-    await ElevatorPitch.findOneAndDelete({userId: user._id})
-    await AppliedJob.findOneAndDelete({userId: user._id})
+  if (user.role === "candidate") {
+    await CreateResume.findOneAndDelete({ userId: user._id })
+    await Experience.deleteMany({ userId: user._id })
+    await AwardsAndHonor.deleteMany({ userId: user._id })
+    await ElevatorPitch.findOneAndDelete({ userId: user._id })
+    await AppliedJob.deleteMany({ userId: user._id })
+  } else if (user.role === "recruiter") {
+    const jobs = await Job.find({ userId: user._id });
+    const jobIds = jobs.map((j) => j._id);
+    await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    await Job.deleteMany({ userId: user._id });
+    await Job.findOneAndDelete({ userId: user._id })
+    await RecruiterAccount.findOneAndDelete({ userId: user._id })
+    await Experience.deleteMany({ userId: user._id })
+    await AwardsAndHonor.deleteMany({ userId: user._id })
+    await ElevatorPitch.findOneAndDelete({ userId: user._id })
+    await Company.findOneAndUpdate({ employeesId: user._id }, { $pull: { employeesId: user._id } })
+  } else if (user.role === "company") {
+    const jobs = await Job.find({ userId: user._id });
+    const jobIds = jobs.map((j) => j._id);
+    await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    await Job.deleteMany({ userId: user._id });
+    await Job.findOneAndDelete({ userId: user._id })
+    await RecruiterAccount.findOneAndDelete({ userId: user._id })
+    await Experience.deleteMany({ userId: user._id })
+    await AwardsAndHonor.deleteMany({ userId: user._id })
+    await ElevatorPitch.findOneAndDelete({ userId: user._id })
+    await Company.findOneAndDelete({userId: user._id})
   }
 
 
   const delet = await User.findByIdAndDelete(id)
-  sendResponse(res,{
+  sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "User Delete Successful",

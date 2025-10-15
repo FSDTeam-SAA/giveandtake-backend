@@ -63,7 +63,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
       photoUrl = logoRes.secure_url;
       if (!user.avatar) user.avatar = { url: "" };
       user.avatar.url = photoUrl;
-      await user.save();
+      
     }
     fs.unlinkSync(files.photo[0].path); // cleanup
   }
@@ -82,6 +82,10 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     const destRelative = path.posix.join("resumes", safeName);
     resumeFileRelative = await moveFileToUploads(resumeFile.path, destRelative);
   }
+  if(resume.name){
+    user.name = resume.name
+  }
+  await user.save();
 
   // save main resume doc
   const resumeDoc = await CreateResume.create({
