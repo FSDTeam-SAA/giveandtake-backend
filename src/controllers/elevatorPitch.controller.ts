@@ -314,6 +314,7 @@ import {
   getSignedS3Url,
   deleteFromS3,
 } from "../services/s3.service";
+import { createNotification } from "../sockets/notification.service";
 
 /*************************************
  * ADD RESUME VIDEO (ELEVATOR PITCH) *
@@ -446,6 +447,13 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   }
 
   await ElevatorPitch.deleteOne({ _id: pitch._id });
+      // ✅ also send notification in-app
+      let notification = await createNotification({
+        to: userId as any,
+        message: `Admin has removed your elevator pitch video please upload again`,
+        type: "Update elevator pitch",
+        id: pitch._id as any,
+      });
 
   res.status(httpStatus.OK).json({
     success: true,

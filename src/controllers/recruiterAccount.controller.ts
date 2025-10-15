@@ -71,6 +71,10 @@ export const createRecruiterAccount = catchAsync(
         { upsert: true, new: true } // create if not exists, return the doc
       );
     }
+    if (saferest.name) {
+      user.name = saferest.name
+    }
+    await user.save();
     const recruiterAccount = await RecruiterAccount.create({
       userId,
       videoFile: videoUrl,
@@ -112,7 +116,8 @@ export const getRecruiterAccountByUserId = catchAsync(
       statusCode: httpStatus.OK,
       success: true,
       message: 'Recruiter account fetched successfully',
-      data: {...account.toObject(), elevatorPitch: pitch || null, // add pitch data or null
+      data: {
+        ...account.toObject(), elevatorPitch: pitch || null, // add pitch data or null
       },
     })
   }
