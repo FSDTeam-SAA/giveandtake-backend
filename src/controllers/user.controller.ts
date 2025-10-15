@@ -1187,13 +1187,40 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
 });
 
 
-export const getAllUser = catchAsync(async(req,res)=>{
-  const user = await User.find()
-  sendResponse(res,{
-    statusCode:200,
+export const getAllUser = catchAsync(async (req, res) => {
+  const users = await User.find()
+
+  // Map through users and attach evpAvailable
+  const usersWithEvp = await Promise.all(
+    users.map(async (user) => {
+      let evpAvailable = false
+
+      if (user.role === 'candidate') {
+        // Check if the candidate has created a resume
+        const resume = await CreateResume.findOne({ userId: user._id })
+        evpAvailable = !!resume
+      } else if (user.role === 'company') {
+        // Check if the company profile exists
+        const company = await Company.findOne({ userId: user._id })
+        evpAvailable = !!company
+      } else if (user.role === 'recruiter') {
+        // Check if recruiter has created a resume (similar to candidate)
+        const recruiterProfile = await CreateResume.findOne({ userId: user._id })
+        evpAvailable = !!recruiterProfile
+      }
+
+      return {
+        ...user.toObject(),
+        evpAvailable,
+      }
+    })
+  )
+
+  sendResponse(res, {
+    statusCode: 200,
     success: true,
-    message: "All User Fetched",
-    data: user
+    message: 'All Users Fetched',
+    data: usersWithEvp,
   })
 })
 

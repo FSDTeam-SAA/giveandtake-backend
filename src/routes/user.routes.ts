@@ -37,7 +37,7 @@ router.post("/user/login", login);
 router.post("/user/verify", verifyEmail);
 router.post("/user/verify-reset-otp", otpVerifyResetPassword);
 router.post("/user/forget", forgetPassword),
-  router.post("/user/reset-password", resetPassword);
+router.post("/user/reset-password", resetPassword);
 router.post("/user/change-password", protect, changePassword);
 router.patch("/user/deactivate", protect, deactivateUser);
 router.patch("/user/disable", protect, softDeactivateUser);
