@@ -187,6 +187,8 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
         { description: { $regex: title, $options: "i" } },
       ],
     });
+    andConditions.push({ location: { $regex: title, $options: "i" } });
+    andConditions.push({ location_Type: { $regex: title, $options: "i" } });
   }
 
   // Location
