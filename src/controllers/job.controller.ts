@@ -173,7 +173,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title, location, jobCategoryId } = req.query;
+  const { title, location, jobCategoryId,location_Type } = req.query;
   console.log(title);
 
   const filter: any = {};
@@ -192,6 +192,9 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   // Location
   if (location) {
     andConditions.push({ location: { $regex: location, $options: "i" } });
+  }
+  if (location_Type) {
+    andConditions.push({ location_Type: { $regex: location_Type, $options: "i" } });
   }
 
   // Category
