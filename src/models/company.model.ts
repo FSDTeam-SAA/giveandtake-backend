@@ -12,7 +12,6 @@ const companySchema: Schema<ICompany> = new Schema(
     city: { type: String, required: true },
     zipcode: { type: String },
     cemail: { type: String, required: true },
-    cPhoneNumber: { type: String, required: true },
     sLink: [
       {
         label: { type: String },
