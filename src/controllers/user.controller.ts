@@ -885,6 +885,10 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       console.log(resume)
       if (resume) {
         resume.photo = uploadResult?.secure_url!
+        if (updateData.name) {
+          resume.firstName = updateData.name.split(" ")[0]
+          resume.lastName = updateData.name.split(" ")[1]
+        }
         await resume.save()
       }
     } else if (existingUser?.role === 'recruiter') {
@@ -892,6 +896,10 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       console.log(resume)
       if (resume) {
         resume.photo = uploadResult?.secure_url!
+        if (updateData.name) {
+          resume.firstName = updateData.name.split(" ")[0]
+          resume.lastName = updateData.name.split(" ")[1]
+        }
         await resume.save()
       }
     } else if (existingUser?.role === 'company') {
@@ -1256,7 +1264,7 @@ export const deleteUser = catchAsync(async (req, res) => {
     await Experience.deleteMany({ userId: user._id })
     await AwardsAndHonor.deleteMany({ userId: user._id })
     await ElevatorPitch.findOneAndDelete({ userId: user._id })
-    await Company.findOneAndDelete({userId: user._id})
+    await Company.findOneAndDelete({ userId: user._id })
   }
 
 

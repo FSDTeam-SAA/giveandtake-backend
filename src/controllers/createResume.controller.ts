@@ -82,8 +82,8 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     const destRelative = path.posix.join("resumes", safeName);
     resumeFileRelative = await moveFileToUploads(resumeFile.path, destRelative);
   }
-  if(resume.name){
-    user.name = resume.name
+  if(resume.firstName){
+    user.name = `${resume.firstName} ${resume.lastName}`
   }
   await user.save();
 
@@ -222,9 +222,13 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
         user.avatar = { url: "" }; // initialize if missing
       }
       user.avatar.url = logoRes.secure_url || "";
-      await user?.save()
+      
     }
   }
+    if(resume.firstName){
+    user.name = `${resume.firstName} ${resume.lastName}`
+  }
+  await user?.save()
 
   if (files?.banner) {
     const certRes = await uploadToCloudinary(files.banner[0].path);

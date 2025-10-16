@@ -71,8 +71,8 @@ export const createRecruiterAccount = catchAsync(
         { upsert: true, new: true } // create if not exists, return the doc
       );
     }
-    if (saferest.name) {
-      user.name = saferest.name
+    if (saferest.firstName || saferest.lastName) {
+      user.name = `${saferest.firstName} ${saferest.lastName}`
     }
     await user.save();
     const recruiterAccount = await RecruiterAccount.create({
@@ -169,9 +169,12 @@ export const updateRecruiterAccount = catchAsync(
           user.avatar = { url: "" }; // initialize if missing
         }
         user.avatar.url = uploadedPhoto.secure_url || "";
-        await user?.save()
       }
     }
+      if(updates.name){
+    user.name = updates.name
+  }
+  await user?.save()
 
     const updatedAccount = await RecruiterAccount.findOneAndUpdate(
       { userId },
