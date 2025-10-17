@@ -447,6 +447,7 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   }
 
   await ElevatorPitch.deleteOne({ _id: pitch._id });
+  if(req.user?.role === "admin"){
       // ✅ also send notification in-app
       let notification = await createNotification({
         to: userId as any,
@@ -454,6 +455,7 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
         type: "Update elevator pitch",
         id: pitch._id as any,
       });
+    }
 
   res.status(httpStatus.OK).json({
     success: true,

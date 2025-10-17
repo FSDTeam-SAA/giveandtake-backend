@@ -6,7 +6,7 @@ import AppError from "../errors/AppError";
 import httpStatus from "http-status";
 import { generateOTP } from "../utils/generateOTP";
 import { createToken, verifyToken } from "../utils/authToken";
-import { sendEmail } from "../utils/sendEmail";
+import { resetOtpTemplate, sendEmail } from "../utils/sendEmail";
 import { User } from "../models/user.model";
 import sendResponse from "../utils/sendResponse";
 import { defaultSecurityQuestions } from "../constants/defaultSecurityQuestions";
@@ -50,7 +50,8 @@ export const register = catchAsync(async (req, res) => {
     verificationInfo: { token: otptoken },
     dateOfbirth,
   });
-  await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
+  // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
+  await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -86,7 +87,8 @@ export const login = catchAsync(async (req, res) => {
     );
     user.verificationInfo.token = otptoken;
     await user.save();
-    await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
+    // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
+    await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
 
     return sendResponse(res, {
       statusCode: httpStatus.FORBIDDEN,
@@ -237,7 +239,8 @@ export const forgetPassword = catchAsync(async (req, res) => {
   await user.save();
 
   /////// TODO: SENT EMAIL MUST BE DONE
-  sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
+  // sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
+  sendEmail(user.email, "Reset Password OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -1275,4 +1278,39 @@ export const deleteUser = catchAsync(async (req, res) => {
     message: "User Delete Successful",
     data: ''
   })
+})
+
+
+export const emailChange = catchAsync(async(req,res)=>{
+  const id = req.user?._id;
+  const {email} = req.body;
+  const user = await User.findById(id)
+  if(!user){
+    throw new AppError(404, "User Not Found")
+  }
+  if(user.email == email){
+    throw new AppError(400, "Same Email need to change that")
+  }
+      const otp = generateOTP();
+    const jwtPayloadOTP = {
+      otp: otp,
+    };
+
+    const otptoken = createToken(
+      jwtPayloadOTP,
+      process.env.OTP_SECRET as string,
+      process.env.OTP_EXPIRE
+    );
+    user.verificationInfo.token = otptoken;
+    user.verificationInfo.verified = false
+    await user.save();
+    await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
+
+    sendResponse(res, {
+      statusCode: httpStatus.FORBIDDEN,
+      success: false,
+      message: "Email Change Successful. Please verify your OTP",
+      data: { email: user.email },
+    });
+
 })
