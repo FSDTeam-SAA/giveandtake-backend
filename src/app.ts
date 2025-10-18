@@ -30,6 +30,8 @@ import skillRoutes from "./routes/skill.route";
 import courencyRoutes from "./routes/courency.routes";
 import languageRoutes from "./routes/language.routes";
 import universityRoutes from "./routes/university.routes";
+import contentRoutes from "./routes/contentRoutes";
+
 
 const app = express();
 
@@ -144,6 +146,8 @@ app.use("/api/v1/skill", skillRoutes);
 app.use("/api/v1/university", universityRoutes);
 app.use("/api/v1/language", languageRoutes);
 app.use("/api/v1/courency", courencyRoutes);
+
+app.use("/api/v1/content", contentRoutes);
 
 app.use(notFound as never);
 app.use(globalErrorHandler);

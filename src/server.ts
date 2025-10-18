@@ -6,7 +6,7 @@ import { Server } from 'socket.io'
 import cors from 'cors'
 import { setupMessageSocket } from './sockets/message.socket'
 import cron from 'node-cron'
-import { deleteOldDeactivatedUsers } from './jobs/deleteOldDeactivatedUsers'
+import { deleteOldDeactivatedUsers, notifyExpiredSubscriptions, notifyJobExpiryToRecruiters, updateExpiredPlans } from './jobs/deleteOldDeactivatedUsers'
 import path from 'path'
 
 dotenv.config()
@@ -27,6 +27,9 @@ export const io = new Server(httpServer, {
 cron.schedule('0 0 * * *', async () => {
   console.log('Running user deletion job...')
   await deleteOldDeactivatedUsers()
+  await updateExpiredPlans(); 
+  await notifyExpiredSubscriptions();
+  await notifyJobExpiryToRecruiters();
 })
 
 setupMessageSocket(io)

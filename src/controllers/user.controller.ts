@@ -51,7 +51,7 @@ export const register = catchAsync(async (req, res) => {
     dateOfbirth,
   });
   // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-  await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
+  await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -88,7 +88,7 @@ export const login = catchAsync(async (req, res) => {
     user.verificationInfo.token = otptoken;
     await user.save();
     // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-    await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
+    await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
 
     return sendResponse(res, {
       statusCode: httpStatus.FORBIDDEN,
@@ -204,6 +204,29 @@ export const verifyEmail = catchAsync(async (req, res) => {
       user.verificationInfo.verified = true;
       user.verificationInfo.token = "";
       await user.save();
+      if (user?.role === 'candidate') {
+        console.log('candidate')
+        const resume = await CreateResume.findOne({ userId: user._id })
+        console.log(resume)
+        if (resume) {
+          resume.email = user.email
+          await resume.save()
+        }
+      } else if (user?.role === 'recruiter') {
+        const resume = await RecruiterAccount.findOne({ userId: user._id })
+        console.log(resume)
+        if (resume) {
+          resume.emailAddress = user.email
+          await resume.save()
+        }
+      } else if (user?.role === 'company') {
+        const resume = await Company.findOne({ userId: user._id })
+        console.log(resume)
+        if (resume) {
+          resume.cemail = user.email
+          await resume.save()
+        }
+      }
 
       sendResponse(res, {
         statusCode: httpStatus.OK,
@@ -240,7 +263,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
 
   /////// TODO: SENT EMAIL MUST BE DONE
   // sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
-  sendEmail(user.email, "Reset Password OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
+  sendEmail(user.email, "Reset Password OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -1281,36 +1304,41 @@ export const deleteUser = catchAsync(async (req, res) => {
 })
 
 
-export const emailChange = catchAsync(async(req,res)=>{
+export const emailChange = catchAsync(async (req, res) => {
   const id = req.user?._id;
-  const {email} = req.body;
+  const { email } = req.body;
   const user = await User.findById(id)
-  if(!user){
+  if (!user) {
     throw new AppError(404, "User Not Found")
   }
-  if(user.email == email){
+  if (user.email == email) {
     throw new AppError(400, "Same Email need to change that")
   }
-      const otp = generateOTP();
-    const jwtPayloadOTP = {
-      otp: otp,
-    };
+  const existingUser = await User.findOne({ email })
+  if (existingUser) {
+    throw new AppError(404, "This Email Already Associted with Another Account")
+  }
+  const otp = generateOTP();
+  const jwtPayloadOTP = {
+    otp: otp,
+  };
 
-    const otptoken = createToken(
-      jwtPayloadOTP,
-      process.env.OTP_SECRET as string,
-      process.env.OTP_EXPIRE
-    );
-    user.verificationInfo.token = otptoken;
-    user.verificationInfo.verified = false
-    await user.save();
-    await sendEmail(user.email, "OTP - Elevator Video Pitch©",resetOtpTemplate(user.name, otp));
+  const otptoken = createToken(
+    jwtPayloadOTP,
+    process.env.OTP_SECRET as string,
+    process.env.OTP_EXPIRE
+  );
+  user.email = email;
+  user.verificationInfo.token = otptoken;
+  user.verificationInfo.verified = false
+  await user.save();
+  await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
 
-    sendResponse(res, {
-      statusCode: httpStatus.FORBIDDEN,
-      success: false,
-      message: "Email Change Successful. Please verify your OTP",
-      data: { email: user.email },
-    });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Email Change Successful. Please verify your OTP",
+    data: { email: user.email },
+  });
 
 })
