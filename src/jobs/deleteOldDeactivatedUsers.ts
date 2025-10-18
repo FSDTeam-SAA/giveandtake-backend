@@ -102,7 +102,7 @@ export const notifyExpiredSubscriptions = async () => {
       to: payment.userId as mongoose.Types.ObjectId,
       message: 'Your subscription has expired, please renew or upload a 30-second elevator pitch video today.',
       type: 'Subscription Expired',
-      id: payment._id!,
+      id: payment._id as mongoose.Types.ObjectId,
     });
   }
 
