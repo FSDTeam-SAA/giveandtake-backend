@@ -297,7 +297,7 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0;">Application Denied</h2>
         <p>Dear ${user?.name || "Company"},</p>  
-        <p>‘Please reach out to Admin for support regarding your job post’ on Info@evp.com</p>
+        <p>‘Please reach out to Admin for support regarding your job post’ on info@evpitch.com</p>
       </div>
     `;
 
