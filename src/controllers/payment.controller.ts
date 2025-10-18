@@ -113,7 +113,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <!-- Optional logo or emoji -->
-                    <div style="width:56px;height:56px;border-radius:8px;background:#0ea5a4;display:inline-block;line-height:56px;text-align:center;color:#fff;font-weight:bold;">
+                    <div style="width:56px;height:56px;border-radius:8px;background:#2B7FD0;display:inline-block;line-height:56px;text-align:center;color:#fff;font-weight:bold;">
                       EVP
                     </div>
                   </td>
@@ -156,7 +156,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 
               <!-- Support -->
               <p style="margin:18px 0 6px;font-size:14px;color:#374151;">
-                Please reach out to <a href="mailto:Admin@evpitch.com" style="color:#0ea5a4;text-decoration:none;">Admin@evpitch.com</a> if you have any queries.
+                Please reach out to <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a> if you have any queries.
               </p>
 
               <p style="margin:8px 0 0;font-size:14px;color:#374151;">
@@ -172,7 +172,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
                 <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
-                <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact Admin@evpitch.com</p>
+                <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
               </div>
             </td>
           </tr>
@@ -185,12 +185,12 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 </html>
 `;
 
-console.log(captureDetails)
+    console.log(captureDetails);
 
     if (captureDetails.status === "COMPLETED") {
-      console.log("ami hoisi")
+      console.log("ami hoisi");
       await sendEmail(user.email, "Payment Complete", emailBody);
-      console.log("email sent")
+      console.log("email sent");
     }
 
     res.status(200).json({
@@ -241,7 +241,7 @@ export const getPaymentsByUserId = catchAsync(
     const [payments, total] = await Promise.all([
       paymentInfo
         .find({ userId })
-        .populate('planId', 'title price valid')
+        .populate("planId", "title price valid")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
