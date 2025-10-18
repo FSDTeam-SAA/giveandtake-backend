@@ -1,0 +1,41 @@
+import { Request, Response } from "express";
+import Content, { IContent } from "../models/Content";
+
+export const upsertContent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { type, title, description } = req.body as IContent;
+
+    const content = await Content.findOneAndUpdate(
+      { type },
+      { title, description },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(200).json(content);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getAllContent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const content = await Content.find();
+    res.status(200).json(content);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getContentByType = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { type } = req.params;
+    const content = await Content.findOne({ type });
+    if (!content) {
+      res.status(404).json({ message: "Content not found" });
+      return;
+    }
+    res.status(200).json(content);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
