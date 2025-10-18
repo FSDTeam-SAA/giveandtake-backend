@@ -46,7 +46,7 @@ export const updateBookmarked = catchAsync(async (req, res) => {
     statusCode: 200,
     success: true,
     message:
-      bookmarked === true ? "Bookmarked Successfully" : "Bookmarked Removed",
+      bookmarked === true ? "Bookmarked successfully" : "Bookmark removed",
     data: update,
   });
 });

@@ -11,7 +11,7 @@ export const employeeReq = catchAsync(async (req, res) => {
 
     const check = await ReqCompany.findOne({ company: companyId, userId: req.user?._id })
     if (check) {
-        throw new AppError(400, "You are already Req for this Company")
+        throw new AppError(400, "You have already requested to join this company")
     }
     const reqCom = await ReqCompany.create({
         userId: req.user?._id,
@@ -21,7 +21,7 @@ export const employeeReq = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: "Successfully requested",
+        message: "Request submitted successfully",
         data: reqCom
     })
 })
@@ -33,7 +33,7 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
     console.log(companyId, userId, status)
     const check = await ReqCompany.findById(id)
     if (!check) {
-        throw new AppError(400, "Not Found")
+        throw new AppError(400, "Request not found")
     }
 
     if (status === "accepted") {
@@ -61,7 +61,7 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: "Successfully request Update",
+        message: "Request updated successfully",
         data: reqCom
     })
 })
@@ -78,7 +78,7 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
     sendResponse(res,{
         statusCode: 200,
         success: true,
-        message: "employee added to the company",
+        message: "Employee added to the company",
         data: company
     })
 })

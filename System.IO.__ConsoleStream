@@ -1,0 +1,200 @@
+import { Request, Response } from "express";
+import httpStatus from "http-status";
+import mongoose from "mongoose";
+import { AppliedJob } from "../models/appliedJob.model";
+import catchAsync from "../utils/catchAsync";
+import AppError from "../errors/AppError";
+import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
+import { CreateResume } from "../models/createResume.model";
+import { Education } from "../models/education.model";
+import { Experience } from "../models/experience.model";
+import { ElevatorPitch } from "../models/elevatorPitch.model";
+import { AwardsAndHonor } from "../models/awardsAndHonor.model";
+import { createNotification } from "../sockets/notification.service";
+import { Job } from "../models/job.model";
+import { sendEmail } from "../utils/sendEmail";
+import { User } from "../models/user.model";
+import { io } from "../server";
+import { Notification } from "../models/notification.model";
+
+/***************
+ * CREATE Application
+//  ***************/
+// export const applyForJob = catchAsync(async (req: Request, res: Response) => {
+//   const { jobId, userId, status, resumeId } = req.body
+
+//   // Check if already applied
+//   const exists = await AppliedJob.findOne({ jobId, userId, resumeId })
+//   if (exists) {
+//     throw new AppError(httpStatus.CONFLICT, 'Already applied to this job')
+//   }
+
+//   // Create application
+//   const application = await AppliedJob.create({
+//     jobId,
+//     userId,
+//     status,
+//     resumeId,
+//   })
+
+//   // 🔹 Fetch job details (to know who posted it)
+//   const job = await Job.findById(jobId).populate('userId', 'username')
+//   if (!job) {
+//     throw new AppError(httpStatus.NOT_FOUND, 'Job not found')
+//   }
+
+//   // ✅ Notify the Job Owner
+//   await createNotification({
+//     to: job.userId as mongoose.Types.ObjectId,
+//     message: `A new candidate has applied for your job "${job.title}".`,
+//     type: 'job_application',
+//     id: application._id,
+//   })
+
+//   // ✅ Notify the Applicant
+//   await createNotification({
+//     to: userId,
+//     message: `You have successfully applied for the job "${job.title}".`,
+//     type: 'job_application_confirmation',
+//     id: application._id,
+//   })
+
+//   res.status(httpStatus.CREATED).json({
+//     success: true,
+//     message: 'Application submitted',
+//     data: application,
+//   })
+// })
+
+export const applyForJob = catchAsync(async (req: Request, res: Response) => {
+  const { jobId, userId, status, resumeId, answer } = req.body;
+
+  // 🔹 Check if already applied
+  const exists = await AppliedJob.findOne({ jobId, userId });
+  if (exists) {
+    throw new AppError(httpStatus.CONFLICT, "Already applied to this job");
+  }
+  // 🔹 Fetch job details (with recruiter info)
+  const job = await Job.findById(jobId).populate("userId", "name email");
+  if (!job) {
+    throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+  }
+  const resume = await CreateResume.findOne({ userId });
+
+  if (!resume) {
+    throw new AppError(404, "You need to Create Your Resume Before Apply the job")
+  }
+
+  // 🔹 Find the requirement with key "noticePeriod"
+  const noticePeriodReq = job.applicationRequirement.find(
+    (req: any) => req.requirement === "noticePeriod"
+  );
+
+  if (noticePeriodReq) {
+    // convert both to string/boolean properly before comparing
+    const resumeAvailable = resume?.immediatelyAvailable;
+    const check = noticePeriodReq.status === "Immediate" ? true : false
+
+    if (check == resumeAvailable) {
+      throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
+    }
+  }
+
+  // 🔹 Create application
+  const application = await AppliedJob.create({
+    jobId,
+    userId,
+    status,
+    resumeId,
+    answer,
+  });
+
+  // 🔹 Fetch candidate info
+  const candidate = await User.findById(userId).select("name email");
+  if (!candidate) {
+    throw new AppError(httpStatus.NOT_FOUND, "Candidate not found");
+  }
+
+  // ✅ Notify the Job Owner
+  await createNotification({
+    to: job.userId as mongoose.Types.ObjectId,
+    message: `A new candidate has applied for your job "${job.title}".`,
+    type: "job_application",
+    id: application._id,
+  });
+  const count = await Notification.countDocuments({ to: job.userId, isViewed: false })
+  // Emit socket event
+  io.to(job.userId.toString()).emit("newNotification", {
+    message: `A new candidate has applied for your job "${job.title}".`,
+    count: count
+  });
+
+  // ✅ Notify the Applicant
+  await createNotification({
+    to: userId,
+    message: `You have successfully applied for the job "${job.title}".`,
+    type: "job_application_confirmation",
+    id: application._id,
+  });
+  const count1 = await Notification.countDocuments({ to: userId, isViewed: false })
+
+  // Emit socket event
+  io.to(userId).emit("newNotification", {
+    message: `You have successfully applied for the job "${job.title}".`,
+    count: count1
+  });
+
+  // ✅ Send email to Applicant
+  if (candidate.email) {
+    const recruiterName = (job.userId as any)?.name || "Recruiter";
+
+    const emailSubject = `Application Received: ${job.title}`;
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0;">Application Confirmation</h2>
+        <p>Dear ${candidate.name?.split(" ")[0] || "Candidate"},</p>
+        <p>Your application has been received and is now being reviewed.</p>
+        <p>Thank you for your patience and good luck!</p>
+        <p style="margin-top: 20px;">Best regards,<br/>${recruiterName}</p>
+      </div>
+    `;
+
+    await sendEmail(candidate.email, emailSubject, emailBody);
+  }
+
+  res.status(httpStatus.CREATED).json({
+    success: true,
+    message: "Application submitted",
+    data: application,
+  });
+});
+
+/****************************
+ * GET Applications by Job ID
+ ***************/
+export const getApplicationsByJob = catchAsync(
+  async (req: Request, res: Response) => {
+    const { jobId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid Job ID");
+    }
+
+    // ✅ Extract pagination params (default: page=1, limit=10)
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    // ✅ Get total count for pagination metadata
+    const total = await AppliedJob.countDocuments({ jobId });
+
+    // ✅ Fetch applications with pagination
+    const applications = await AppliedJob.find({ jobId })
+      .populate("userId", "name email avatar")
+      .populate("resumeId")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }); // optional: newest first
+
+    const applicationsWithResume = await Promise.all(
+      applications.map(async (app) => {

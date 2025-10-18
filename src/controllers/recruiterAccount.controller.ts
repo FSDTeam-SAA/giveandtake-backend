@@ -19,7 +19,7 @@ export const createRecruiterAccount = catchAsync(
 
     const user = await User.findById(userId);
     if (!user) {
-      throw new AppError(400, "User Not Found")
+      throw new AppError(400, "User not found")
     }
 
     const existing = await RecruiterAccount.findOne({ userId })
@@ -133,7 +133,7 @@ export const updateRecruiterAccount = catchAsync(
 
     const user = await User.findById(userId);
     if (!user) {
-      throw new AppError(400, "User Not Found")
+      throw new AppError(400, "User not found")
     }
 
     // @ts-ignore

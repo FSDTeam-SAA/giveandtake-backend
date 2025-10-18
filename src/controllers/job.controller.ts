@@ -379,7 +379,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id;
 
   if (!userId) {
-    throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
+    throw new AppError(httpStatus.BAD_REQUEST, "User ID is required");
   }
 
   const resume = await CreateResume.findOne({ userId }).lean();

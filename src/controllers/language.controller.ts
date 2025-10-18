@@ -85,18 +85,18 @@ export const listLanguages = async (_req: Request, res: Response) => {
 
 export const getLanguage = async (req: Request, res: Response) => {
   const lang = await Language.findById(req.params.id);
-  if (!lang)  res.status(404).json({ status: "fail", message: "Not found" });
+  if (!lang)  res.status(404).json({ status: "fail", message: "Language not found" });
   res.json({ status: "success", data: lang });
 };
 
 export const updateLanguage = async (req: Request, res: Response) => {
   const lang = await Language.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!lang)  res.status(404).json({ status: "fail", message: "Not found" });
+  if (!lang)  res.status(404).json({ status: "fail", message: "Language not found" });
   res.json({ status: "success", data: lang });
 };
 
 export const deleteLanguage = async (req: Request, res: Response) => {
   const lang = await Language.findByIdAndDelete(req.params.id);
-  if (!lang)  res.status(404).json({ status: "fail", message: "Not found" });
-  res.json({ status: "success", message: "Deleted" });
+  if (!lang)  res.status(404).json({ status: "fail", message: "Language not found" });
+  res.json({ status: "success", message: "Language deleted successfully" });
 };

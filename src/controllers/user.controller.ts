@@ -56,7 +56,7 @@ export const register = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "User Logged in successfully",
+    message: "Registration successful. Please verify your OTP",
     data: user,
   });
 });
@@ -72,7 +72,7 @@ export const login = catchAsync(async (req, res) => {
     user?.password &&
     !(await User.isPasswordMatched(password, user.password))
   ) {
-    throw new AppError(httpStatus.FORBIDDEN, "Password is not correct");
+    throw new AppError(httpStatus.FORBIDDEN, "Incorrect password");
   }
   if (!(await User.isOTPVerified(user._id.toString()))) {
     const otp = generateOTP();
@@ -93,7 +93,7 @@ export const login = catchAsync(async (req, res) => {
     return sendResponse(res, {
       statusCode: httpStatus.FORBIDDEN,
       success: false,
-      message: "OTP is not verified, please verify your OTP",
+      message: "OTP not verified. Please verify your OTP",
       data: { email: user.email },
     });
   }
@@ -167,7 +167,7 @@ export const login = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "User Logged in successfully",
+    message: "User logged in successfully",
     data: {
       accessToken,
       role: user.role,
@@ -231,7 +231,7 @@ export const verifyEmail = catchAsync(async (req, res) => {
       sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: "User verified",
+        message: "Email verified successfully",
         data: "",
       });
     } else {
@@ -268,7 +268,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "OTP sent to your email",
+    message: "OTP sent to your email.",
     data: "",
   });
 });
@@ -295,7 +295,7 @@ export const otpVerifyResetPassword = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Password reset successfully",
+    message: "OTP verified successfully",
     data: {},
   });
 });
@@ -456,14 +456,14 @@ export const checkSubmitSecurityAnswers = catchAsync(
     if (!user.securityQuestions) {
       res.status(httpStatus.OK).json({
         success: true,
-        message: "Security questions not Found",
+        message: "Security questions not found",
         data: { security: false },
       });
     }
 
     res.status(httpStatus.OK).json({
       success: true,
-      message: "Security questions Found",
+      message: "Security questions found",
       data: { security: true },
     });
   }
@@ -948,7 +948,7 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
   }).select("-password -verificationInfo -password_reset_token");
 
   if (!updatedUser) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found or not updated");
+    throw new AppError(httpStatus.NOT_FOUND, "User not found or update failed");
   }
 
   sendResponse(res, {
@@ -1249,7 +1249,7 @@ export const getAllUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: 'All Users Fetched',
+    message: 'All users fetched successfully',
     data: usersWithEvp,
   })
 })
@@ -1261,7 +1261,7 @@ export const deleteUser = catchAsync(async (req, res) => {
   const user = await User.findById(id)
 
   if (!user) {
-    throw new AppError(400, "User Not Found")
+    throw new AppError(400, "User not found")
   }
   if (user.role === "candidate") {
     await CreateResume.findOneAndDelete({ userId: user._id })
@@ -1298,7 +1298,7 @@ export const deleteUser = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: "User Delete Successful",
+    message: "User deleted successfully",
     data: ''
   })
 })
@@ -1309,14 +1309,14 @@ export const emailChange = catchAsync(async (req, res) => {
   const { email } = req.body;
   const user = await User.findById(id)
   if (!user) {
-    throw new AppError(404, "User Not Found")
+    throw new AppError(404, "User not found")
   }
   if (user.email == email) {
-    throw new AppError(400, "Same Email need to change that")
+    throw new AppError(400, "New email must be different from the current email")
   }
   const existingUser = await User.findOne({ email })
   if (existingUser) {
-    throw new AppError(404, "This Email Already Associted with Another Account")
+    throw new AppError(404, "This email is already associated with another account")
   }
   const otp = generateOTP();
   const jwtPayloadOTP = {
@@ -1337,7 +1337,7 @@ export const emailChange = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Email Change Successful. Please verify your OTP",
+    message: "Email changed successfully. Please verify your OTP",
     data: { email: user.email },
   });
 

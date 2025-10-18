@@ -42,7 +42,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User ID is required");
 
   const user = await User.findById(userId);
-  if (!user) throw new AppError(httpStatus.BAD_REQUEST, "User Not Found");
+  if (!user) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
 
   // parse JSON data
   const resume = JSON.parse(req.body.resume || "{}");
@@ -194,7 +194,7 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
 
   const user = await User.findById(userId);
   if (!user) {
-    throw new AppError(400, "User Not Found")
+    throw new AppError(400, "User not found")
   }
   const resume = JSON.parse(req.body.resume || '{}')
   const experiences = JSON.parse(req.body.experiences || '[]')

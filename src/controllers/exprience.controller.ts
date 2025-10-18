@@ -29,11 +29,11 @@ export const createExperience = catchAsync(async (req, res) => {
   } = req.body;
 
   if (!employer || !jobTitle || !startDate) {
-    throw new AppError(400, 'employer, jobTitle, and startDate are required');
+    throw new AppError(400, 'Employer, job title, and start date are required');
   }
 
   if (endDate && new Date(startDate) > new Date(endDate)) {
-    throw new AppError(400, 'startDate cannot be after endDate');
+    throw new AppError(400, 'Start date cannot be after end date');
   }
 
   if (careerField && !dummyCareerFields.includes(careerField)) {
@@ -128,7 +128,7 @@ export const updateExperience = catchAsync(async (req, res) => {
   } = req.body;
 
   if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-    throw new AppError(400, 'startDate cannot be after endDate');
+    throw new AppError(400, 'Start date cannot be after end date');
   }
 
   if (careerField && !dummyCareerFields.includes(careerField)) {

@@ -126,11 +126,11 @@ export const createUniversity = async (req: Request, res: Response) => {
   try {
     const { country, name } = req.body;
     if (!country || !name) {
-     res.status(400).json({ status: "fail", message: "country and name required" });
+     res.status(400).json({ status: "fail", message: "Country and name are required" });
     }
     const existing = await University.findOne({ country, name });
     if (existing) {
-     res.status(409).json({ status: "fail", message: "Already exists" });
+     res.status(409).json({ status: "fail", message: "University already exists" });
     }
     const uni = await University.create({ country, name });
    res.status(201).json({ status: "success", data: uni });
@@ -158,7 +158,7 @@ export const getUniversity = async (req: Request, res: Response) => {
   try {
     const uni = await University.findById(req.params.id);
     if (!uni) {
-     res.status(404).json({ status: "fail", message: "Not found" });
+     res.status(404).json({ status: "fail", message: "University not found" });
     }
    res.status(200).json({ status: "success", data: uni });
   } catch (err: any) {
@@ -178,7 +178,7 @@ export const updateUniversity = async (req: Request, res: Response) => {
 
     const uni = await University.findByIdAndUpdate(req.params.id, updateObj, { new: true, runValidators: true });
     if (!uni) {
-     res.status(404).json({ status: "fail", message: "Not found" });
+     res.status(404).json({ status: "fail", message: "University not found" });
     }
    res.status(200).json({ status: "success", data: uni });
   } catch (err: any) {
@@ -190,9 +190,9 @@ export const deleteUniversity = async (req: Request, res: Response) => {
   try {
     const uni = await University.findByIdAndDelete(req.params.id);
     if (!uni) {
-     res.status(404).json({ status: "fail", message: "Not found" });
+     res.status(404).json({ status: "fail", message: "University not found" });
     }
-   res.status(200).json({ status: "success", message: "Deleted successfully" });
+   res.status(200).json({ status: "success", message: "University deleted successfully" });
   } catch (err: any) {
    res.status(500).json({ status: "error", message: err.message });
   }

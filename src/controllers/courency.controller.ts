@@ -115,7 +115,7 @@ export const createItem = async (req: Request, res: Response) => {
   try {
     const { category, name, description } = req.body;
     if (!category || !name) {
-       res.status(400).json({ status: "fail", message: "category and name are required" });
+       res.status(400).json({ status: "fail", message: "Category and name are required" });
     }
     const existing = await Item.findOne({ category, name });
     if (existing) {
@@ -145,7 +145,7 @@ export const listItems = async (req: Request, res: Response) => {
 export const getItem = async (req: Request, res: Response) => {
   try {
     const item = await Item.findById(req.params.id);
-    if (!item)  res.status(404).json({ status: "fail", message: "Not found" });
+    if (!item)  res.status(404).json({ status: "fail", message: "Item not found" });
      res.status(200).json({ status: "success", data: item });
   } catch (err: any) {
      res.status(500).json({ status: "error", message: err.message });
@@ -160,7 +160,7 @@ export const updateItem = async (req: Request, res: Response) => {
     if (req.body.description !== undefined) updateFields.description = req.body.description;
 
     const item = await Item.findByIdAndUpdate(req.params.id, updateFields, { new: true, runValidators: true });
-    if (!item)  res.status(404).json({ status: "fail", message: "Not found" });
+    if (!item)  res.status(404).json({ status: "fail", message: "Item not found" });
      res.status(200).json({ status: "success", data: item });
   } catch (err: any) {
      res.status(500).json({ status: "error", message: err.message });
@@ -170,8 +170,8 @@ export const updateItem = async (req: Request, res: Response) => {
 export const deleteItem = async (req: Request, res: Response) => {
   try {
     const item = await Item.findByIdAndDelete(req.params.id);
-    if (!item)  res.status(404).json({ status: "fail", message: "Not found" });
-     res.status(200).json({ status: "success", message: "Deleted successfully" });
+    if (!item)  res.status(404).json({ status: "fail", message: "Item not found" });
+     res.status(200).json({ status: "success", message: "Item deleted successfully" });
   } catch (err: any) {
      res.status(500).json({ status: "error", message: err.message });
   }

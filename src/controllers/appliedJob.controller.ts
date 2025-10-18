@@ -82,7 +82,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const resume = await CreateResume.findOne({ userId });
 
   if (!resume) {
-    throw new AppError(404, "You need to Create Your Resume Before Apply the job")
+    throw new AppError(404, "You need to create your resume before applying to this job")
   }
 
   // 🔹 Find the requirement with key "noticePeriod"
@@ -96,7 +96,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     const check = noticePeriodReq.status === "Immediate" ? true : false
 
     if (check == resumeAvailable) {
-      throw new AppError(httpStatus.BAD_REQUEST, "This job is only available for those who are immediately available");
+      throw new AppError(httpStatus.BAD_REQUEST, "This job requires immediate availability");
     }
   }
 
@@ -177,7 +177,7 @@ export const getApplicationsByJob = catchAsync(
     const { jobId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
-      throw new AppError(httpStatus.BAD_REQUEST, "Invalid Job ID");
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
     }
 
     // ✅ Extract pagination params (default: page=1, limit=10)
@@ -208,7 +208,7 @@ export const getApplicationsByJob = catchAsync(
 
     res.status(httpStatus.OK).json({
       success: true,
-      message: "Applications fetched by job",
+      message: "Applications fetched for job",
       data: applicationsWithResume,
       pagination: {
         total,
@@ -230,7 +230,7 @@ export const getApplicationsByUser = catchAsync(
     const { page, limit, skip } = getPaginationParams(req.query);
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new AppError(httpStatus.BAD_REQUEST, "Invalid User ID");
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid user ID");
     }
 
     const filter: any = { userId };
@@ -265,7 +265,7 @@ export const getApplicationsByUser = catchAsync(
 
     res.status(httpStatus.OK).json({
       success: true,
-      message: "Applications fetched by user",
+      message: "Applications fetched for user",
       meta,
       data: {
         applications,
@@ -386,7 +386,7 @@ export const updateApplicationStatus = catchAsync(
     // ✅ also send notification in-app
     let notification = await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
-      message: `"${jobTitle}" Application Status Updated Check Your Email.`,
+      message: `"${jobTitle}" application status updated. Check your email.`,
       type: "job_application_status",
       id: updated._id,
     });
