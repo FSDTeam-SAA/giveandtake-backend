@@ -1,11 +1,11 @@
-import mongoose, { Schema } from 'mongoose'
-import { IJob, JobModel } from '../interface/job.interface'
+import mongoose, { Schema } from "mongoose";
+import { IJob, JobModel } from "../interface/job.interface";
 
 const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
-    recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: 'RecruiterAccount' },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
+    recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: "RecruiterAccount" },
     title: { type: String, required: true },
     description: { type: String, required: true },
     companyName: { type: String },
@@ -20,22 +20,18 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     deadline: { type: Date },
     status: {
       type: String,
-      enum: ['pending','active', 'deactivate'],
-      default: 'active',
+      enum: ["pending", "active", "deactivate"],
+      default: "active",
     },
-    jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'JobCategory' },
-    name: {
-      type: String
-    },
-    role: {
-      type: String
-    },
+    jobCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: "JobCategory" },
+    name: { type: String },
+    role: { type: String },
     compensation: { type: String },
     arcrivedJob: { type: Boolean, default: false },
     applicationRequirement: [
       {
         requirement: { type: String },
-        status: {type: String}
+        status: { type: String },
       },
     ],
     customQuestion: [
@@ -45,8 +41,8 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     ],
     jobApprove: {
       type: String,
-      enm: ['pending', 'approved', 'denied'],
-      default: 'approved',
+      enum: ["pending", "approved", "denied"],
+      default: "approved",
     },
     adminApprove: {
       type: Boolean,
@@ -56,29 +52,50 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     employement_Type: {
       type: String,
       enum: [
-        'full-time',
-        'part-time',
-        'internship',
-        'contract',
-        'temporary',
-        'freelance',
-        'volunteer',
+        "full-time",
+        "part-time",
+        "internship",
+        "contract",
+        "temporary",
+        "freelance",
+        "volunteer",
       ],
     },
     location_Type: {
       type: String,
-      enum: ['onsite', 'remote', 'hybrid'],
+      enum: ["onsite", "remote", "hybrid"],
     },
     career_Stage: {
       type: String,
-      enum: ['New Entry', 'Experienced Professional', 'Career Returner'],
+      enum: ["New Entry", "Experienced Professional", "Career Returner"],
     },
     website_Url: { type: String },
-
   },
   { timestamps: true }
-)
+);
 
-jobSchema.index({ title: 'text', location: 'text', description: 'text' })
+/**
+ * 🔍 Full-Text Search Index
+ * - Includes title, description, location, and location_Type
+ * - Assigns higher weight to title and description
+ * - Enables ranking by relevance when using `$text` search
+ */
+jobSchema.index(
+  {
+    title: "text",
+    description: "text",
+    location: "text",
+    location_Type: "text",
+  },
+  {
+    weights: {
+      title: 5,
+      description: 3,
+      location: 2,
+      location_Type: 2,
+    },
+    name: "JobTextIndex",
+  }
+);
 
-export const Job = mongoose.model<IJob, JobModel>('Job', jobSchema)
+export const Job = mongoose.model<IJob, JobModel>("Job", jobSchema);

@@ -173,38 +173,29 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title, location, jobCategoryId,location_Type } = req.query;
-  console.log(title);
+  const { title, jobCategoryId } = req.query;
 
   const filter: any = {};
   const andConditions: any[] = [];
 
-  // Title or description
+  /**
+   * 🔍 Step 1: Full-text search (fast and ranked)
+   * Uses MongoDB’s $text search for indexed fields: title, description, location, location_Type.
+   */
   if (title) {
-    andConditions.push({
-      $or: [
-        { title: { $regex: title, $options: "i" } },
-        { description: { $regex: title, $options: "i" } },
-      ],
-    });
-    andConditions.push({ location: { $regex: title, $options: "i" } });
-    andConditions.push({ location_Type: { $regex: title, $options: "i" } });
+    andConditions.push({ $text: { $search: title as string } });
   }
 
-  // Location
-  if (location) {
-    andConditions.push({ location: { $regex: location, $options: "i" } });
-  }
-  if (location_Type) {
-    andConditions.push({ location_Type: { $regex: location_Type, $options: "i" } });
-  }
-
-  // Category
+  /**
+   * 🗂️ Optional: Filter by job category
+   */
   if (jobCategoryId) {
     andConditions.push({ jobCategoryId });
   }
 
-  // Publish date condition
+  /**
+   * 📅 Publish date filter
+   */
   andConditions.push({
     $or: [
       { publishDate: { $exists: false } },
@@ -213,33 +204,59 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     ],
   });
 
-  // Final filter
   if (andConditions.length > 0) {
     filter.$and = andConditions;
   }
 
-  console.log(JSON.stringify(filter, null, 2));
-
+  // Pagination
   const { page, limit, skip } = getPaginationParams(req.query);
 
-  const totalJobs = await Job.countDocuments({
+  const baseQuery = {
     ...filter,
     arcrivedJob: false,
     jobApprove: "approved",
     adminApprove: true,
-  });
+  };
 
-  const jobs = await Job.find({
-    ...filter,
-    arcrivedJob: false,
-    adminApprove: true,
-    jobApprove: "approved",
-  })
-    .skip(skip)
-    .limit(limit)
-    .sort({ createdAt: -1 })
-    .populate("companyId recruiterId");
+  /**
+   * ⚡ Step 2: Perform full-text search
+   * - If $text search yields results, they’re sorted by textScore.
+   * - Otherwise, fallback to regex search for partial matches.
+   */
+  let [totalJobs, jobs] = await Promise.all([
+    Job.countDocuments(baseQuery),
+    Job.find(baseQuery, title ? { score: { $meta: "textScore" } } : {})
+      .skip(skip)
+      .limit(limit)
+      .sort(title ? { score: { $meta: "textScore" }, createdAt: -1 } : { createdAt: -1 })
+      .populate("companyId recruiterId"),
+  ]);
 
+  // 🧠 Fallback: If $text search finds nothing, use regex search instead
+  if (title && jobs.length === 0) {
+    const regex = { $regex: title, $options: "i" };
+
+    const regexFilter: any = {
+      ...baseQuery,
+      $or: [
+        { title: regex },
+        { description: regex },
+        { location: regex },
+        { location_Type: regex },
+      ],
+    };
+
+    [totalJobs, jobs] = await Promise.all([
+      Job.countDocuments(regexFilter),
+      Job.find(regexFilter)
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .populate("companyId recruiterId"),
+    ]);
+  }
+
+  // Pagination meta
   const meta = buildMetaPagination(totalJobs, page, limit);
 
   sendResponse(res, {
@@ -375,7 +392,6 @@ export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
  * JOB RECOMMEND SYSTEM *
  ************************/
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
-  // const { userId } = req.query
   const userId = req.user?._id;
 
   if (!userId) {
@@ -385,7 +401,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const resume = await CreateResume.findOne({ userId }).lean();
 
   if (!resume) {
-    sendResponse(res, {
+    return sendResponse(res, {
       statusCode: 200,
       success: true,
       message: "No resume found for the User",
@@ -398,32 +414,42 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const skills = resume?.skills || [];
   const jobCategoryId = resume?.jobCategoryId;
 
-  // const { title, country, skills = [], jobCategoryId } = resume
-
   const matchConditions = [];
 
-  if (title)
-    matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
-  if (country)
-    matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
+  if (title) matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
+  if (country) matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
   if (skills.length > 0) {
     matchConditions.push({ responsibilities: { $in: skills } });
     matchConditions.push({
       description: { $regex: new RegExp(skills.join("|"), "i") },
     });
   }
-
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId });
 
-  const jobs = await Job.find({ $or: matchConditions, status: "active",    arcrivedJob: false,
-    adminApprove: true,
-    jobApprove: "approved", })
+  // ✅ Fix: Exclude future publish dates
+  const dateFilter = {
+    $or: [
+      { publishDate: { $exists: false } },
+      { publishDate: null },
+      { publishDate: { $lte: new Date() } },
+    ],
+  };
+
+  const jobs = await Job.find({
+    $and: [
+      { $or: matchConditions },
+      { arcrivedJob: false },
+      { adminApprove: true },
+      { jobApprove: "approved" },
+      dateFilter,
+    ],
+  })
     .populate("companyId recruiterId")
     .limit(50)
     .lean();
 
-  const exactMatches = [] as any[];
-  const partialMatches = [] as any[];
+  const exactMatches: any[] = [];
+  const partialMatches: any[] = [];
 
   jobs.forEach((job) => {
     let score = 0;
@@ -439,31 +465,32 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     const matchedSkillsInResponsibilities = skills.filter((skill: any) =>
       jobResponsibilities.includes(skill)
     );
-
     const matchedSkillsInDescription = skills.filter((skill: any) =>
       jobDescription.includes(skill.toLowerCase())
     );
 
     if (matchedSkillsInResponsibilities.length > 0) score += 1;
-    if (matchedSkillsInDescription.length > 0) score += 1; // ✅ new scoring rule
+    if (matchedSkillsInDescription.length > 0) score += 1;
 
-    if (score >= 5) {
-      exactMatches.push({ job, score });
-    } else {
-      partialMatches.push({ job, score });
-    }
+    if (score >= 5) exactMatches.push({ job, score });
+    else partialMatches.push({ job, score });
   });
 
-  // Sort by score (highest first)
   exactMatches.sort((a, b) => b.score - a.score);
   partialMatches.sort((a, b) => b.score - a.score);
 
   if (exactMatches.length === 0 && partialMatches.length === 0) {
-    const fallbackJobs = await Job.find({ status: "active" })
+    const fallbackJobs = await Job.find({
+      status: "active",
+      arcrivedJob: false,
+      adminApprove: true,
+      jobApprove: "approved",
+      ...dateFilter,
+    })
       .populate("companyId recruiterId")
       .limit(5);
 
-    sendResponse(res, {
+    return sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: "No exact or partial matches found.",
@@ -485,6 +512,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     },
   });
 });
+
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
