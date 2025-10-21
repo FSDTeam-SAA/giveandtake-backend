@@ -412,6 +412,9 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       description: { $regex: new RegExp(skills.join("|"), "i") },
     });
   }
+   matchConditions.push(  {  arcrivedJob: false,
+    adminApprove: true,
+    jobApprove: "approved",});
 
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId });
 
