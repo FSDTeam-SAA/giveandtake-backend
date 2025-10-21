@@ -37,6 +37,10 @@ export const createPaypalOrder = async (req: Request, res: Response) => {
       message: "PayPal order created",
       orderId: order.id,
       links: order.links,
+      data: {
+        orderId: order.id,
+        links: order.links,
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -196,6 +200,10 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     res.status(200).json({
       message: "Payment captured successfully",
       payment: newPayment,
+      success: true,
+      data: {
+        payment: newPayment,
+      }
     });
   } catch (error) {
     res.status(500).json({ message: "Payment capture failed", error });
