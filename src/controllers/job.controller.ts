@@ -412,13 +412,12 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       description: { $regex: new RegExp(skills.join("|"), "i") },
     });
   }
-   matchConditions.push(  {  arcrivedJob: false,
-    adminApprove: true,
-    jobApprove: "approved",});
 
   if (jobCategoryId as string) matchConditions.push({ jobCategoryId });
 
-  const jobs = await Job.find({ $or: matchConditions, status: "active" })
+  const jobs = await Job.find({ $or: matchConditions, status: "active",    arcrivedJob: false,
+    adminApprove: true,
+    jobApprove: "approved", })
     .populate("companyId recruiterId")
     .limit(50)
     .lean();
