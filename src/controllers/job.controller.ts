@@ -228,7 +228,11 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     Job.find(baseQuery, title ? { score: { $meta: "textScore" } } : {})
       .skip(skip)
       .limit(limit)
-      .sort(title ? { score: { $meta: "textScore" }, createdAt: -1 } : { createdAt: -1 })
+      .sort(
+        title
+          ? { score: { $meta: "textScore" }, createdAt: -1 }
+          : { createdAt: -1 }
+      )
       .populate("companyId recruiterId"),
   ]);
 
@@ -416,8 +420,10 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
 
   const matchConditions = [];
 
-  if (title) matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
-  if (country) matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
+  if (title)
+    matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
+  if (country)
+    matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
   if (skills.length > 0) {
     matchConditions.push({ responsibilities: { $in: skills } });
     matchConditions.push({
@@ -513,7 +519,6 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
@@ -534,7 +539,6 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
     data: archivedJobs,
   });
 });
-
 
 export const archiveJob = catchAsync(async (req, res) => {
   const userId = req.user?._id;
@@ -662,7 +666,6 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       { companyId: userId }, // user account itself is a company
       ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
     ],
-    arcrivedJob: false,
   }).sort({ createdAt: -1 });
 
   if (!Jobs.length) {
@@ -716,7 +719,6 @@ export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;
   const Jobs = await Job.find({
     companyId: userId,
-    arcrivedJob: false,
     jobApprove: "approved",
   })
     .sort({
@@ -737,7 +739,6 @@ export const getRicruitercompanyJobs3 = catchAsync(async (req, res) => {
   const userId = req.params.id;
   const Jobs = await Job.find({
     recruiterId: userId,
-    arcrivedJob: false,
   })
     .sort({
       createdAt: -1,
@@ -758,7 +759,6 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
   const userId = req.params.id;
   const Jobs = await Job.find({
     companyId: userId,
-    arcrivedJob: false,
   })
     .sort({
       createdAt: -1,
