@@ -13,7 +13,6 @@ import {
   adminApproveJobs,
   getRicruitercompanyJobs2,
   getRicruitercompanyJobs3,
-  archiveJob,
   toggleArchiveJob,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
