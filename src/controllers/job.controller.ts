@@ -536,26 +536,27 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
 });
 
 
-export const archiveJob = catchAsync(async (req, res) => {
+export const toggleArchiveJob = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   const { jobId } = req.params;
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
   if (!jobId) throw new AppError(httpStatus.BAD_REQUEST, "Job ID is required");
 
-  const job = await Job.findOneAndUpdate(
-    { _id: jobId, userId },
-    { arcrivedJob: true },
-    { new: true }
-  );
+  const job = await Job.findOne({ _id: jobId, userId });
+  if (!job) throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
 
-  if (!job)
-    throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
+  job.arcrivedJob = !job.arcrivedJob;
+  await job.save();
+
+  const message = job.arcrivedJob
+    ? "Job archived successfully"
+    : "Job unarchived successfully";
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Job archived successfully",
+    message,
     data: job,
   });
 });
