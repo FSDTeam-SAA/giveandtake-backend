@@ -13,6 +13,7 @@ import {
   adminApproveJobs,
   getRicruitercompanyJobs2,
   getRicruitercompanyJobs3,
+  archiveJob,
 } from '../controllers/job.controller'
 import { protect } from '../middlewares/auth.middleware'
 
@@ -30,7 +31,11 @@ router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
+
+
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
+router.patch("jobs/:jobId/archive", protect, archiveJob);
+
 router.route('/jobs/recruiter/company').get(protect, getRecruiterCompanyJobs)
 router.route('/all-jobs/company/:id').get( getRicruitercompanyJobs1)
 router.route('/all-jobs/recruiter/:id').get( getRicruitercompanyJobs3)

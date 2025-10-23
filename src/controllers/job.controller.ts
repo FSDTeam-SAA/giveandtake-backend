@@ -535,6 +535,31 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
   });
 });
 
+
+export const archiveJob = catchAsync(async (req, res) => {
+  const userId = req.user?._id;
+  const { jobId } = req.params;
+
+  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
+  if (!jobId) throw new AppError(httpStatus.BAD_REQUEST, "Job ID is required");
+
+  const job = await Job.findOneAndUpdate(
+    { _id: jobId, userId },
+    { arcrivedJob: true },
+    { new: true }
+  );
+
+  if (!job)
+    throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Job archived successfully",
+    data: job,
+  });
+});
+
 /************************************************
  * FETCH JOBS THAT RICRUTER AND COMPANY CREATED *
  ************************************************/

@@ -22,7 +22,8 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 };
 
 export const isAdmin = (req: Request, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== "admin") {
+  if (req.user?.role !== "admin" && req.user?.role !== 'super-admin') {
+    console.log(req.user?.role);
     throw new AppError(403, "Access denied. You are not an admin.");
   }
   next();
