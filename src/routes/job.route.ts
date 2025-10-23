@@ -34,7 +34,7 @@ router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
 
 
 router.route('/jobs/archived/user').get(protect, getArchivedJobs)
-router.patch("jobs/:jobId/archive", protect, toggleArchiveJob);
+router.patch("/jobs/:jobId/archive", protect, toggleArchiveJob);
 
 router.route('/jobs/recruiter/company').get(protect, getRecruiterCompanyJobs)
 router.route('/all-jobs/company/:id').get( getRicruitercompanyJobs1)
