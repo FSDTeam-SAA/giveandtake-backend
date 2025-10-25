@@ -17,14 +17,28 @@ export const upsertContent = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+
 export const getAllContent = async (req: Request, res: Response): Promise<void> => {
   try {
     const content = await Content.find();
-    res.status(200).json(content);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
+
+    res.status(200).json({
+      status: "success",
+      message: "Content retrieved successfully.",
+      data: content,
+    });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Unexpected error retrieving content.";
+
+    res.status(500).json({
+      status: "error",
+      message,
+      data: null,
+    });
   }
 };
+
 
 export const getContentByType = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -34,7 +48,11 @@ export const getContentByType = async (req: Request, res: Response): Promise<voi
       res.status(404).json({ message: "Content not found" });
       return;
     }
-    res.status(200).json(content);
+    res.status(200).json({
+      status: "success",
+      message: "Content retrieved successfully.",
+      data: content,
+    });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
