@@ -187,17 +187,44 @@ export const notifyJobExpiryToRecruiters = async () => {
 export const notifyExpiredSubscriptions = async () => {
   const today = new Date();
 
-  const expiredPayments = await paymentInfo.find({
-    planStatus: 'deactivate',
-    updatedAt: { $lte: today },
-  });
+  const expiredPayments = await paymentInfo
+    .find({
+      planStatus: "deactivate",
+      updatedAt: { $lte: today },
+    })
+    .populate("userId", "name email"); // need name + email for the email
 
   for (const payment of expiredPayments) {
+    const user = payment.userId as any;
 
+    // Send email if we have an address
+    if (user?.email) {
+      const subject = "Your subscription is about to expire";
+      const body = buildEvpEmail({
+        heading: "Subscription Notice",
+        subheading: "Action Required",
+        greetingName: getFirstName(user?.name),
+        signer: "EVP Admin",
+        titleTag: "EVP — Subscription Notice",
+        bodyHtml: `
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+            Your upgraded plan is due to expire shortly.
+          </p>
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+            Please renew your subscription or upload a new 30-second Elevator Video Pitch.
+          </p>
+        `,
+      });
+
+      await sendEmail(user.email, subject, body);
+    }
+
+    // Existing in-app notification
     await createNotification({
-      to: payment.userId as mongoose.Types.ObjectId,
-      message: 'Your subscription has expired, please renew or upload a 30-second elevator pitch video today.',
-      type: 'Subscription Expired',
+      to: (user?._id || payment.userId) as mongoose.Types.ObjectId,
+      message:
+        "Your subscription has expired, please renew or upload a 30-second elevator pitch video today.",
+      type: "Subscription Expired",
       id: payment._id as mongoose.Types.ObjectId,
     });
   }
