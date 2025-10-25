@@ -116,9 +116,9 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Payment Receipt</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <!-- Optional logo or emoji -->
-                    <div style="width:56px;height:56px;border-radius:8px;background:#2B7FD0;display:inline-block;line-height:56px;text-align:center;color:#fff;font-weight:bold;">
-                      EVP
+                    <!-- Company Logo -->
+                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
                     </div>
                   </td>
                 </tr>
@@ -133,7 +133,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                 Dear <strong>${user.name}</strong>,
               </p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch© Ltd</strong>! Below is a copy of your receipt. You can also download this from your Account pannel.
+                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch© Ltd</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
               </p>
 
               <!-- Receipt card -->
@@ -188,6 +188,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 </body>
 </html>
 `;
+
 
     console.log(captureDetails);
 

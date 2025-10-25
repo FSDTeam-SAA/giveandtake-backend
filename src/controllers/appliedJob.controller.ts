@@ -145,22 +145,88 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   });
 
   // ✅ Send email to Applicant
-  if (candidate.email) {
-    const recruiterName = (job.userId as any)?.name || "Recruiter";
+function getFirstName(fullName?: string): string {
+  if (!fullName) return "Candidate";
+  return fullName.trim().split(" ")[0];
+}
 
-    const emailSubject = `Application Received: ${job.title}`;
-    const emailBody = `
-      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
-        <h2 style="margin-top: 0;">Application Confirmation</h2>
-        <p>Dear ${candidate.name?.split(" ")[0] || "Candidate"},</p>
-        <p>Your application has been received and is now being reviewed.</p>
-        <p>Thank you for your patience and good luck!</p>
-        <p style="margin-top: 20px;">Best regards,<br/>${recruiterName}</p>
-      </div>
-    `;
+if (candidate.email) {
+  const recruiterName = (job.userId as any)?.name || "Recruiter";
+  const firstName = getFirstName(candidate.name);
 
-    await sendEmail(candidate.email, emailSubject, emailBody);
-  }
+  const emailSubject = `Application Received: ${job.title}`;
+  const emailBody = `<!doctype html>
+  <html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Application Received — Elevator Video Pitch</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
+      <tr>
+        <td align="center" style="padding:20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+            
+            <!-- Header -->
+            <tr>
+              <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Application Confirmation</p>
+                    </td>
+                    <td style="text-align:right;vertical-align:middle;">
+                      <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
+                        <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:24px;">
+                <p style="margin:0 0 12px;font-size:15px;color:#111;">Dear <strong>${firstName}</strong>,</p>
+                <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                  We’re pleased to inform you that your application for <strong>${job.title}</strong> has been received and is now under review.
+                </p>
+                <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                  Thank you for your interest in joining Elevator Video Pitch© Ltd. Our team will reach out if your qualifications match our requirements.
+                </p>
+                <p style="margin:0 0 16px;font-size:14px;color:#374151;">We wish you the best of luck!</p>
+
+                <p style="margin:8px 0 0;font-size:14px;color:#374151;">
+                  Best regards,<br>
+                  <strong>${recruiterName}</strong><br>
+                  Elevator Video Pitch© Ltd
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
+                <div style="max-width:520px;margin:0 auto;">
+                  <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
+                  <p style="margin:0;">If you have any questions, please contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                </div>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>`;
+
+  await sendEmail(candidate.email, emailSubject, emailBody);
+}
+
 
   res.status(httpStatus.CREATED).json({
     success: true,
@@ -323,6 +389,95 @@ export const getApplicationsByUser = catchAsync(
 //   }
 // )
 
+// Helper: safely get first name
+function getFirstName(fullName?: string): string {
+  if (!fullName) return "Candidate";
+  const trimmed = fullName.trim();
+  if (!trimmed) return "Candidate";
+  return trimmed.split(/\s+/)[0];
+}
+
+// Helper: shared EVP email template
+function buildEvpEmail(opts: {
+  heading: string;              // e.g., "Application Update"
+  subheading?: string;          // e.g., "Status: Shortlisted"
+  greetingName: string;         // e.g., "Fahim"
+  bodyHtml: string;             // inner HTML paragraphs
+  signer: string;               // e.g., recruiter name
+  titleTag?: string;            // <title> content
+}) {
+  const {
+    heading,
+    subheading,
+    greetingName,
+    bodyHtml,
+    signer,
+    titleTag = "Elevator Video Pitch — Notification",
+  } = opts;
+
+  return `<!doctype html>
+  <html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${titleTag}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
+      <tr>
+        <td align="center" style="padding:20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+            
+            <!-- Header -->
+            <tr>
+              <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${heading}${subheading ? ` — ${subheading}` : ""}</p>
+                    </td>
+                    <td style="text-align:right;vertical-align:middle;">
+                      <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
+                        <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:24px;">
+                <p style="margin:0 0 12px;font-size:15px;color:#111;">Dear <strong>${greetingName}</strong>,</p>
+                ${bodyHtml}
+                <p style="margin:16px 0 0;font-size:14px;color:#374151;">
+                  Best regards,<br>
+                  <strong>${signer}</strong><br>
+                  Elevator Video Pitch© Ltd
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
+                <div style="max-width:520px;margin:0 auto;">
+                  <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
+                  <p style="margin:0;">If you have any questions, contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                </div>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>`;
+}
+
 export const updateApplicationStatus = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params; // candidate user id
@@ -338,59 +493,95 @@ export const updateApplicationStatus = catchAsync(
       { new: true }
     )
       .populate("jobId", "title")
-      .populate("userId", "name email"); // ✅ fetch candidate info
+      .populate("userId", "name email"); // fetch candidate info
 
     if (!updated) {
       throw new AppError(httpStatus.NOT_FOUND, "Application not found");
     }
 
     const candidate = updated.userId as any;
-    const recruiter = req.user; // ✅ assuming you attach recruiter info in middleware
+    const recruiter = req.user as any; // assuming you attach recruiter info in middleware
     const jobTitle = (updated.jobId as any)?.title || "the job";
+
+    const firstName = getFirstName(candidate?.name);
+    const recruiterName = getFirstName(recruiter?.name) || "Recruiter";
 
     let emailSubject = "";
     let emailBody = "";
 
     if (status === "rejected") {
       emailSubject = `Application Update: ${jobTitle}`;
-      emailBody = `
-    <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
-      <h2 style="margin-top: 0;">Application Update</h2>
-      <p>Dear ${candidate.name?.split(" ")[0] || "Candidate"},</p>
-      <p>I’m sorry to let you know your application has been <strong>unsuccessful</strong> on this occasion and, unfortunately, due to the sheer volume of applications we receive, we cannot give personalised feedback at this stage.</p>
-      <p>Please keep applying and remain hopeful that the best of your career is yet to come!</p>
-      <p style="margin-top: 20px;">Best regards,<br/>${recruiter?.name || "Recruiter"
-        }</p>
-    </div>
-  `;
-    }
-
-    if (status === "shortlisted") {
+      emailBody = buildEvpEmail({
+        heading: "Application Update",
+        subheading: "Status: Unsuccessful",
+        greetingName: firstName,
+        signer: recruiterName,
+        titleTag: "EVP — Application Update",
+        bodyHtml: `
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+            I’m sorry to let you know your application for <strong>${jobTitle}</strong> has been
+            <strong>unsuccessful</strong> on this occasion. Due to the high volume of applications, we
+            can’t provide personalised feedback at this stage.
+          </p>
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+            Please keep applying and remain hopeful — the best of your career is yet to come!
+          </p>
+        `,
+      });
+    } else if (status === "shortlisted") {
       emailSubject = `Application Update: ${jobTitle}`;
-      emailBody = `
-    <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
-      <h2 style="margin-top: 0;">Application Update</h2>
-      <p>Dear ${candidate.name?.split(" ")[0] || "Candidate"},</p>
-      <p>Your application has been <strong>forwarded to the hiring manager</strong>, and you will be contacted outside of EVP’s platform if the hiring manager wishes to progress your application.</p>
-      <p>Good luck!</p>
-      <p style="margin-top: 20px;">${recruiter?.name || "Recruiter"}</p>
-    </div>
-  `;
+      emailBody = buildEvpEmail({
+        heading: "Application Update",
+        subheading: "Status: Shortlisted",
+        greetingName: firstName,
+        signer: recruiterName,
+        titleTag: "EVP — Application Update",
+        bodyHtml: `
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+            Great news! Your application for <strong>${jobTitle}</strong> has been
+            <strong>forwarded to the hiring manager</strong>. You may be contacted outside of EVP’s
+            platform if they wish to progress your application.
+          </p>
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+            Good luck!
+          </p>
+        `,
+      });
+    } else if (status === "pending") {
+      // Optional: send a "still under review" message. Keep subject/body minimal or skip entirely.
+      emailSubject = `Application Update: ${jobTitle}`;
+      emailBody = buildEvpEmail({
+        heading: "Application Update",
+        subheading: "Status: Under Review",
+        greetingName: firstName,
+        signer: recruiterName,
+        titleTag: "EVP — Application Update",
+        bodyHtml: `
+          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+            Your application for <strong>${jobTitle}</strong> is still under review. We’ll reach out as
+            soon as there’s an update.
+          </p>
+        `,
+      });
     }
 
-    // ✅ send email
-    if (candidate?.email) {
+    // send email (only if we actually built one and the candidate has an email)
+    if (candidate?.email && emailSubject && emailBody) {
       await sendEmail(candidate.email, emailSubject, emailBody);
     }
 
-    // ✅ also send notification in-app
-    let notification = await createNotification({
+    // also send notification in-app
+    const notification = await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
       message: `"${jobTitle}" application status updated. Check your email.`,
       type: "job_application_status",
       id: updated._id,
     });
-    const count = await Notification.countDocuments({ to: updated.userId, isViewed: false })
+    const count = await Notification.countDocuments({
+      to: updated.userId,
+      isViewed: false,
+    });
+
     // Emit socket event
     io.to(updated.userId.toString()).emit("newNotification", { notification, count });
 
@@ -401,6 +592,7 @@ export const updateApplicationStatus = catchAsync(
     });
   }
 );
+
 
 /***************
  * DELETE Application
