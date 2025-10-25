@@ -29,45 +29,66 @@ export const sendEmail = async (
   }
 };
 
-export const resetOtpTemplate = (name: String, otp: String) => `
-<!doctype html>
+// Optional helper (reuse if already defined elsewhere)
+function getFirstName(fullName?: string): string {
+  if (!fullName) return "User";
+  const trimmed = fullName.trim();
+  if (!trimmed) return "User";
+  return trimmed.split(/\s+/)[0];
+}
+
+export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Password Reset OTP</title>
+  <title>Password Reset OTP — Elevator Video Pitch</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
     <tr>
-      <td align="center" style="padding:30px 10px;">
-        <table cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+      <td align="center" style="padding:20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+
           <!-- Header -->
           <tr>
-            <td style="background-color:#2B7FD0;padding:20px;text-align:center;">
-              <h1 style="margin:0;font-size:22px;color:#fff;">Elevator Video Pitch©</h1>
+            <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                    <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Password Reset OTP</p>
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                    </div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+
           <!-- Body -->
           <tr>
-            <td style="padding:30px 25px;">
-              <p style="margin:0 0 12px;font-size:16px;color:#111;">Hello ${
-                name || "User"
-              },</p>
+            <td style="padding:24px;">
+              <p style="margin:0 0 12px;font-size:15px;color:#111;">
+                Hello <strong>${getFirstName(name)}</strong>,
+              </p>
               <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
-                We received a request to reset your password for your <strong>Elevator Video Pitch©</strong> account.  
-                Please use the OTP below to proceed with resetting your password.
+                We received a request to reset your password for your
+                <strong>Elevator Video Pitch©</strong> account. Please use the OTP below to proceed.
               </p>
 
               <div style="margin:20px 0;text-align:center;">
                 <div style="display:inline-block;padding:14px 28px;background-color:#2B7FD0;color:#fff;border-radius:8px;font-size:22px;letter-spacing:3px;font-weight:bold;">
-                  ${otp}
+                  ${otp || ""}
                 </div>
               </div>
 
               <p style="margin:18px 0 8px;font-size:14px;color:#374151;line-height:1.6;">
-                This OTP is valid for the next <strong>10 minutes</strong>.  
-                If you didn’t request a password reset, you can safely ignore this email — your account is secure.
+                This OTP is valid for the next <strong>10 minutes</strong>. If you didn’t request a password reset,
+                you can safely ignore this email — your account remains secure.
               </p>
 
               <p style="margin:18px 0 0;font-size:14px;color:#374151;">
@@ -81,14 +102,18 @@ export const resetOtpTemplate = (name: String, otp: String) => `
           <!-- Footer -->
           <tr>
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
-              <p style="margin:0;">&copy; ${new Date().getFullYear()} Elevator Video Pitch© Ltd. All rights reserved.</p>
+              <div style="max-width:520px;margin:0 auto;">
+                <p style="margin:0 0 8px;">&copy; ${new Date().getFullYear()} Elevator Video Pitch© Ltd. All rights reserved.</p>
+                <p style="margin:0;">Need help? Contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+              </div>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
   </table>
 </body>
-</html>
-`;
+</html>`;
+
 
