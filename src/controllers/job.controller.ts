@@ -173,80 +173,50 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title, jobCategoryId } = req.query;
+  const { title } = req.query;
 
-  const filter: any = {};
-  const andConditions: any[] = [];
-
-  /**
-   * 🔍 Step 1: Full-text search (fast and ranked)
-   * Uses MongoDB’s $text search for indexed fields: title, description, location, location_Type.
-   */
-  if (title) {
-    andConditions.push({ $text: { $search: title as string } });
-  }
-
-  /**
-   * 🗂️ Optional: Filter by job category
-   */
-  if (jobCategoryId) {
-    andConditions.push({ jobCategoryId });
-  }
-
-  /**
-   * 📅 Publish date filter
-   */
-  andConditions.push({
+  const filter: any = {
+    arcrivedJob: false,
+    jobApprove: "approved",
+    adminApprove: true,
     $or: [
       { publishDate: { $exists: false } },
       { publishDate: null },
       { publishDate: { $lte: new Date() } },
     ],
-  });
-
-  if (andConditions.length > 0) {
-    filter.$and = andConditions;
-  }
-
-  // Pagination
-  const { page, limit, skip } = getPaginationParams(req.query);
-
-  const baseQuery = {
-    ...filter,
-    arcrivedJob: false,
-    jobApprove: "approved",
-    adminApprove: true,
   };
 
-  /**
-   * ⚡ Step 2: Perform full-text search
-   * - If $text search yields results, they’re sorted by textScore.
-   * - Otherwise, fallback to regex search for partial matches.
-   */
+  // Pagination setup
+  const { page, limit, skip } = getPaginationParams(req.query);
+
+  // 🔍 Full-text search
+  if (title) {
+    filter.$text = { $search: title as string };
+  }
+
   let [totalJobs, jobs] = await Promise.all([
-    Job.countDocuments(baseQuery),
-    Job.find(baseQuery, title ? { score: { $meta: "textScore" } } : {})
+    Job.countDocuments(filter),
+    Job.find(filter, title ? { score: { $meta: "textScore" } } : {})
       .skip(skip)
       .limit(limit)
-      .sort(
-        title
-          ? { score: { $meta: "textScore" }, createdAt: -1 }
-          : { createdAt: -1 }
-      )
+      .sort(title ? { score: { $meta: "textScore" } } : { createdAt: -1 })
       .populate("companyId recruiterId"),
   ]);
 
-  // 🧠 Fallback: If $text search finds nothing, use regex search instead
+  // 🧠 Fallback to regex search if no text search results
   if (title && jobs.length === 0) {
     const regex = { $regex: title, $options: "i" };
 
     const regexFilter: any = {
-      ...baseQuery,
+      arcrivedJob: false,
+      jobApprove: "approved",
+      adminApprove: true,
       $or: [
         { title: regex },
         { description: regex },
         { location: regex },
         { location_Type: regex },
+        { employement_Type: regex },
       ],
     };
 
@@ -260,7 +230,6 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     ]);
   }
 
-  // Pagination meta
   const meta = buildMetaPagination(totalJobs, page, limit);
 
   sendResponse(res, {
@@ -270,6 +239,8 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     data: { meta, jobs },
   });
 });
+
+
 
 /*******************
  * // UPDATE A JOB *
