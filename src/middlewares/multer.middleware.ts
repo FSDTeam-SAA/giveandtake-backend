@@ -21,11 +21,11 @@ const storage = multer.diskStorage({
   },
 });
 
-// ✅ INCREASE FILE SIZE LIMIT for videos
+
 export const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // ✅ Increased to 100MB for videos
+    fileSize: 600 * 1024 * 1024, 
   },
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|mp4|mov|avi|xlsx/;
