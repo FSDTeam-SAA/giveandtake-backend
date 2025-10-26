@@ -372,11 +372,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   fs.mkdirSync(hlsDir, { recursive: true });
 
   // @ts-ignore
-  const { playlistPath, keyPath } = await processVideoHLS(
-    tempPath,
-    hlsDir,
-    userId
-  );
+  await processVideoHLS(tempPath, hlsDir, userId);
   fs.unlinkSync(tempPath);
 
   // ✅ Upload HLS files to AWS S3
@@ -384,7 +380,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const uploadedFiles = await uploadHLSFilesToS3(hlsDir, s3Folder);
 
   // ✅ Extract S3 URLs
-  const hlsUrl = uploadedFiles["playlist.m3u8"] || "";
+  const hlsUrl = uploadedFiles["master.m3u8"] || "";
   const encryptionKeyUrl = uploadedFiles["encryption.key"] || "";
 
   // ✅ Clean up HLS temp directory
@@ -435,11 +431,11 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
       const keyFolder = path.dirname(s3Key);
 
       // Delete all files in the HLS folder
-      await deleteFromS3(s3Key); // playlist.m3u8
+      await deleteFromS3(s3Key); // master playlist
       await deleteFromS3(`${keyFolder}/encryption.key`);
 
       // Delete .ts segments (you might want to list and delete all segments)
-      const baseKey = s3Key.replace("playlist.m3u8", "");
+      const baseKey = s3Key.replace(/[^/]+$/, "");
       // Note: For production, you'd want to list all objects with prefix and delete them
     } catch (error) {
       console.error("Error deleting S3 files:", error);
@@ -492,14 +488,20 @@ export const streamElevatorPitch = catchAsync(
       let playlistContent = playlistRes.data as string;
 
       // Rewrite .ts segment lines to use our secure proxy endpoint
+      const rewriteAssetLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+          return line;
+        }
+        if (/\.(ts|m3u8)$/i.test(trimmed)) {
+          return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`;
+        }
+        return line;
+      };
+
       playlistContent = playlistContent
         .split("\n")
-        .map((line) => {
-          if (line.trim().endsWith(".ts")) {
-            return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${line.trim()}`;
-          }
-          return line;
-        })
+        .map(rewriteAssetLine)
         .join("\n");
 
       res.set({
@@ -527,13 +529,19 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
   }
 
-  // Derive base S3 key from playlist.m3u8 URL
+  // Derive base S3 key from the stored master playlist URL
   const hlsUrl = pitch.video.hlsUrl;
   const baseS3Key = hlsUrl.replace(
     `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
     ""
   );
-  const segmentS3Key = baseS3Key.replace("playlist.m3u8", segment);
+  const sanitizedSegment = segment.replace(/\\/g, "/");
+  if (sanitizedSegment.includes("..")) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid segment reference");
+  }
+  const baseDirectory = baseS3Key.replace(/[^/]+$/, "");
+  const segmentS3Key = `${baseDirectory}${sanitizedSegment}`;
+  const isPlaylist = sanitizedSegment.toLowerCase().endsWith(".m3u8");
 
   try {
     // Generate signed URL for the segment
@@ -543,7 +551,9 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
     });
 
     res.set({
-      "Content-Type": "video/mp2t",
+      "Content-Type": isPlaylist
+        ? "application/vnd.apple.mpegurl"
+        : "video/mp2t",
       "Cache-Control": "no-cache",
     });
 

@@ -46,22 +46,133 @@ const rotationToVf = (rotation: 0 | 90 | 180 | 270): string | null => {
   return null
 }
 
-const ensureEven = (value: number): number => {
-  if (!Number.isFinite(value) || value <= 0) return 1080
+type RenditionProfile = {
+  name: string
+  height: number
+  videoKbps: number
+  maxrateKbps: number
+  bufsizeKbps: number
+  audioKbps: number
+}
+
+type MasterPlaylistEntry = {
+  name: string
+  playlistFile: string
+  bandwidth: number
+  averageBandwidth: number
+  resolution: string
+}
+
+const HLS_RENDITIONS: RenditionProfile[] = [
+  { name: '1080p', height: 1080, videoKbps: 5200, maxrateKbps: 5800, bufsizeKbps: 7800, audioKbps: 160 },
+  { name: '720p', height: 720, videoKbps: 3200, maxrateKbps: 3600, bufsizeKbps: 5000, audioKbps: 128 },
+  { name: '480p', height: 480, videoKbps: 1800, maxrateKbps: 2100, bufsizeKbps: 3200, audioKbps: 96 },
+  { name: '360p', height: 360, videoKbps: 1100, maxrateKbps: 1300, bufsizeKbps: 2000, audioKbps: 64 },
+]
+
+const ensureEven = (value: number, fallback = 2): number => {
+  if (!Number.isFinite(value) || value <= 0) return fallback
   return value % 2 === 0 ? value : value - 1
 }
 
 const buildVideoFilters = (
   rotationFilter: string | null,
-  cappedHeight: number
+  targetHeight: number
 ): string => {
   const filters = []
   if (rotationFilter) filters.push(rotationFilter)
   filters.push(
-    `scale=-2:${cappedHeight}:force_original_aspect_ratio=decrease:flags=lanczos`
+    `scale=-2:${targetHeight}:force_original_aspect_ratio=decrease:flags=lanczos`
   )
   filters.push('format=yuv420p')
   return filters.join(',')
+}
+
+const toPosix = (value: string) => value.split(path.sep).join('/')
+
+const selectRenditions = (sourceHeight?: number) => {
+  if (!sourceHeight) return HLS_RENDITIONS
+  const enabled = HLS_RENDITIONS.filter(profile => sourceHeight >= profile.height)
+  if (enabled.length) return enabled
+  return [HLS_RENDITIONS[HLS_RENDITIONS.length - 1]]
+}
+
+const computeResolution = (
+  sourceWidth: number,
+  sourceHeight: number,
+  targetHeight: number
+) => {
+  if (!sourceWidth || !sourceHeight) {
+    const assumedWidth = ensureEven(Math.round((16 / 9) * targetHeight), 640)
+    return `${assumedWidth}x${targetHeight}`
+  }
+  const aspect = sourceWidth / sourceHeight
+  const targetWidth = ensureEven(Math.round(aspect * targetHeight), 640)
+  return `${targetWidth}x${targetHeight}`
+}
+
+const transcodeRendition = async ({
+  inputPath,
+  outputDir,
+  keyInfoPath,
+  filters,
+  profile,
+}: {
+  inputPath: string
+  outputDir: string
+  keyInfoPath: string
+  filters: string
+  profile: RenditionProfile
+}) => {
+  const playlistName = `${profile.name}.m3u8`
+  const playlistPath = path.join(outputDir, playlistName)
+  const segmentPattern = toPosix(path.join(outputDir, `${profile.name}_%03d.ts`))
+
+  const cmd = ffmpeg(inputPath)
+    .videoCodec('libx264')
+    .audioCodec('aac')
+    .audioBitrate(`${profile.audioKbps}k`)
+    .videoFilters(filters)
+    .outputOptions([
+      '-pix_fmt yuv420p',
+      '-profile:v high',
+      '-level 4.1',
+      '-preset veryfast',
+      `-b:v ${profile.videoKbps}k`,
+      `-maxrate ${profile.maxrateKbps}k`,
+      `-bufsize ${profile.bufsizeKbps}k`,
+      '-map_metadata -1',
+      '-metadata:s:v:0 rotate=0',
+      '-hls_time 4',
+      '-hls_list_size 0',
+      '-hls_segment_type mpegts',
+      '-hls_flags independent_segments',
+      `-hls_segment_filename ${segmentPattern}`,
+      `-hls_key_info_file ${keyInfoPath}`,
+      '-hls_playlist_type vod',
+    ])
+
+  return new Promise<{ playlistPath: string; playlistName: string }>((resolve, reject) => {
+    cmd
+      .output(toPosix(playlistPath))
+      .on('end', () => resolve({ playlistPath, playlistName }))
+      .on('error', err => reject(err))
+      .run()
+  })
+}
+
+const writeMasterPlaylist = (
+  masterPath: string,
+  entries: MasterPlaylistEntry[]
+) => {
+  const lines = ['#EXTM3U']
+  entries.forEach(entry => {
+    lines.push(
+      `#EXT-X-STREAM-INF:BANDWIDTH=${entry.bandwidth},AVERAGE-BANDWIDTH=${entry.averageBandwidth},RESOLUTION=${entry.resolution},CODECS="avc1.640029,mp4a.40.2"`
+    )
+    lines.push(entry.playlistFile)
+  })
+  fs.writeFileSync(masterPath, lines.join('\n'))
 }
 
 /**
@@ -82,7 +193,7 @@ export const processVideoHLS = async (
   fs.mkdirSync(outputDir, { recursive: true })
   const keyPath = path.join(outputDir, keyFileName)
   const keyInfoPath = path.join(outputDir, keyInfoFileName)
-  const playlistPath = path.join(outputDir, 'playlist.m3u8')
+  const masterPlaylistPath = path.join(outputDir, 'master.m3u8')
 
   // 1) Write key file
   fs.writeFileSync(keyPath, key)
@@ -94,59 +205,55 @@ export const processVideoHLS = async (
   const keyInfoContent = `${keyUri}\n${keyPath}\n${iv.toString('hex')}`
   fs.writeFileSync(keyInfoPath, keyInfoContent)
 
-  // --- Probe rotation & build filters/codecs ---
-  const { rotation, height } = await getVideoMetadata(inputPath)
-  const vf = rotationToVf(rotation)
-  const maxHeight = ensureEven(Math.min(height || 1080, 1080))
-  const filterChain = buildVideoFilters(vf, maxHeight)
+  // --- Probe rotation & determine rendition set ---
+  const { rotation, width, height } = await getVideoMetadata(inputPath)
+  const rotated = rotation === 90 || rotation === 270
+  const sourceWidth = rotated ? height : width
+  const sourceHeight = rotated ? width : height
+  const rotationFilter = rotationToVf(rotation)
+  const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
 
-  // We re-encode to H.264/AAC for broad HLS compatibility
-  // and strip any residual rotate metadata.
-  const cmd = ffmpeg(inputPath)
-    .videoCodec('libx264')
-    .audioCodec('aac')
-    .audioBitrate('160k')
-    .outputOptions([
-      '-pix_fmt yuv420p',
-      '-profile:v main',
-      '-level 4.0',
-      '-preset veryfast',
-      '-crf 21',
-      '-maxrate 5200k',
-      '-bufsize 7800k',
-      '-g 48',
-      '-keyint_min 48',
-      '-movflags faststart',
-      '-map_metadata -1',          // drop global metadata
-      '-metadata:s:v:0 rotate=0',  // ensure no rotate tag remains
-      // HLS options
-      '-hls_time 4',
-      '-hls_list_size 0',
-      '-hls_segment_type mpegts',
-      '-hls_flags independent_segments',
-      `-hls_key_info_file ${keyInfoPath}`,
-      '-hls_playlist_type vod',
-    ])
+  const selectedProfiles = selectRenditions(sourceHeight)
+  const masterEntries: MasterPlaylistEntry[] = []
 
-  if (filterChain) cmd.videoFilters(filterChain)
+  for (const profile of selectedProfiles) {
+    const targetHeight = ensureEven(
+      Math.min(profile.height, clampedSourceHeight),
+      profile.height
+    )
+    const filters = buildVideoFilters(rotationFilter, targetHeight)
+    await transcodeRendition({
+      inputPath,
+      outputDir,
+      keyInfoPath,
+      filters,
+      profile,
+    })
 
-  return new Promise<{
-    playlistPath: string
-    keyPath: string
-    keyInfoPath: string
-    iv: string
-  }>((resolve, reject) => {
-    cmd
-      .output(playlistPath)
-      .on('end', () => {
-        resolve({
-          playlistPath,
-          keyPath,
-          keyInfoPath,
-          iv: iv.toString('hex'),
-        })
-      })
-      .on('error', (err) => reject(err))
-      .run()
-  })
+    const resolution = computeResolution(
+      ensureEven(sourceWidth || 1920, 1920),
+      ensureEven(sourceHeight || 1080, 1080),
+      targetHeight
+    )
+    masterEntries.push({
+      name: profile.name,
+      playlistFile: `${profile.name}.m3u8`,
+      bandwidth: Math.round(
+        (profile.maxrateKbps + profile.audioKbps) * 1000
+      ),
+      averageBandwidth: Math.round(
+        (profile.videoKbps + profile.audioKbps) * 1000
+      ),
+      resolution,
+    })
+  }
+
+  writeMasterPlaylist(masterPlaylistPath, masterEntries)
+
+  return {
+    masterPlaylistPath,
+    keyPath,
+    keyInfoPath,
+    iv: iv.toString('hex'),
+  }
 }
