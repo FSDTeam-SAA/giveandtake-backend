@@ -72,10 +72,10 @@ type MasterPlaylistEntry = {
 }
 
 const HLS_RENDITIONS: RenditionProfile[] = [
-  { name: '1080p', height: 1080, videoKbps: 8500, maxrateKbps: 10000, bufsizeKbps: 15000, audioKbps: 192, crf: 19 },
-  { name: '720p', height: 720, videoKbps: 5600, maxrateKbps: 6800, bufsizeKbps: 10000, audioKbps: 160, crf: 19 },
-  { name: '480p', height: 480, videoKbps: 3200, maxrateKbps: 3800, bufsizeKbps: 6000, audioKbps: 128, crf: 20 },
-  { name: '360p', height: 360, videoKbps: 1800, maxrateKbps: 2300, bufsizeKbps: 3600, audioKbps: 96, crf: 21 },
+  { name: '1080p', height: 1080, videoKbps: 10000, maxrateKbps: 12000, bufsizeKbps: 18000, audioKbps: 192, crf: 17 },
+  { name: '720p', height: 720, videoKbps: 6500, maxrateKbps: 7800, bufsizeKbps: 12000, audioKbps: 160, crf: 18 },
+  { name: '480p', height: 480, videoKbps: 3600, maxrateKbps: 4400, bufsizeKbps: 7200, audioKbps: 128, crf: 20 },
+  { name: '360p', height: 360, videoKbps: 2200, maxrateKbps: 2800, bufsizeKbps: 4800, audioKbps: 96, crf: 22 },
 ]
 
 const ensureEven = (value: number, fallback = 2): number => {
@@ -98,11 +98,12 @@ const computeResolution = (
   targetHeight: number
 ) => {
   if (!sourceWidth || !sourceHeight) {
-    const assumedWidth = ensureEven(Math.round((16 / 9) * targetHeight), 640)
+    // Fall back to portrait-friendly assumption
+    const assumedWidth = ensureEven(Math.round((9 / 16) * targetHeight), 320)
     return `${assumedWidth}x${targetHeight}`
   }
   const aspect = sourceWidth / sourceHeight
-  const targetWidth = ensureEven(Math.round(aspect * targetHeight), 640)
+  const targetWidth = ensureEven(Math.round(aspect * targetHeight), 320)
   return `${targetWidth}x${targetHeight}`
 }
 
@@ -231,7 +232,7 @@ export const processVideoHLS = async (
         `-map [${cfg.videoLabel}]`,
         '-map 0:a:0?',
         '-c:v libx264',
-        '-preset veryfast',
+        '-preset medium',
         '-profile:v high',
         '-level 4.1',
         `-crf ${cfg.crf}`,
