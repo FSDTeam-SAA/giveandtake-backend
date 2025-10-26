@@ -53,6 +53,7 @@ type RenditionProfile = {
   maxrateKbps: number
   bufsizeKbps: number
   audioKbps: number
+  crf: number
 }
 
 type RenditionConfig = RenditionProfile & {
@@ -71,10 +72,10 @@ type MasterPlaylistEntry = {
 }
 
 const HLS_RENDITIONS: RenditionProfile[] = [
-  { name: '1080p', height: 1080, videoKbps: 5200, maxrateKbps: 5800, bufsizeKbps: 7800, audioKbps: 160 },
-  { name: '720p', height: 720, videoKbps: 3200, maxrateKbps: 3600, bufsizeKbps: 5000, audioKbps: 128 },
-  { name: '480p', height: 480, videoKbps: 1800, maxrateKbps: 2100, bufsizeKbps: 3200, audioKbps: 96 },
-  { name: '360p', height: 360, videoKbps: 1100, maxrateKbps: 1300, bufsizeKbps: 2000, audioKbps: 64 },
+  { name: '1080p', height: 1080, videoKbps: 8500, maxrateKbps: 10000, bufsizeKbps: 15000, audioKbps: 192, crf: 19 },
+  { name: '720p', height: 720, videoKbps: 5600, maxrateKbps: 6800, bufsizeKbps: 10000, audioKbps: 160, crf: 19 },
+  { name: '480p', height: 480, videoKbps: 3200, maxrateKbps: 3800, bufsizeKbps: 6000, audioKbps: 128, crf: 20 },
+  { name: '360p', height: 360, videoKbps: 1800, maxrateKbps: 2300, bufsizeKbps: 3600, audioKbps: 96, crf: 21 },
 ]
 
 const ensureEven = (value: number, fallback = 2): number => {
@@ -233,7 +234,7 @@ export const processVideoHLS = async (
         '-preset veryfast',
         '-profile:v high',
         '-level 4.1',
-        `-b:v ${cfg.videoKbps}k`,
+        `-crf ${cfg.crf}`,
         `-maxrate ${cfg.maxrateKbps}k`,
         `-bufsize ${cfg.bufsizeKbps}k`,
         '-g 48',
