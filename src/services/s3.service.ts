@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import fs from "fs";
 import path from "path";
@@ -17,19 +18,42 @@ const s3Client = new S3Client({
   },
 });
 
-export const uploadToS3 = async (filePath: string, s3Key: string) => {
-  const fileContent = fs.readFileSync(filePath);
-  const bucketName = process.env.AWS_BUCKET_NAME!;
+const bucketUrl = (key: string) =>
+  `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 
-  const command = new PutObjectCommand({
-    Bucket: bucketName,
-    Key: s3Key,
-    Body: fileContent,
-    ContentType: getContentType(s3Key),
+const multipartUpload = async (params: {
+  Key: string;
+  Body: fs.ReadStream;
+  ContentType?: string;
+  CacheControl?: string;
+}) => {
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: process.env.AWS_BUCKET_NAME!,
+      ...params,
+    },
+    queueSize: 4,
+    partSize: 8 * 1024 * 1024,
+    leavePartsOnError: false,
   });
 
-  await s3Client.send(command);
-  return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+  await upload.done();
+};
+
+export const uploadToS3 = async (filePath: string, s3Key: string) => {
+  const stream = fs.createReadStream(filePath);
+
+  await multipartUpload({
+    Key: s3Key,
+    Body: stream,
+    ContentType: getContentType(s3Key),
+    CacheControl: s3Key.endsWith(".key")
+      ? "private, max-age=0, no-cache"
+      : "public, max-age=31536000, immutable",
+  });
+
+  return bucketUrl(s3Key);
 };
 
 export const getSignedS3Url = async (
@@ -59,15 +83,29 @@ export const uploadHLSFilesToS3 = async (
   localDir: string,
   s3Folder: string
 ) => {
-  const files = fs.readdirSync(localDir);
+  const entries = fs.readdirSync(localDir, { withFileTypes: true });
+  const files = entries
+    .filter((entry) => entry.isFile() && !entry.name.endsWith(".info"))
+    .map((entry) => entry.name);
   const uploadedUrls: { [key: string]: string } = {};
 
-  for (const file of files) {
-    const filePath = path.join(localDir, file);
-    const s3Key = `${s3Folder}/${file}`;
-    const url = await uploadToS3(filePath, s3Key);
-    uploadedUrls[file] = url;
-  }
+  const maxConcurrent = Math.min(6, Math.max(1, files.length));
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < files.length) {
+      const file = files[cursor];
+      cursor += 1;
+      const filePath = path.join(localDir, file);
+      const s3Key = `${s3Folder}/${file}`;
+      const url = await uploadToS3(filePath, s3Key);
+      uploadedUrls[file] = url;
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: maxConcurrent }, () => worker())
+  );
 
   return uploadedUrls;
 };
@@ -85,18 +123,15 @@ const getContentType = (filename: string): string => {
 };
 
 export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
-  const fileContent = fs.readFileSync(localFilePath);
   const fileName = path.basename(localFilePath);
   const key = `${folder}/${Date.now()}-${fileName}`;
+  const body = fs.createReadStream(localFilePath);
 
-  const command = new PutObjectCommand({
-    Bucket: process.env.AWS_BUCKET_NAME!,
+  await multipartUpload({
     Key: key,
-    Body: fileContent,
+    Body: body,
     ContentType: "application/octet-stream",
   });
-
-  await s3Client.send(command);
 
   // Delete file from local after upload
   fs.unlinkSync(localFilePath);
@@ -112,7 +147,7 @@ export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
   );
 
   // Return permanent S3 URL (not signed, public access if your bucket allows)
-  const fileUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  const fileUrl = bucketUrl(key);
 
   return { key, fileUrl, signedUrl };
 };

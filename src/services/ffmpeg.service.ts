@@ -11,6 +11,8 @@ export const getVideoMetadata = (
   format: string
   vcodec: string
   rotation: 0 | 90 | 180 | 270
+  width: number
+  height: number
 }> => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
@@ -21,12 +23,14 @@ export const getVideoMetadata = (
 
       const vstream = (metadata.streams || []).find(s => s.codec_type === 'video')
       const vcodec = (vstream?.codec_name ?? 'unknown') as string
+      const width = (vstream?.width ?? 0) as number
+      const height = (vstream?.height ?? 0) as number
 
       const tagRotate = Number(vstream?.tags?.rotate || 0)
       const rotation = ([0, 90, 180, 270].includes(tagRotate) ? tagRotate : 0) as
         | 0 | 90 | 180 | 270
 
-      resolve({ duration, format, vcodec, rotation })
+      resolve({ duration, format, vcodec, rotation, width, height })
     })
   })
 }
@@ -40,6 +44,24 @@ const rotationToVf = (rotation: 0 | 90 | 180 | 270): string | null => {
   if (rotation === 180) return 'transpose=1,transpose=1'
   if (rotation === 270) return 'transpose=2'
   return null
+}
+
+const ensureEven = (value: number): number => {
+  if (!Number.isFinite(value) || value <= 0) return 1080
+  return value % 2 === 0 ? value : value - 1
+}
+
+const buildVideoFilters = (
+  rotationFilter: string | null,
+  cappedHeight: number
+): string => {
+  const filters = []
+  if (rotationFilter) filters.push(rotationFilter)
+  filters.push(
+    `scale=-2:${cappedHeight}:force_original_aspect_ratio=decrease:flags=lanczos`
+  )
+  filters.push('format=yuv420p')
+  return filters.join(',')
 }
 
 /**
@@ -73,36 +95,40 @@ export const processVideoHLS = async (
   fs.writeFileSync(keyInfoPath, keyInfoContent)
 
   // --- Probe rotation & build filters/codecs ---
-  const { rotation } = await getVideoMetadata(inputPath)
+  const { rotation, height } = await getVideoMetadata(inputPath)
   const vf = rotationToVf(rotation)
+  const maxHeight = ensureEven(Math.min(height || 1080, 1080))
+  const filterChain = buildVideoFilters(vf, maxHeight)
 
   // We re-encode to H.264/AAC for broad HLS compatibility
   // and strip any residual rotate metadata.
   const cmd = ffmpeg(inputPath)
     .videoCodec('libx264')
     .audioCodec('aac')
-    .audioBitrate('128k')
+    .audioBitrate('160k')
     .outputOptions([
       '-pix_fmt yuv420p',
       '-profile:v main',
       '-level 4.0',
       '-preset veryfast',
-      // Reasonable for 720p-ish elevator pitch; tweak as you like
-      '-b:v 2400k',
-      '-maxrate 2600k',
-      '-bufsize 3000k',
+      '-crf 21',
+      '-maxrate 5200k',
+      '-bufsize 7800k',
+      '-g 48',
+      '-keyint_min 48',
       '-movflags faststart',
       '-map_metadata -1',          // drop global metadata
       '-metadata:s:v:0 rotate=0',  // ensure no rotate tag remains
       // HLS options
-      '-hls_time 10',
+      '-hls_time 4',
       '-hls_list_size 0',
       '-hls_segment_type mpegts',
+      '-hls_flags independent_segments',
       `-hls_key_info_file ${keyInfoPath}`,
       '-hls_playlist_type vod',
     ])
 
-  if (vf) cmd.videoFilters(vf)
+  if (filterChain) cmd.videoFilters(filterChain)
 
   return new Promise<{
     playlistPath: string
