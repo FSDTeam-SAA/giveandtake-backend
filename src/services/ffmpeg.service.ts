@@ -55,6 +55,13 @@ type RenditionProfile = {
   audioKbps: number
 }
 
+type RenditionConfig = RenditionProfile & {
+  targetHeight: number
+  videoLabel: string
+  splitLabel: string
+  resolution: string
+}
+
 type MasterPlaylistEntry = {
   name: string
   playlistFile: string
@@ -73,19 +80,6 @@ const HLS_RENDITIONS: RenditionProfile[] = [
 const ensureEven = (value: number, fallback = 2): number => {
   if (!Number.isFinite(value) || value <= 0) return fallback
   return value % 2 === 0 ? value : value - 1
-}
-
-const buildVideoFilters = (
-  rotationFilter: string | null,
-  targetHeight: number
-): string => {
-  const filters = []
-  if (rotationFilter) filters.push(rotationFilter)
-  filters.push(
-    `scale=-2:${targetHeight}:force_original_aspect_ratio=decrease:flags=lanczos`
-  )
-  filters.push('format=yuv420p')
-  return filters.join(',')
 }
 
 const toPosix = (value: string) => value.split(path.sep).join('/')
@@ -111,54 +105,40 @@ const computeResolution = (
   return `${targetWidth}x${targetHeight}`
 }
 
-const transcodeRendition = async ({
-  inputPath,
-  outputDir,
-  keyInfoPath,
-  filters,
-  profile,
-}: {
-  inputPath: string
-  outputDir: string
-  keyInfoPath: string
-  filters: string
-  profile: RenditionProfile
-}) => {
-  const playlistName = `${profile.name}.m3u8`
-  const playlistPath = path.join(outputDir, playlistName)
-  const segmentPattern = toPosix(path.join(outputDir, `${profile.name}_%03d.ts`))
+const buildFilterGraph = (
+  rotationFilter: string | null,
+  configs: RenditionConfig[]
+): string[] => {
+  const filters: string[] = []
+  const splitInput = rotationFilter ? 'rotated' : '0:v'
 
-  const cmd = ffmpeg(inputPath)
-    .videoCodec('libx264')
-    .audioCodec('aac')
-    .audioBitrate(`${profile.audioKbps}k`)
-    .videoFilters(filters)
-    .outputOptions([
-      '-pix_fmt yuv420p',
-      '-profile:v high',
-      '-level 4.1',
-      '-preset veryfast',
-      `-b:v ${profile.videoKbps}k`,
-      `-maxrate ${profile.maxrateKbps}k`,
-      `-bufsize ${profile.bufsizeKbps}k`,
-      '-map_metadata -1',
-      '-metadata:s:v:0 rotate=0',
-      '-hls_time 4',
-      '-hls_list_size 0',
-      '-hls_segment_type mpegts',
-      '-hls_flags independent_segments',
-      `-hls_segment_filename ${segmentPattern}`,
-      `-hls_key_info_file ${keyInfoPath}`,
-      '-hls_playlist_type vod',
-    ])
+  if (rotationFilter) {
+    filters.push(`[0:v]${rotationFilter}[rotated]`)
+  }
 
-  return new Promise<{ playlistPath: string; playlistName: string }>((resolve, reject) => {
-    cmd
-      .output(toPosix(playlistPath))
-      .on('end', () => resolve({ playlistPath, playlistName }))
-      .on('error', err => reject(err))
-      .run()
+  if (configs.length === 1) {
+    const only = configs[0]
+    filters.push(
+      `[${splitInput}]scale=-2:${only.targetHeight}:force_original_aspect_ratio=decrease:flags=lanczos:force_divisible_by=2,format=yuv420p[${only.videoLabel}]`
+    )
+    return filters
+  }
+
+  const splitOutputs = configs.map(cfg => cfg.splitLabel)
+  filters.push(
+    `[${splitInput}]split=${configs.length}${splitOutputs
+      .map(label => `[${label}]`)
+      .join('')}`
+  )
+
+  configs.forEach((cfg, idx) => {
+    const inputLabel = splitOutputs[idx]
+    filters.push(
+      `[${inputLabel}]scale=-2:${cfg.targetHeight}:force_original_aspect_ratio=decrease:flags=lanczos:force_divisible_by=2,format=yuv420p[${cfg.videoLabel}]`
+    )
   })
+
+  return filters
 }
 
 const writeMasterPlaylist = (
@@ -214,39 +194,81 @@ export const processVideoHLS = async (
   const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
 
   const selectedProfiles = selectRenditions(sourceHeight)
-  const masterEntries: MasterPlaylistEntry[] = []
-
-  for (const profile of selectedProfiles) {
+  const renditionConfigs: RenditionConfig[] = selectedProfiles.map((profile, index) => {
     const targetHeight = ensureEven(
       Math.min(profile.height, clampedSourceHeight),
       profile.height
     )
-    const filters = buildVideoFilters(rotationFilter, targetHeight)
-    await transcodeRendition({
-      inputPath,
-      outputDir,
-      keyInfoPath,
-      filters,
-      profile,
-    })
-
     const resolution = computeResolution(
       ensureEven(sourceWidth || 1920, 1920),
       ensureEven(sourceHeight || 1080, 1080),
       targetHeight
     )
-    masterEntries.push({
-      name: profile.name,
-      playlistFile: `${profile.name}.m3u8`,
-      bandwidth: Math.round(
-        (profile.maxrateKbps + profile.audioKbps) * 1000
-      ),
-      averageBandwidth: Math.round(
-        (profile.videoKbps + profile.audioKbps) * 1000
-      ),
+    return {
+      ...profile,
+      targetHeight,
+      videoLabel: `vout${index}`,
+      splitLabel: `vsplit${index}`,
       resolution,
-    })
+    }
+  })
+
+  const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
+  const cmd = ffmpeg(inputPath)
+  if (filterGraph.length) {
+    cmd.complexFilter(filterGraph)
   }
+
+  renditionConfigs.forEach((cfg) => {
+    const playlistName = `${cfg.name}.m3u8`
+    const playlistPath = path.join(outputDir, playlistName)
+    const segmentPattern = toPosix(path.join(outputDir, `${cfg.name}_%03d.ts`))
+
+    cmd
+      .output(toPosix(playlistPath))
+      .outputOptions([
+        `-map [${cfg.videoLabel}]`,
+        '-map 0:a:0?',
+        '-c:v libx264',
+        '-preset veryfast',
+        '-profile:v high',
+        '-level 4.1',
+        `-b:v ${cfg.videoKbps}k`,
+        `-maxrate ${cfg.maxrateKbps}k`,
+        `-bufsize ${cfg.bufsizeKbps}k`,
+        '-g 48',
+        '-keyint_min 48',
+        '-pix_fmt yuv420p',
+        '-map_metadata -1',
+        '-metadata:s:v:0 rotate=0',
+        '-c:a aac',
+        `-b:a ${cfg.audioKbps}k`,
+        '-ac 2',
+        '-ar 48000',
+        '-hls_time 4',
+        '-hls_list_size 0',
+        '-hls_segment_type mpegts',
+        '-hls_flags independent_segments',
+        `-hls_segment_filename ${segmentPattern}`,
+        `-hls_key_info_file ${keyInfoPath}`,
+        '-hls_playlist_type vod',
+      ])
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    cmd
+      .on('end', () => resolve())
+      .on('error', (err) => reject(err))
+      .run()
+  })
+
+  const masterEntries: MasterPlaylistEntry[] = renditionConfigs.map((cfg) => ({
+    name: cfg.name,
+    playlistFile: `${cfg.name}.m3u8`,
+    bandwidth: Math.round((cfg.maxrateKbps + cfg.audioKbps) * 1000),
+    averageBandwidth: Math.round((cfg.videoKbps + cfg.audioKbps) * 1000),
+    resolution: cfg.resolution,
+  }))
 
   writeMasterPlaylist(masterPlaylistPath, masterEntries)
 
