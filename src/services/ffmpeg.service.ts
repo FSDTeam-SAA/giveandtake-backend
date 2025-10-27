@@ -312,7 +312,11 @@ export const processVideoHLS = async (
     queueUpload(keyPath)
 
     // --- Probe rotation & determine rendition set ---
-    const { rotation, width, height } = await getVideoMetadata(inputPath)
+    const { rotation, width, height, format, vcodec, duration } = await getVideoMetadata(inputPath)
+    const safeDuration = Number.isFinite(duration) ? duration.toFixed(2) : 'unknown'
+    console.log(
+      `[ffmpeg] Source metadata -> format: ${format}, vcodec: ${vcodec}, duration: ${safeDuration}s, width: ${width}, height: ${height}, rotation: ${rotation}`
+    )
     const rotated = rotation === 90 || rotation === 270
     const sourceWidth = rotated ? height : width
     const sourceHeight = rotated ? width : height
@@ -344,6 +348,22 @@ export const processVideoHLS = async (
 
     const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
     const cmd = ffmpeg(inputPath)
+    const ffmpegLogs: string[] = []
+
+    cmd.on('start', (commandLine: string) => {
+      console.log(`[ffmpeg] Command: ${commandLine}`)
+    })
+
+    cmd.on('stderr', (line: string) => {
+      const message = line?.toString().trim()
+      if (!message) return
+      ffmpegLogs.push(message)
+      if (ffmpegLogs.length > 200) {
+        ffmpegLogs.shift()
+      }
+      console.log(`[ffmpeg] ${message}`)
+    })
+
     cmd.addOption('-threads 2')
     if (filterGraph.length) {
       cmd.complexFilter(filterGraph)
@@ -391,7 +411,22 @@ export const processVideoHLS = async (
     await new Promise<void>((resolve, reject) => {
       cmd
         .on('end', () => resolve())
-        .on('error', (err) => reject(err))
+        .on('error', (err: Error, _stdout: string | null, stderr: string | null) => {
+          const tail = ffmpegLogs.length
+            ? `\n---- ffmpeg last output ----\n${ffmpegLogs.slice(-40).join('\n')}`
+            : ''
+          const aggregatedLogs = ffmpegLogs.join('\n')
+          const stderrText = stderr?.trim() ?? ''
+          const diagnostic =
+            stderrText && !aggregatedLogs.includes(stderrText)
+              ? `\n---- ffmpeg stderr ----\n${stderrText}`
+              : ''
+          const enhancedError = new Error(
+            `FFmpeg processing failed: ${err.message}${tail}${diagnostic}`
+          )
+          ;(enhancedError as Error & { cause?: Error }).cause = err
+          reject(enhancedError)
+        })
         .run()
     })
 
