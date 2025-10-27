@@ -72,10 +72,7 @@ type MasterPlaylistEntry = {
 }
 
 const HLS_RENDITIONS: RenditionProfile[] = [
-  { name: '1080p', height: 1080, videoKbps: 10000, maxrateKbps: 12000, bufsizeKbps: 18000, audioKbps: 192, crf: 17 },
-  { name: '720p', height: 720, videoKbps: 6500, maxrateKbps: 7800, bufsizeKbps: 12000, audioKbps: 160, crf: 18 },
   { name: '480p', height: 480, videoKbps: 3600, maxrateKbps: 4400, bufsizeKbps: 7200, audioKbps: 128, crf: 20 },
-  { name: '360p', height: 360, videoKbps: 2200, maxrateKbps: 2800, bufsizeKbps: 4800, audioKbps: 96, crf: 22 },
 ]
 
 const ensureEven = (value: number, fallback = 2): number => {
@@ -208,6 +205,7 @@ export const processVideoHLS = async (
     )
     return {
       ...profile,
+      name: targetHeight === profile.height ? profile.name : `${targetHeight}p`,
       targetHeight,
       videoLabel: `vout${index}`,
       splitLabel: `vsplit${index}`,
@@ -232,7 +230,7 @@ export const processVideoHLS = async (
         `-map [${cfg.videoLabel}]`,
         '-map 0:a:0?',
         '-c:v libx264',
-        '-preset medium',
+        '-preset fast',
         '-profile:v high',
         '-level 4.1',
         `-crf ${cfg.crf}`,
