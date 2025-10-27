@@ -22,28 +22,48 @@ const storage = multer.diskStorage({
 });
 
 
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/x-msvideo",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".webp",
+  ".mp4",
+  ".mov",
+  ".avi",
+  ".xlsx",
+]);
+
+
 export const upload = multer({
   storage: storage,
   limits: {
     fileSize: 600 * 1024 * 1024, 
   },
   fileFilter: (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|mp4|mov|avi|xlsx/;
     console.log("Uploading file with mimetype:", file.mimetype);
 
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(
-      path.extname(file.originalname).toLowerCase()
-    );
+    const extname = path.extname(file.originalname).toLowerCase();
+    const mimetypeAllowed = ALLOWED_MIME_TYPES.has(file.mimetype);
+    const extensionAllowed = ALLOWED_EXTENSIONS.has(extname);
 
-    // if (mimetype && extname) {
+    if (mimetypeAllowed || extensionAllowed) {
       return cb(null, true);
-    // }
+    }
 
-    // ✅ Better error message
     cb(
       new Error(
-        `File type not allowed. Supported types: jpeg, jpg, png, mp4, mov, avi, xlsx`
+        `File type not allowed. Supported types: jpeg, jpg, png, webp, mp4, mov, avi, xlsx`
       )
     );
   },
@@ -60,3 +80,8 @@ export const resumeFileUpload = multer({
     fileSize: 100 * 1024 * 1024, // ✅ Also increase for resume files
   },
 }).array("resumes", 5);
+
+
+
+
+

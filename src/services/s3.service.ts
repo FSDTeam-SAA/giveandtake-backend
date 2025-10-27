@@ -33,7 +33,7 @@ const multipartUpload = async (params: {
       Bucket: process.env.AWS_BUCKET_NAME!,
       ...params,
     },
-    queueSize: 4,
+    queueSize: 8,
     partSize: 8 * 1024 * 1024,
     leavePartsOnError: false,
   });
