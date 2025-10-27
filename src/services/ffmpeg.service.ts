@@ -2,8 +2,7 @@ import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
-import chokidar from 'chokidar'
-import { uploadToS3 } from './s3.service'
+import { uploadHLSFilesToS3 } from './s3.service'
 
 type FfprobeSideData = {
   rotation?: number | string
@@ -248,215 +247,134 @@ export const processVideoHLS = async (
   const keyInfoContent = `${keyUri}\n${keyPath}\n${iv.toString('hex')}`
   fs.writeFileSync(keyInfoPath, keyInfoContent)
 
-  const uploadedUrls: Record<string, string> = {}
-  const pendingUploads = new Map<string, Promise<void>>()
-  const uploadErrors: Array<{ file: string; error: Error }> = []
+  // --- Probe rotation & determine rendition set ---
+  const { rotation, width, height, format, vcodec, duration } = await getVideoMetadata(inputPath)
+  const safeDuration = Number.isFinite(duration) ? duration.toFixed(2) : 'unknown'
+  console.log(
+    `[ffmpeg] Source metadata -> format: ${format}, vcodec: ${vcodec}, duration: ${safeDuration}s, width: ${width}, height: ${height}, rotation: ${rotation}`
+  )
+  const rotated = rotation === 90 || rotation === 270
+  const sourceWidth = rotated ? height : width
+  const sourceHeight = rotated ? width : height
+  const rotationFilter = rotationToVf(rotation)
+  const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
 
-  const queueUpload = (absolutePath: string) => {
-    const fileName = path.basename(absolutePath)
-    if (!fileName || fileName.endsWith('.info')) return
-    if (pendingUploads.has(absolutePath)) return
-    if (!fs.existsSync(absolutePath)) return
-
-    const uploadPromise = (async () => {
-      try {
-        const url = await uploadToS3(absolutePath, `${s3Folder}/${fileName}`)
-        uploadedUrls[fileName] = url
-      } catch (error) {
-        uploadErrors.push({ file: fileName, error: error as Error })
-        throw error
-      } finally {
-        pendingUploads.delete(absolutePath)
-      }
-    })()
-
-    pendingUploads.set(absolutePath, uploadPromise)
-  }
-
-  const watcher = chokidar.watch(['*.m3u8', '*.m4s', '*.mp4', '*.ts'], {
-    cwd: outputDir,
-    ignoreInitial: true,
-    awaitWriteFinish: {
-      stabilityThreshold: 750,
-      pollInterval: 100,
-    },
-  })
-
-  const watcherReady = new Promise<void>((resolve, reject) => {
-    const handleReady = () => {
-      watcher.removeListener('error', handleError)
-      resolve()
-    }
-    const handleError = (error: Error) => {
-      watcher.removeListener('ready', handleReady)
-      reject(error)
-    }
-    watcher.once('ready', handleReady)
-    watcher.once('error', handleError)
-  })
-
-  watcher.on('add', relativePath => queueUpload(path.join(outputDir, relativePath)))
-  watcher.on('change', relativePath => queueUpload(path.join(outputDir, relativePath)))
-
-  const settleUploads = async () => {
-    if (!pendingUploads.size) return
-    await Promise.allSettled(Array.from(pendingUploads.values()))
-  }
-
-  try {
-    await watcherReady
-
-    watcher.on('error', (error: Error) => {
-      uploadErrors.push({ file: 'watcher', error })
-    })
-
-    queueUpload(keyPath)
-
-    // --- Probe rotation & determine rendition set ---
-    const { rotation, width, height, format, vcodec, duration } = await getVideoMetadata(inputPath)
-    const safeDuration = Number.isFinite(duration) ? duration.toFixed(2) : 'unknown'
-    console.log(
-      `[ffmpeg] Source metadata -> format: ${format}, vcodec: ${vcodec}, duration: ${safeDuration}s, width: ${width}, height: ${height}, rotation: ${rotation}`
+  const selectedProfiles = selectRenditions(sourceHeight)
+  const renditionConfigs: RenditionConfig[] = selectedProfiles.map((profile, index) => {
+    const targetHeight = ensureEven(
+      Math.min(profile.height, clampedSourceHeight),
+      profile.height
     )
-    const rotated = rotation === 90 || rotation === 270
-    const sourceWidth = rotated ? height : width
-    const sourceHeight = rotated ? width : height
-    const rotationFilter = rotationToVf(rotation)
-    const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
-
-    const selectedProfiles = selectRenditions(sourceHeight)
-    const renditionConfigs: RenditionConfig[] = selectedProfiles.map((profile, index) => {
-      const targetHeight = ensureEven(
-        Math.min(profile.height, clampedSourceHeight),
-        profile.height
-      )
-      const resolution = computeResolution(
-        ensureEven(sourceWidth || 1920, 1920),
-        ensureEven(sourceHeight || 1080, 1080),
-        targetHeight
-      )
-      const name = targetHeight === profile.height ? profile.name : `${targetHeight}p`
-      return {
-        ...profile,
-        name,
-        targetHeight,
-        videoLabel: `vout${index}`,
-        splitLabel: `vsplit${index}`,
-        resolution,
-      }
-    })
-
-    const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
-    const cmd = ffmpeg(inputPath)
-    const ffmpegLogs: string[] = []
-
-    cmd.on('start', (commandLine: string) => {
-      console.log(`[ffmpeg] Command: ${commandLine}`)
-    })
-
-    cmd.on('stderr', (line: string) => {
-      const message = line?.toString().trim()
-      if (!message) return
-      ffmpegLogs.push(message)
-      if (ffmpegLogs.length > 200) {
-        ffmpegLogs.shift()
-      }
-      console.log(`[ffmpeg] ${message}`)
-    })
-
-    cmd.addOption('-threads 2')
-    if (filterGraph.length) {
-      cmd.complexFilter(filterGraph)
+    const resolution = computeResolution(
+      ensureEven(sourceWidth || 1920, 1920),
+      ensureEven(sourceHeight || 1080, 1080),
+      targetHeight
+    )
+    const name = targetHeight === profile.height ? profile.name : `${targetHeight}p`
+    return {
+      ...profile,
+      name,
+      targetHeight,
+      videoLabel: `vout${index}`,
+      splitLabel: `vsplit${index}`,
+      resolution,
     }
+  })
 
-    renditionConfigs.forEach((cfg) => {
-      const playlistName = `${cfg.name}.m3u8`
-      const playlistPath = path.join(outputDir, playlistName)
-      const segmentPattern = toPosix(
-        path.join(outputDir, `${cfg.name}_%03d.${HLS_SEGMENT_EXTENSION}`)
-      )
+  const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
+  const cmd = ffmpeg(inputPath)
+  const ffmpegLogs: string[] = []
 
-      cmd
-        .output(toPosix(playlistPath))
-        .outputOptions([
-          `-map [${cfg.videoLabel}]`,
-          '-map 0:a:0?',
-          '-c:v libx264',
-          '-preset veryfast',
-          '-profile:v high',
-          '-level 4.1',
-          `-crf ${cfg.crf}`,
-          `-maxrate ${cfg.maxrateKbps}k`,
-          `-bufsize ${cfg.bufsizeKbps}k`,
-          '-g 48',
-          '-keyint_min 48',
-          '-pix_fmt yuv420p',
-          '-map_metadata -1',
-          '-metadata:s:v:0 rotate=0',
-          '-c:a aac',
-          `-b:a ${cfg.audioKbps}k`,
-          '-ac 2',
-          '-ar 48000',
-          '-hls_time 8',
-          '-hls_list_size 0',
-          '-hls_segment_type mpegts',
-          '-hls_flags independent_segments',
-          `-hls_segment_filename ${segmentPattern}`,
-          `-hls_key_info_file ${keyInfoPath}`,
-          '-hls_playlist_type vod',
-        ])
-    })
+  cmd.on('start', (commandLine: string) => {
+    console.log(`[ffmpeg] Command: ${commandLine}`)
+  })
 
-    await new Promise<void>((resolve, reject) => {
-      cmd
-        .on('end', () => resolve())
-        .on('error', (err: Error, _stdout: string | null, stderr: string | null) => {
-          const tail = ffmpegLogs.length
-            ? `\n---- ffmpeg last output ----\n${ffmpegLogs.slice(-40).join('\n')}`
+  cmd.on('stderr', (line: string) => {
+    const message = line?.toString().trim()
+    if (!message) return
+    ffmpegLogs.push(message)
+    if (ffmpegLogs.length > 200) {
+      ffmpegLogs.shift()
+    }
+    console.log(`[ffmpeg] ${message}`)
+  })
+
+  cmd.addOption('-threads 2')
+  if (filterGraph.length) {
+    cmd.complexFilter(filterGraph)
+  }
+
+  renditionConfigs.forEach((cfg) => {
+    const playlistName = `${cfg.name}.m3u8`
+    const playlistPath = path.join(outputDir, playlistName)
+    const segmentPattern = toPosix(
+      path.join(outputDir, `${cfg.name}_%03d.${HLS_SEGMENT_EXTENSION}`)
+    )
+
+    cmd
+      .output(toPosix(playlistPath))
+      .outputOptions([
+        `-map [${cfg.videoLabel}]`,
+        '-map 0:a:0?',
+        '-c:v libx264',
+        '-preset veryfast',
+        '-profile:v high',
+        '-level 4.1',
+        `-crf ${cfg.crf}`,
+        `-maxrate ${cfg.maxrateKbps}k`,
+        `-bufsize ${cfg.bufsizeKbps}k`,
+        '-g 48',
+        '-keyint_min 48',
+        '-pix_fmt yuv420p',
+        '-map_metadata -1',
+        '-metadata:s:v:0 rotate=0',
+        '-c:a aac',
+        `-b:a ${cfg.audioKbps}k`,
+        '-ac 2',
+        '-ar 48000',
+        '-hls_time 8',
+        '-hls_list_size 0',
+        '-hls_segment_type mpegts',
+        '-hls_flags independent_segments',
+        `-hls_segment_filename ${segmentPattern}`,
+        `-hls_key_info_file ${keyInfoPath}`,
+        '-hls_playlist_type vod',
+      ])
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    cmd
+      .on('end', () => resolve())
+      .on('error', (err: Error, _stdout: string | null, stderr: string | null) => {
+        const tail = ffmpegLogs.length
+          ? `\n---- ffmpeg last output ----\n${ffmpegLogs.slice(-40).join('\n')}`
+          : ''
+        const aggregatedLogs = ffmpegLogs.join('\n')
+        const stderrText = stderr?.trim() ?? ''
+        const diagnostic =
+          stderrText && !aggregatedLogs.includes(stderrText)
+            ? `\n---- ffmpeg stderr ----\n${stderrText}`
             : ''
-          const aggregatedLogs = ffmpegLogs.join('\n')
-          const stderrText = stderr?.trim() ?? ''
-          const diagnostic =
-            stderrText && !aggregatedLogs.includes(stderrText)
-              ? `\n---- ffmpeg stderr ----\n${stderrText}`
-              : ''
-          const enhancedError = new Error(
-            `FFmpeg processing failed: ${err.message}${tail}${diagnostic}`
-          )
-          ;(enhancedError as Error & { cause?: Error }).cause = err
-          reject(enhancedError)
-        })
-        .run()
-    })
+        const enhancedError = new Error(
+          `FFmpeg processing failed: ${err.message}${tail}${diagnostic}`
+        )
+        ;(enhancedError as Error & { cause?: Error }).cause = err
+        reject(enhancedError)
+      })
+      .run()
+  })
 
-    const masterEntries: MasterPlaylistEntry[] = renditionConfigs.map((cfg) => ({
-      name: cfg.name,
-      playlistFile: `${cfg.name}.m3u8`,
-      bandwidth: Math.round((cfg.maxrateKbps + cfg.audioKbps) * 1000),
-      averageBandwidth: Math.round((cfg.videoKbps + cfg.audioKbps) * 1000),
-      resolution: cfg.resolution,
-    }))
+  const masterEntries: MasterPlaylistEntry[] = renditionConfigs.map((cfg) => ({
+    name: cfg.name,
+    playlistFile: `${cfg.name}.m3u8`,
+    bandwidth: Math.round((cfg.maxrateKbps + cfg.audioKbps) * 1000),
+    averageBandwidth: Math.round((cfg.videoKbps + cfg.audioKbps) * 1000),
+    resolution: cfg.resolution,
+  }))
 
-    writeMasterPlaylist(masterPlaylistPath, masterEntries)
+  writeMasterPlaylist(masterPlaylistPath, masterEntries)
 
-    renditionConfigs.forEach((cfg) => {
-      const variantPlaylistPath = path.join(outputDir, `${cfg.name}.m3u8`)
-      queueUpload(variantPlaylistPath)
-    })
-    queueUpload(masterPlaylistPath)
-  } finally {
-    await watcher.close().catch(() => undefined)
-    await settleUploads()
-  }
-
-  if (uploadErrors.length) {
-    const failedFiles = uploadErrors.map(entry => entry.file).join(', ') || 'unknown'
-    const aggregateError = Object.assign(
-      new Error(`Failed to upload HLS artifacts: ${failedFiles}`),
-      { cause: uploadErrors[0].error }
-    )
-    throw aggregateError
-  }
+  const uploadedUrls = await uploadHLSFilesToS3(outputDir, s3Folder)
 
   return {
     masterPlaylistPath,
