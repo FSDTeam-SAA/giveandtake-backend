@@ -121,7 +121,6 @@ type RenditionConfig = RenditionProfile & {
   videoLabel: string
   splitLabel: string
   resolution: string
-  initFileName: string
 }
 
 type MasterPlaylistEntry = {
@@ -135,6 +134,8 @@ type MasterPlaylistEntry = {
 const HLS_RENDITIONS: RenditionProfile[] = [
   { name: '480p', height: 480, videoKbps: 2600, maxrateKbps: 3120, bufsizeKbps: 5200, audioKbps: 64, crf: 22 },
 ]
+
+const HLS_SEGMENT_EXTENSION = 'ts'
 
 const ensureEven = (value: number, fallback = 2): number => {
   if (!Number.isFinite(value) || value <= 0) return fallback
@@ -272,7 +273,7 @@ export const processVideoHLS = async (
     pendingUploads.set(absolutePath, uploadPromise)
   }
 
-  const watcher = chokidar.watch(['*.m3u8', '*.m4s', '*.mp4'], {
+  const watcher = chokidar.watch(['*.m3u8', '*.m4s', '*.mp4', '*.ts'], {
     cwd: outputDir,
     ignoreInitial: true,
     awaitWriteFinish: {
@@ -342,7 +343,6 @@ export const processVideoHLS = async (
         videoLabel: `vout${index}`,
         splitLabel: `vsplit${index}`,
         resolution,
-        initFileName: `${name}_init.mp4`,
       }
     })
 
@@ -372,8 +372,9 @@ export const processVideoHLS = async (
     renditionConfigs.forEach((cfg) => {
       const playlistName = `${cfg.name}.m3u8`
       const playlistPath = path.join(outputDir, playlistName)
-      const segmentPattern = toPosix(path.join(outputDir, `${cfg.name}_%03d.m4s`))
-      const initFileName = cfg.initFileName
+      const segmentPattern = toPosix(
+        path.join(outputDir, `${cfg.name}_%03d.${HLS_SEGMENT_EXTENSION}`)
+      )
 
       cmd
         .output(toPosix(playlistPath))
@@ -384,7 +385,6 @@ export const processVideoHLS = async (
           '-preset veryfast',
           '-profile:v high',
           '-level 4.1',
-          '-movflags +faststart',
           `-crf ${cfg.crf}`,
           `-maxrate ${cfg.maxrateKbps}k`,
           `-bufsize ${cfg.bufsizeKbps}k`,
@@ -399,8 +399,7 @@ export const processVideoHLS = async (
           '-ar 48000',
           '-hls_time 8',
           '-hls_list_size 0',
-          '-hls_segment_type fmp4',
-          `-hls_fmp4_init_filename ${initFileName}`,
+          '-hls_segment_type mpegts',
           '-hls_flags independent_segments',
           `-hls_segment_filename ${segmentPattern}`,
           `-hls_key_info_file ${keyInfoPath}`,
