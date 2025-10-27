@@ -2,6 +2,68 @@ import crypto from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
+import chokidar from 'chokidar'
+import { uploadToS3 } from './s3.service'
+
+type FfprobeSideData = {
+  rotation?: number | string
+  displaymatrix?: string
+  side_data_type?: string
+  [key: string]: unknown
+}
+
+type FfprobeVideoStream = {
+  tags?: Record<string, unknown>
+  side_data_list?: FfprobeSideData[]
+  [key: string]: unknown
+}
+
+const VALID_ROTATIONS: Array<0 | 90 | 180 | 270> = [0, 90, 180, 270]
+
+const normalizeRotation = (value: unknown): 0 | 90 | 180 | 270 => {
+  const numeric =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+      ? Number.parseFloat(value)
+      : Number.NaN
+
+  if (!Number.isFinite(numeric)) return 0
+
+  const normalized = ((Math.round(numeric) % 360) + 360) % 360
+  const match = VALID_ROTATIONS.find(rot => Math.abs(normalized - rot) <= 1)
+  return (match ?? 0) as 0 | 90 | 180 | 270
+}
+
+const extractMatrixRotation = (stream: FfprobeVideoStream | undefined): 0 | 90 | 180 | 270 => {
+  if (!stream?.side_data_list) return 0
+
+  for (const entry of stream.side_data_list) {
+    if (!entry || typeof entry !== 'object') continue
+    if (entry.side_data_type && entry.side_data_type !== 'Display Matrix') continue
+
+    if (entry.rotation !== undefined) {
+      const normalized = normalizeRotation(entry.rotation)
+      if (normalized !== 0) return normalized
+    }
+
+    if (typeof entry.displaymatrix === 'string') {
+      const match = entry.displaymatrix.match(/rotation\s*\(?(-?\d+(?:\.\d+)?)\)?/i)
+      if (match) {
+        const normalized = normalizeRotation(match[1])
+        if (normalized !== 0) return normalized
+      }
+    }
+  }
+
+  return 0
+}
+
+const resolveRotation = (stream: FfprobeVideoStream | undefined): 0 | 90 | 180 | 270 => {
+  const tagRotate = normalizeRotation(stream?.tags?.['rotate'])
+  if (tagRotate !== 0) return tagRotate
+  return extractMatrixRotation(stream)
+}
 
 /** Read duration/format/video codec and rotation (0|90|180|270). */
 export const getVideoMetadata = (
@@ -26,9 +88,7 @@ export const getVideoMetadata = (
       const width = (vstream?.width ?? 0) as number
       const height = (vstream?.height ?? 0) as number
 
-      const tagRotate = Number(vstream?.tags?.rotate || 0)
-      const rotation = ([0, 90, 180, 270].includes(tagRotate) ? tagRotate : 0) as
-        | 0 | 90 | 180 | 270
+      const rotation = resolveRotation(vstream)
 
       resolve({ duration, format, vcodec, rotation, width, height })
     })
@@ -61,6 +121,7 @@ type RenditionConfig = RenditionProfile & {
   videoLabel: string
   splitLabel: string
   resolution: string
+  initFileName: string
 }
 
 type MasterPlaylistEntry = {
@@ -72,7 +133,7 @@ type MasterPlaylistEntry = {
 }
 
 const HLS_RENDITIONS: RenditionProfile[] = [
-  { name: '480p', height: 480, videoKbps: 3600, maxrateKbps: 4400, bufsizeKbps: 7200, audioKbps: 128, crf: 20 },
+  { name: '480p', height: 480, videoKbps: 2600, maxrateKbps: 3120, bufsizeKbps: 5200, audioKbps: 64, crf: 22 },
 ]
 
 const ensureEven = (value: number, fallback = 2): number => {
@@ -156,13 +217,18 @@ const writeMasterPlaylist = (
 
 /**
  * Transcodes to HLS VOD with AES-128 encryption, normalizing orientation.
- * Outputs: playlist.m3u8 + *.ts and encryption.key in outputDir.
+ * Outputs: playlist.m3u8 + CMAF segments and encryption.key in outputDir.
  */
 export const processVideoHLS = async (
   inputPath: string,
   outputDir: string,
-  userId: string
+  userId: string,
+  s3Folder: string
 ) => {
+  if (!s3Folder) {
+    throw new Error('s3Folder is required to upload HLS outputs')
+  }
+
   // --- HLS key material ---
   const key = crypto.randomBytes(16)
   const keyFileName = 'encryption.key'
@@ -174,108 +240,195 @@ export const processVideoHLS = async (
   const keyInfoPath = path.join(outputDir, keyInfoFileName)
   const masterPlaylistPath = path.join(outputDir, 'master.m3u8')
 
-  // 1) Write key file
   fs.writeFileSync(keyPath, key)
 
-  // 2) Public URI (your API route that serves the key)
   const keyUri = `/api/v1/elevator-pitch/key/${userId}/${keyFileName}`
 
-  // 3) HLS key info file: <key URI>\n<local key path>\n<IV hex>
   const keyInfoContent = `${keyUri}\n${keyPath}\n${iv.toString('hex')}`
   fs.writeFileSync(keyInfoPath, keyInfoContent)
 
-  // --- Probe rotation & determine rendition set ---
-  const { rotation, width, height } = await getVideoMetadata(inputPath)
-  const rotated = rotation === 90 || rotation === 270
-  const sourceWidth = rotated ? height : width
-  const sourceHeight = rotated ? width : height
-  const rotationFilter = rotationToVf(rotation)
-  const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
+  const uploadedUrls: Record<string, string> = {}
+  const pendingUploads = new Map<string, Promise<void>>()
+  const uploadErrors: Array<{ file: string; error: Error }> = []
 
-  const selectedProfiles = selectRenditions(sourceHeight)
-  const renditionConfigs: RenditionConfig[] = selectedProfiles.map((profile, index) => {
-    const targetHeight = ensureEven(
-      Math.min(profile.height, clampedSourceHeight),
-      profile.height
-    )
-    const resolution = computeResolution(
-      ensureEven(sourceWidth || 1920, 1920),
-      ensureEven(sourceHeight || 1080, 1080),
-      targetHeight
-    )
-    return {
-      ...profile,
-      name: targetHeight === profile.height ? profile.name : `${targetHeight}p`,
-      targetHeight,
-      videoLabel: `vout${index}`,
-      splitLabel: `vsplit${index}`,
-      resolution,
-    }
-  })
+  const queueUpload = (absolutePath: string) => {
+    const fileName = path.basename(absolutePath)
+    if (!fileName || fileName.endsWith('.info')) return
+    if (pendingUploads.has(absolutePath)) return
+    if (!fs.existsSync(absolutePath)) return
 
-  const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
-  const cmd = ffmpeg(inputPath)
-  if (filterGraph.length) {
-    cmd.complexFilter(filterGraph)
+    const uploadPromise = (async () => {
+      try {
+        const url = await uploadToS3(absolutePath, `${s3Folder}/${fileName}`)
+        uploadedUrls[fileName] = url
+      } catch (error) {
+        uploadErrors.push({ file: fileName, error: error as Error })
+        throw error
+      } finally {
+        pendingUploads.delete(absolutePath)
+      }
+    })()
+
+    pendingUploads.set(absolutePath, uploadPromise)
   }
 
-  renditionConfigs.forEach((cfg) => {
-    const playlistName = `${cfg.name}.m3u8`
-    const playlistPath = path.join(outputDir, playlistName)
-    const segmentPattern = toPosix(path.join(outputDir, `${cfg.name}_%03d.ts`))
-
-    cmd
-      .output(toPosix(playlistPath))
-      .outputOptions([
-        `-map [${cfg.videoLabel}]`,
-        '-map 0:a:0?',
-        '-c:v libx264',
-        '-preset fast',
-        '-profile:v high',
-        '-level 4.1',
-        `-crf ${cfg.crf}`,
-        `-maxrate ${cfg.maxrateKbps}k`,
-        `-bufsize ${cfg.bufsizeKbps}k`,
-        '-g 48',
-        '-keyint_min 48',
-        '-pix_fmt yuv420p',
-        '-map_metadata -1',
-        '-metadata:s:v:0 rotate=0',
-        '-c:a aac',
-        `-b:a ${cfg.audioKbps}k`,
-        '-ac 2',
-        '-ar 48000',
-        '-hls_time 4',
-        '-hls_list_size 0',
-        '-hls_segment_type mpegts',
-        '-hls_flags independent_segments',
-        `-hls_segment_filename ${segmentPattern}`,
-        `-hls_key_info_file ${keyInfoPath}`,
-        '-hls_playlist_type vod',
-      ])
+  const watcher = chokidar.watch(['*.m3u8', '*.m4s', '*.mp4'], {
+    cwd: outputDir,
+    ignoreInitial: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 750,
+      pollInterval: 100,
+    },
   })
 
-  await new Promise<void>((resolve, reject) => {
-    cmd
-      .on('end', () => resolve())
-      .on('error', (err) => reject(err))
-      .run()
+  const watcherReady = new Promise<void>((resolve, reject) => {
+    const handleReady = () => {
+      watcher.removeListener('error', handleError)
+      resolve()
+    }
+    const handleError = (error: Error) => {
+      watcher.removeListener('ready', handleReady)
+      reject(error)
+    }
+    watcher.once('ready', handleReady)
+    watcher.once('error', handleError)
   })
 
-  const masterEntries: MasterPlaylistEntry[] = renditionConfigs.map((cfg) => ({
-    name: cfg.name,
-    playlistFile: `${cfg.name}.m3u8`,
-    bandwidth: Math.round((cfg.maxrateKbps + cfg.audioKbps) * 1000),
-    averageBandwidth: Math.round((cfg.videoKbps + cfg.audioKbps) * 1000),
-    resolution: cfg.resolution,
-  }))
+  watcher.on('add', relativePath => queueUpload(path.join(outputDir, relativePath)))
+  watcher.on('change', relativePath => queueUpload(path.join(outputDir, relativePath)))
 
-  writeMasterPlaylist(masterPlaylistPath, masterEntries)
+  const settleUploads = async () => {
+    if (!pendingUploads.size) return
+    await Promise.allSettled(Array.from(pendingUploads.values()))
+  }
+
+  try {
+    await watcherReady
+
+    watcher.on('error', (error: Error) => {
+      uploadErrors.push({ file: 'watcher', error })
+    })
+
+    queueUpload(keyPath)
+
+    // --- Probe rotation & determine rendition set ---
+    const { rotation, width, height } = await getVideoMetadata(inputPath)
+    const rotated = rotation === 90 || rotation === 270
+    const sourceWidth = rotated ? height : width
+    const sourceHeight = rotated ? width : height
+    const rotationFilter = rotationToVf(rotation)
+    const clampedSourceHeight = ensureEven(Math.min(sourceHeight || 1080, 1080), 1080)
+
+    const selectedProfiles = selectRenditions(sourceHeight)
+    const renditionConfigs: RenditionConfig[] = selectedProfiles.map((profile, index) => {
+      const targetHeight = ensureEven(
+        Math.min(profile.height, clampedSourceHeight),
+        profile.height
+      )
+      const resolution = computeResolution(
+        ensureEven(sourceWidth || 1920, 1920),
+        ensureEven(sourceHeight || 1080, 1080),
+        targetHeight
+      )
+      const name = targetHeight === profile.height ? profile.name : `${targetHeight}p`
+      return {
+        ...profile,
+        name,
+        targetHeight,
+        videoLabel: `vout${index}`,
+        splitLabel: `vsplit${index}`,
+        resolution,
+        initFileName: `${name}_init.mp4`,
+      }
+    })
+
+    const filterGraph = buildFilterGraph(rotationFilter, renditionConfigs)
+    const cmd = ffmpeg(inputPath)
+    cmd.addOption('-threads 2')
+    if (filterGraph.length) {
+      cmd.complexFilter(filterGraph)
+    }
+
+    renditionConfigs.forEach((cfg) => {
+      const playlistName = `${cfg.name}.m3u8`
+      const playlistPath = path.join(outputDir, playlistName)
+      const segmentPattern = toPosix(path.join(outputDir, `${cfg.name}_%03d.m4s`))
+      const initFileName = cfg.initFileName
+
+      cmd
+        .output(toPosix(playlistPath))
+        .outputOptions([
+          `-map [${cfg.videoLabel}]`,
+          '-map 0:a:0?',
+          '-c:v libx264',
+          '-preset veryfast',
+          '-profile:v high',
+          '-level 4.1',
+          '-movflags +faststart',
+          `-crf ${cfg.crf}`,
+          `-maxrate ${cfg.maxrateKbps}k`,
+          `-bufsize ${cfg.bufsizeKbps}k`,
+          '-g 48',
+          '-keyint_min 48',
+          '-pix_fmt yuv420p',
+          '-map_metadata -1',
+          '-metadata:s:v:0 rotate=0',
+          '-c:a aac',
+          `-b:a ${cfg.audioKbps}k`,
+          '-ac 2',
+          '-ar 48000',
+          '-hls_time 8',
+          '-hls_list_size 0',
+          '-hls_segment_type fmp4',
+          `-hls_fmp4_init_filename ${initFileName}`,
+          '-hls_flags independent_segments',
+          `-hls_segment_filename ${segmentPattern}`,
+          `-hls_key_info_file ${keyInfoPath}`,
+          '-hls_playlist_type vod',
+        ])
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      cmd
+        .on('end', () => resolve())
+        .on('error', (err) => reject(err))
+        .run()
+    })
+
+    const masterEntries: MasterPlaylistEntry[] = renditionConfigs.map((cfg) => ({
+      name: cfg.name,
+      playlistFile: `${cfg.name}.m3u8`,
+      bandwidth: Math.round((cfg.maxrateKbps + cfg.audioKbps) * 1000),
+      averageBandwidth: Math.round((cfg.videoKbps + cfg.audioKbps) * 1000),
+      resolution: cfg.resolution,
+    }))
+
+    writeMasterPlaylist(masterPlaylistPath, masterEntries)
+
+    renditionConfigs.forEach((cfg) => {
+      const variantPlaylistPath = path.join(outputDir, `${cfg.name}.m3u8`)
+      queueUpload(variantPlaylistPath)
+    })
+    queueUpload(masterPlaylistPath)
+  } finally {
+    await watcher.close().catch(() => undefined)
+    await settleUploads()
+  }
+
+  if (uploadErrors.length) {
+    const failedFiles = uploadErrors.map(entry => entry.file).join(', ') || 'unknown'
+    const aggregateError = Object.assign(
+      new Error(`Failed to upload HLS artifacts: ${failedFiles}`),
+      { cause: uploadErrors[0].error }
+    )
+    throw aggregateError
+  }
 
   return {
     masterPlaylistPath,
     keyPath,
     keyInfoPath,
     iv: iv.toString('hex'),
+    uploadedFiles: uploadedUrls,
   }
 }

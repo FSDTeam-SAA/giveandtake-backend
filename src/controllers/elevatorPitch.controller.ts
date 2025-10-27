@@ -12,11 +12,7 @@ import { paymentInfo } from "../models/paymentInfo.model";
 import axios from "axios";
 import { validateElevatorPitchAccess } from "../helper/validateElevatorPitchAccess";
 import { User } from "../models/user.model";
-import {
-  uploadHLSFilesToS3,
-  getSignedS3Url,
-  deleteFromS3,
-} from "../services/s3.service";
+import { getSignedS3Url, deleteFromS3 } from "../services/s3.service";
 import { createNotification } from "../sockets/notification.service";
 
 /*************************************
@@ -70,17 +66,18 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     // }
   }
 
-  // ✅ Process video to HLS
+  // Process video to HLS and stream uploads to S3
   const hlsDir = path.join(__dirname, `../../temp/hls/${userId}`);
   fs.mkdirSync(hlsDir, { recursive: true });
 
-  // @ts-ignore
-  await processVideoHLS(tempPath, hlsDir, userId);
-  fs.unlinkSync(tempPath);
-
-  // ✅ Upload HLS files to AWS S3
   const s3Folder = `elevator_pitches/${userId}/hls`;
-  const uploadedFiles = await uploadHLSFilesToS3(hlsDir, s3Folder);
+  const { uploadedFiles } = await processVideoHLS(
+    tempPath,
+    hlsDir,
+    userId,
+    s3Folder
+  );
+  fs.unlinkSync(tempPath);
 
   // ✅ Extract S3 URLs
   const hlsUrl = uploadedFiles["master.m3u8"] || "";
@@ -345,3 +342,4 @@ export const getAllElevatorPitches = catchAsync(
     });
   }
 );
+

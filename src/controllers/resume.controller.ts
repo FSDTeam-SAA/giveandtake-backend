@@ -5,7 +5,7 @@ import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import path from 'path'
-import { uploadFileToS3, uploadHLSFilesToS3 } from '../services/s3.service'
+import { uploadFileToS3 } from '../services/s3.service'
 
 /***********************
  * CREATE RESUME ENTRY *
