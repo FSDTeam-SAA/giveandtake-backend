@@ -1,4 +1,4 @@
-import express from 'express'
+import express from "express";
 import {
   createJob,
   getAllJobs,
@@ -14,41 +14,44 @@ import {
   getRicruitercompanyJobs2,
   getRicruitercompanyJobs3,
   toggleArchiveJob,
-} from '../controllers/job.controller'
-import { protect } from '../middlewares/auth.middleware'
+  editJob,
+} from "../controllers/job.controller";
+import { protect } from "../middlewares/auth.middleware";
 
-const router = express.Router()
+const router = express.Router();
 
-router.route('/jobs').post(createJob).get(getAllJobs)
+router.route("/jobs").post(createJob).get(getAllJobs);
 
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
-router.route('/jobs/recommend').get(protect,recommendJobs)
-router.route('/jobs/:id').get(getSingleJob).patch(updateJob).delete(deleteJob)
+router.route("/jobs/recommend").get(protect, recommendJobs);
+router.route("/jobs/:id").get(getSingleJob).patch(updateJob).delete(deleteJob);
 
+router.route("/jobs/update/:id").patch(protect, editJob);
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
  *******************************/
 
-
-router.route('/jobs/archived/user').get(protect, getArchivedJobs)
+router.route("/jobs/archived/user").get(protect, getArchivedJobs);
 router.patch("/jobs/:jobId/archive", protect, toggleArchiveJob);
 
-router.route('/jobs/recruiter/company').get(protect, getRecruiterCompanyJobs)
-router.route('/all-jobs/company/:id').get( getRicruitercompanyJobs1)
-router.route('/all-jobs/recruiter/:id').get( getRicruitercompanyJobs3)
-router.route('/all-jobs-for-company/company/:id').get( getRicruitercompanyJobs2)
+router.route("/jobs/recruiter/company").get(protect, getRecruiterCompanyJobs);
+router.route("/all-jobs/company/:id").get(getRicruitercompanyJobs1);
+router.route("/all-jobs/recruiter/:id").get(getRicruitercompanyJobs3);
+router.route("/all-jobs-for-company/company/:id").get(getRicruitercompanyJobs2);
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
-router.get('/pending/job/company', protect, getPendingJobsForCompany)
+router.get("/pending/job/company", protect, getPendingJobsForCompany);
 
-// Api for fetch jobs that need to be admin approvals  
-router.get('/admin/job/approve', 
+// Api for fetch jobs that need to be admin approvals
+router.get(
+  "/admin/job/approve",
   // protect,
-   adminApproveJobs)
+  adminApproveJobs
+);
 
-export default router
+export default router;

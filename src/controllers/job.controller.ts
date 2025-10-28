@@ -169,6 +169,159 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const editJob = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  // Require userId in body to authorize edit
+  const { userId } = req.body || {};
+  if (!userId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  }
+
+  const job = await Job.findById(id);
+  if (!job) {
+    throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+  }
+
+  // ---- Permission checks (company & recruiter) ----
+  let canEdit = false;
+
+  if (user.role === "company") {
+    const company = await Company.findOne({ userId });
+    if (company && job.companyId?.toString() === company._id.toString()) {
+      canEdit = true;
+    }
+  } else if (user.role === "recruiter") {
+    const recruiter = await RecruiterAccount.findOne({ userId });
+    if (recruiter) {
+      // own job
+      if (job.userId?.toString() === userId.toString()) canEdit = true;
+      // same recruiter
+      if (
+        job.recruiterId &&
+        job.recruiterId.toString() === recruiter._id.toString()
+      )
+        canEdit = true;
+      // recruiter tied to same company
+      if (
+        recruiter.companyId &&
+        job.companyId &&
+        recruiter.companyId.toString() === job.companyId.toString()
+      ) {
+        canEdit = true;
+      }
+    }
+  } else {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You are not authorized to edit a job"
+    );
+  }
+
+  if (!canEdit) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You do not have permission to edit this job"
+    );
+  }
+
+  // ---- Whitelist of fields allowed to be updated ----
+  const updatableFields: (keyof typeof job)[] = [
+    "title",
+    "description",
+    "companyName",
+    "salaryRange",
+    "location",
+    "shift",
+    "responsibilities",
+    "educationExperience",
+    "benefits",
+    "vacancy",
+    "experience",
+    "deadline",
+    "status",
+    "jobCategoryId",
+    "compensation",
+    "arcrivedJob",
+    "applicationRequirement",
+    "customQuestion",
+    "employement_Type",
+    "website_Url",
+    "publishDate",
+    "career_Stage",
+    "location_Type",
+    "name",
+    "role",
+  ] as any;
+
+  // Track some state to optionally notify followers on activation
+  const prevStatus = job.status;
+  const prevPublishDate = job.publishDate;
+
+  // ---- Apply updates safely ----
+  for (const field of updatableFields) {
+    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      // @ts-ignore
+      job[field] = req.body[field];
+    }
+  }
+
+  // Keep authorship associations intact—do not allow swapping owners from edit
+  // If you DO want to allow company/recruiter switching, handle explicitly here.
+
+  await job.save();
+
+  // ---- Optional: notify followers if the job just became active or newly published now ----
+  const justActivated = prevStatus !== "active" && job.status === "active";
+
+  const justPublishedNow =
+    !!job.publishDate &&
+    prevPublishDate?.toString() !== job.publishDate?.toString();
+
+  if (justActivated || justPublishedNow) {
+    let followers: any[] = [];
+    if (job.companyId) {
+      followers = await Following.find({ companyId: job.companyId });
+    } else if (job.recruiterId) {
+      followers = await Following.find({ recruiterId: job.recruiterId });
+    }
+
+    if (followers.length > 0) {
+      const notifications = followers.map((f) => ({
+        userId: f.userId,
+        message: `Updated job: ${job.title}`,
+        jobId: job._id,
+        type: "job_update",
+      }));
+
+      const saved = await Notification.insertMany(notifications);
+
+      saved.forEach(async (n) => {
+        const count = await Notification.countDocuments({
+          to: n.userId,
+          isViewed: false,
+        });
+        // emit without leaking server internals
+        io.to(n.userId.toString()).emit("newNotification", {
+          n,
+          unseenCount: count,
+        });
+      });
+    }
+  }
+
+  return sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Job updated successfully",
+    data: job,
+  });
+});
 /********************************************
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
@@ -183,6 +336,16 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
       { publishDate: { $exists: false } },
       { publishDate: null },
       { publishDate: { $lte: new Date() } },
+    ],
+    // 🚫 Exclude jobs past deadline
+    $and: [
+      {
+        $or: [
+          { deadline: { $exists: false } },
+          { deadline: null },
+          { deadline: { $gte: new Date() } }, // only jobs whose deadline has not passed
+        ],
+      },
     ],
   };
 
@@ -218,6 +381,16 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
         { location_Type: regex },
         { employement_Type: regex },
       ],
+      // ⏰ Again, exclude past deadlines
+      $and: [
+        {
+          $or: [
+            { deadline: { $exists: false } },
+            { deadline: null },
+            { deadline: { $gte: new Date() } },
+          ],
+        },
+      ],
     };
 
     [totalJobs, jobs] = await Promise.all([
@@ -240,8 +413,6 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
-
 /*******************
  * // UPDATE A JOB *
  *******************/
@@ -256,12 +427,12 @@ function getFirstName(fullName?: string): string {
 
 // Helper: shared EVP email template
 function buildEvpEmail(opts: {
-  heading: string;              // e.g., "Application Update"
-  subheading?: string;          // e.g., "Status: Shortlisted"
-  greetingName: string;         // e.g., "Fahim"
-  bodyHtml: string;             // inner HTML paragraphs
-  signer: string;               // e.g., recruiter name
-  titleTag?: string;            // <title> content
+  heading: string; // e.g., "Application Update"
+  subheading?: string; // e.g., "Status: Shortlisted"
+  greetingName: string; // e.g., "Fahim"
+  bodyHtml: string; // inner HTML paragraphs
+  signer: string; // e.g., recruiter name
+  titleTag?: string; // <title> content
 }) {
   const {
     heading,
@@ -292,7 +463,9 @@ function buildEvpEmail(opts: {
                   <tr>
                     <td style="vertical-align:middle;">
                       <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
-                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${heading}${subheading ? ` — ${subheading}` : ""}</p>
+                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${heading}${
+    subheading ? ` — ${subheading}` : ""
+  }</p>
                     </td>
                     <td style="text-align:right;vertical-align:middle;">
                       <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
@@ -335,46 +508,45 @@ function buildEvpEmail(opts: {
   </html>`;
 }
 
-export const updateJob = catchAsync(
-  async (req: Request, res: Response) => {
-    const { id } = req.params; // candidate user id
-    const { status } = req.body;
+export const updateJob = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params; // candidate user id
+  const { status } = req.body;
 
-    if (!["shortlisted", "rejected", "pending"].includes(status)) {
-      throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
-    }
+  if (!["shortlisted", "rejected", "pending"].includes(status)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
+  }
 
-    const updated = await AppliedJob.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true }
-    )
-      .populate("jobId", "title")
-      .populate("userId", "name email"); // fetch candidate info
+  const updated = await AppliedJob.findByIdAndUpdate(
+    id,
+    { status },
+    { new: true }
+  )
+    .populate("jobId", "title")
+    .populate("userId", "name email"); // fetch candidate info
 
-    if (!updated) {
-      throw new AppError(httpStatus.NOT_FOUND, "Application not found");
-    }
+  if (!updated) {
+    throw new AppError(httpStatus.NOT_FOUND, "Application not found");
+  }
 
-    const candidate = updated.userId as any;
-    const recruiter = req.user as any; // assuming you attach recruiter info in middleware
-    const jobTitle = (updated.jobId as any)?.title || "the job";
+  const candidate = updated.userId as any;
+  const recruiter = req.user as any; // assuming you attach recruiter info in middleware
+  const jobTitle = (updated.jobId as any)?.title || "the job";
 
-    const firstName = getFirstName(candidate?.name);
-    const recruiterName = getFirstName(recruiter?.name) || "Recruiter";
+  const firstName = getFirstName(candidate?.name);
+  const recruiterName = getFirstName(recruiter?.name) || "Recruiter";
 
-    let emailSubject = "";
-    let emailBody = "";
+  let emailSubject = "";
+  let emailBody = "";
 
-    if (status === "rejected") {
-      emailSubject = `Application Update: ${jobTitle}`;
-      emailBody = buildEvpEmail({
-        heading: "Application Update",
-        subheading: "Status: Unsuccessful",
-        greetingName: firstName,
-        signer: recruiterName,
-        titleTag: "EVP — Application Update",
-        bodyHtml: `
+  if (status === "rejected") {
+    emailSubject = `Application Update: ${jobTitle}`;
+    emailBody = buildEvpEmail({
+      heading: "Application Update",
+      subheading: "Status: Unsuccessful",
+      greetingName: firstName,
+      signer: recruiterName,
+      titleTag: "EVP — Application Update",
+      bodyHtml: `
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
             I’m sorry to let you know your application for <strong>${jobTitle}</strong> has been
             <strong>unsuccessful</strong> on this occasion. Due to the high volume of applications, we
@@ -384,16 +556,16 @@ export const updateJob = catchAsync(
             Please keep applying and remain hopeful — the best of your career is yet to come!
           </p>
         `,
-      });
-    } else if (status === "shortlisted") {
-      emailSubject = `Application Update: ${jobTitle}`;
-      emailBody = buildEvpEmail({
-        heading: "Application Update",
-        subheading: "Status: Shortlisted",
-        greetingName: firstName,
-        signer: recruiterName,
-        titleTag: "EVP — Application Update",
-        bodyHtml: `
+    });
+  } else if (status === "shortlisted") {
+    emailSubject = `Application Update: ${jobTitle}`;
+    emailBody = buildEvpEmail({
+      heading: "Application Update",
+      subheading: "Status: Shortlisted",
+      greetingName: firstName,
+      signer: recruiterName,
+      titleTag: "EVP — Application Update",
+      bodyHtml: `
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
             Great news! Your application for <strong>${jobTitle}</strong> has been
             <strong>forwarded to the hiring manager</strong>. You may be contacted outside of EVP’s
@@ -403,53 +575,54 @@ export const updateJob = catchAsync(
             Good luck!
           </p>
         `,
-      });
-    } else if (status === "pending") {
-      // Optional: send a "still under review" message. Keep subject/body minimal or skip entirely.
-      emailSubject = `Application Update: ${jobTitle}`;
-      emailBody = buildEvpEmail({
-        heading: "Application Update",
-        subheading: "Status: Under Review",
-        greetingName: firstName,
-        signer: recruiterName,
-        titleTag: "EVP — Application Update",
-        bodyHtml: `
+    });
+  } else if (status === "pending") {
+    // Optional: send a "still under review" message. Keep subject/body minimal or skip entirely.
+    emailSubject = `Application Update: ${jobTitle}`;
+    emailBody = buildEvpEmail({
+      heading: "Application Update",
+      subheading: "Status: Under Review",
+      greetingName: firstName,
+      signer: recruiterName,
+      titleTag: "EVP — Application Update",
+      bodyHtml: `
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
             Your application for <strong>${jobTitle}</strong> is still under review. We’ll reach out as
             soon as there’s an update.
           </p>
         `,
-      });
-    }
-
-    // send email (only if we actually built one and the candidate has an email)
-    if (candidate?.email && emailSubject && emailBody) {
-      await sendEmail(candidate.email, emailSubject, emailBody);
-    }
-
-    // also send notification in-app
-    const notification = await createNotification({
-      to: updated.userId as mongoose.Types.ObjectId,
-      message: `"${jobTitle}" application status updated. Check your email.`,
-      type: "job_application_status",
-      id: updated._id,
-    });
-    const count = await Notification.countDocuments({
-      to: updated.userId,
-      isViewed: false,
-    });
-
-    // Emit socket event
-    io.to(updated.userId.toString()).emit("newNotification", { notification, count });
-
-    res.status(httpStatus.OK).json({
-      success: true,
-      message: "Application status updated",
-      data: updated,
     });
   }
-);
 
+  // send email (only if we actually built one and the candidate has an email)
+  if (candidate?.email && emailSubject && emailBody) {
+    await sendEmail(candidate.email, emailSubject, emailBody);
+  }
+
+  // also send notification in-app
+  const notification = await createNotification({
+    to: updated.userId as mongoose.Types.ObjectId,
+    message: `"${jobTitle}" application status updated. Check your email.`,
+    type: "job_application_status",
+    id: updated._id,
+  });
+  const count = await Notification.countDocuments({
+    to: updated.userId,
+    isViewed: false,
+  });
+
+  // Emit socket event
+  io.to(updated.userId.toString()).emit("newNotification", {
+    notification,
+    count,
+  });
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: "Application status updated",
+    data: updated,
+  });
+});
 
 /*******************
  * // DELETE A JOB *
@@ -510,10 +683,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     });
   }
 
-  const title = resume?.title;
-  const country = resume?.country;
-  const skills = resume?.skills || [];
-  const jobCategoryId = resume?.jobCategoryId;
+  const { title, country, skills = [], jobCategoryId } = resume;
 
   const matchConditions = [];
 
@@ -527,14 +697,23 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       description: { $regex: new RegExp(skills.join("|"), "i") },
     });
   }
-  if (jobCategoryId as string) matchConditions.push({ jobCategoryId });
+  if (jobCategoryId) matchConditions.push({ jobCategoryId });
 
-  // ✅ Fix: Exclude future publish dates
+  // ✅ Filter for published jobs only (no future publish dates)
   const dateFilter = {
     $or: [
       { publishDate: { $exists: false } },
       { publishDate: null },
       { publishDate: { $lte: new Date() } },
+    ],
+  };
+
+  // ✅ Filter to exclude jobs past their deadline
+  const deadlineFilter = {
+    $or: [
+      { deadline: { $exists: false } },
+      { deadline: null },
+      { deadline: { $gte: new Date() } },
     ],
   };
 
@@ -545,6 +724,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       { adminApprove: true },
       { jobApprove: "approved" },
       dateFilter,
+      deadlineFilter, // 🆕 ensure no expired jobs
     ],
   })
     .populate("companyId recruiterId")
@@ -582,6 +762,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   exactMatches.sort((a, b) => b.score - a.score);
   partialMatches.sort((a, b) => b.score - a.score);
 
+  // 🧠 Fallback jobs if no matches found
   if (exactMatches.length === 0 && partialMatches.length === 0) {
     const fallbackJobs = await Job.find({
       status: "active",
@@ -589,6 +770,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       adminApprove: true,
       jobApprove: "approved",
       ...dateFilter,
+      ...deadlineFilter, // 🆕 exclude expired
     })
       .populate("companyId recruiterId")
       .limit(5);
@@ -597,11 +779,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       statusCode: httpStatus.OK,
       success: true,
       message: "No exact or partial matches found.",
-      data: {
-        exactMatches,
-        partialMatches,
-        fallbackJobs,
-      },
+      data: { exactMatches, partialMatches, fallbackJobs },
     });
   }
 
@@ -609,10 +787,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Recommended jobs fetched successfully",
-    data: {
-      exactMatches,
-      partialMatches,
-    },
+    data: { exactMatches, partialMatches },
   });
 });
 
@@ -637,7 +812,6 @@ export const getArchivedJobs = catchAsync(async (req, res) => {
   });
 });
 
-
 export const toggleArchiveJob = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   const { jobId } = req.params;
@@ -646,7 +820,8 @@ export const toggleArchiveJob = catchAsync(async (req, res) => {
   if (!jobId) throw new AppError(httpStatus.BAD_REQUEST, "Job ID is required");
 
   const job = await Job.findOne({ _id: jobId, userId });
-  if (!job) throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
+  if (!job)
+    throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
 
   job.arcrivedJob = !job.arcrivedJob;
   await job.save();
