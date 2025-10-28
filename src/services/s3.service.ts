@@ -4,11 +4,14 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import fs from "fs";
 import path from "path";
+import { pipeline } from "stream/promises";
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -70,6 +73,7 @@ export const getSignedS3Url = async (
 };
 
 export const deleteFromS3 = async (s3Key: string) => {
+  if (!s3Key) return;
   const bucketName = process.env.AWS_BUCKET_NAME!;
   const command = new DeleteObjectCommand({
     Bucket: bucketName,
@@ -150,4 +154,84 @@ export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
   const fileUrl = bucketUrl(key);
 
   return { key, fileUrl, signedUrl };
+};
+
+export const getSignedUploadUrl = async ({
+  key,
+  contentType,
+  expiresIn = 15 * 60,
+  acl,
+}: {
+  key: string;
+  contentType?: string;
+  expiresIn?: number;
+  acl?: "public-read" | "private";
+}) => {
+  const command = new PutObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: key,
+    ContentType: contentType,
+    ACL: acl,
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn });
+  return {
+    uploadUrl,
+    key,
+    bucket: process.env.AWS_BUCKET_NAME!,
+  };
+};
+
+export const downloadS3ObjectToFile = async ({
+  key,
+  destinationPath,
+}: {
+  key: string;
+  destinationPath: string;
+}) => {
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME!,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  if (!response.Body) {
+    throw new Error(`No body returned when downloading S3 object "${key}"`);
+  }
+
+  await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
+  const writeStream = fs.createWriteStream(destinationPath);
+  await pipeline(response.Body as NodeJS.ReadableStream, writeStream);
+
+  return destinationPath;
+};
+
+export const deleteS3Prefix = async (prefix: string) => {
+  const bucket = process.env.AWS_BUCKET_NAME!;
+  let continuationToken: string | undefined;
+
+  do {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    });
+
+    const listed = await s3Client.send(listCommand);
+    const objects = listed.Contents ?? [];
+    if (!objects.length) {
+      continuationToken = listed.NextContinuationToken;
+      continue;
+    }
+
+    const deleteCommand = new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: {
+        Objects: objects.map((obj) => ({ Key: obj.Key! })),
+      },
+    });
+
+    await s3Client.send(deleteCommand);
+    continuationToken = listed.NextContinuationToken;
+  } while (continuationToken);
 };

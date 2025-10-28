@@ -29,21 +29,22 @@
 
 import express from "express";
 import {
-  createResume,
+  requestElevatorPitchUploadUrl,
+  completeElevatorPitchUpload,
+  getElevatorPitchForUser,
   deleteResume,
   streamElevatorPitch,
   secureStream,
   getEncryptionKey,
   getAllElevatorPitches,
 } from "../controllers/elevatorPitch.controller";
-import { resumeUpload } from "../middlewares/multer.middleware";
-import { isAdmin, protect } from "../middlewares/auth.middleware";
-import { checkVideoAccess } from "../middlewares/checkVideoAccess.middleware";
+import { protect } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
-router.post("/video", protect, resumeUpload, createResume);
-
+router.post("/video/upload-url", protect, requestElevatorPitchUploadUrl);
+router.post("/video/complete", protect, completeElevatorPitchUpload);
+router.get("/video", protect, getElevatorPitchForUser);
 router.delete("/video", protect, deleteResume);
 
 router.get("/stream/:userId/:segment", secureStream);
