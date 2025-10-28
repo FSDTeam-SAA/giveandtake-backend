@@ -193,7 +193,11 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
 
   if (user.role === "company") {
     const company = await Company.findOne({ userId });
-    if (company && job.companyId?.toString() === company._id.toString()) {
+    if (
+      company &&
+      job.companyId?.toString() ===
+        (company._id as mongoose.Types.ObjectId).toString()
+    ) {
       canEdit = true;
     }
   } else if (user.role === "recruiter") {
@@ -204,7 +208,8 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
       // same recruiter
       if (
         job.recruiterId &&
-        job.recruiterId.toString() === recruiter._id.toString()
+        recruiter._id &&
+        job.recruiterId.toString() === (recruiter._id as mongoose.Types.ObjectId).toString()
       )
         canEdit = true;
       // recruiter tied to same company
@@ -838,93 +843,7 @@ export const toggleArchiveJob = catchAsync(async (req, res) => {
   });
 });
 
-/************************************************
- * FETCH JOBS THAT RICRUTER AND COMPANY CREATED *
- ************************************************/
-// export const getRicruitercompanyJobs = catchAsync(async (req, res) => {
-//   const userId = req.user?._id;
-//   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
-//   // const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
-//   //   createAt: -1,
-//   // });
 
-//   // if (!Jobs) throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
-
-//   // const applicantCount = await AppliedJob.countDocuments({jobId: Jobs._id})
-
-//   const Jobs = await Job.find({ userId, arcrivedJob: false }).sort({
-//     createdAt: -1,
-//   });
-
-//   if (!Jobs.length) {
-//     sendResponse(res, {
-//       statusCode: httpStatus.OK,
-//       success: true,
-//       message: "No jobs found",
-//       data: [],
-//     });
-//   }
-
-//   const jobsWithApplicants = await Promise.all(
-//     Jobs.map(async (job) => {
-//       const applicantCount = await AppliedJob.countDocuments({
-//         jobId: job._id,
-//       });
-//       return { ...job.toObject(), applicantCount };
-//     })
-//   );
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: "jobs fetched successfully",
-//     data: jobsWithApplicants,
-//   });
-// });
-
-// export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
-//   const userId = req.user?._id
-//   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User not found')
-
-//   // Get the company document for this user, if any
-//   const company = await Company.findOne({ userId })
-
-//   // Match jobs where:
-//   // 1. job.userId === logged-in user
-//   // 2. job.companyId === logged-in user (if user is a company)
-//   // 3. job.companyId === company._id (if user has a company record)
-//   const Jobs = await Job.find({
-//     $or: [
-//       { userId }, // jobs created by the user
-//       { companyId: userId }, // user account itself is a company
-//       ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
-//     ],
-//     arcrivedJob: false,
-//   }).sort({ createdAt: -1 })
-
-//   if (!Jobs.length) {
-//     return sendResponse(res, {
-//       statusCode: httpStatus.OK,
-//       success: true,
-//       message: 'No jobs found',
-//       data: [],
-//     })
-//   }
-
-//   const jobsWithApplicants = await Promise.all(
-//     Jobs.map(async (job) => {
-//       const applicantCount = await AppliedJob.countDocuments({ jobId: job._id })
-//       return { ...job.toObject(), applicantCount }
-//     })
-//   )
-
-//   sendResponse(res, {
-//     statusCode: httpStatus.OK,
-//     success: true,
-//     message: 'Jobs fetched successfully',
-//     data: jobsWithApplicants,
-//   })
-// })
 
 export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id;
