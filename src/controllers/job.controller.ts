@@ -330,71 +330,140 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
 /********************************************
  * GET ALL JOBS WITH FILTERS AND PAGINATION *
  ********************************************/
-export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  const { title } = req.query;
+const EMPLOYMENT_SYNONYMS: Record<string, string[]> = {
+  "full-time": ["full-time", "full time", "fulltime", "ft"],
+  "part-time": ["part-time", "part time", "parttime", "partime", "pt"],
+  internship: ["internship", "intern role", "intern"],
+  contract: ["contract", "contractor", "contract-based"],
+  temporary: ["temporary", "temp", "temp job", "temp role"],
+  freelance: ["freelance", "freelancer", "free-lance"],
+  volunteer: ["volunteer", "voluntary"],
+};
 
-  const filter: any = {
-    arcrivedJob: false,
-    jobApprove: "approved",
-    adminApprove: true,
+// 🧠 Detect employment types from a free-text query
+function detectEmploymentTypes(q: unknown): string[] {
+  if (!q) return [];
+  const text = Array.isArray(q) ? q.join(" ").toLowerCase() : String(q).toLowerCase();
+
+  const matches = new Set<string>();
+  for (const [canonical, variants] of Object.entries(EMPLOYMENT_SYNONYMS)) {
+    for (const v of variants) {
+      // hyphen/space tolerant (e.g., "full-time" ~ "full time" ~ "fulltime")
+      const pattern = v
+        .replace(/\s*-\s*/g, "[-\\s]?")
+        .replace(/\s+/g, "\\s*");
+      const re = new RegExp(`\\b${pattern}\\b`, "i");
+      if (re.test(text)) {
+        matches.add(canonical);
+        break;
+      }
+    }
+  }
+  return Array.from(matches);
+}
+
+// 🧩 Make a regex that treats hyphens/underscores/spaces interchangeably
+function makeLooseRegexFromQuery(q: string): RegExp {
+  // Escape regex specials
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Be forgiving about hyphens/spaces/underscores
+  const loose = escaped.replace(/[-_\s]+/g, "[-_\\s]*");
+  return new RegExp(loose, "i");
+}
+
+export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
+  // Normalize title safely
+  const rawTitle = req.query.title;
+  const title =
+    typeof rawTitle === "string"
+      ? rawTitle
+      : Array.isArray(rawTitle)
+      ? rawTitle.join(" ")
+      : undefined;
+
+  const detectedEmploymentTypes = detectEmploymentTypes(title);
+
+  // Common approval/date filters
+  const publishDateFilter = {
     $or: [
       { publishDate: { $exists: false } },
       { publishDate: null },
       { publishDate: { $lte: new Date() } },
     ],
-    // 🚫 Exclude jobs past deadline
-    $and: [
-      {
-        $or: [
-          { deadline: { $exists: false } },
-          { deadline: null },
-          { deadline: { $gte: new Date() } }, // only jobs whose deadline has not passed
-        ],
-      },
+  };
+  const deadlineFilter = {
+    $or: [
+      { deadline: { $exists: false } },
+      { deadline: null },
+      { deadline: { $gte: new Date() } },
     ],
   };
 
-  // Pagination setup
+  const baseFilter: any = {
+    arcrivedJob: false,
+    jobApprove: "approved",
+    adminApprove: true,
+    ...publishDateFilter,
+    $and: [deadlineFilter],
+  };
+
+  // If employment intent detected, add explicit filter by enum
+  if (detectedEmploymentTypes.length > 0) {
+    baseFilter.employement_Type = { $in: detectedEmploymentTypes };
+  }
+
   const { page, limit, skip } = getPaginationParams(req.query);
 
-  // 🔍 Full-text search
-  if (title) {
-    filter.$text = { $search: title as string };
+  // Heuristic: if the query looks like it's ONLY employment-type intent,
+  // skip $text entirely (since employement_Type isn't in the text index).
+  const onlyEmploymentIntent =
+    !!title &&
+    detectedEmploymentTypes.length > 0 &&
+    // strip the matched variants from the query and see if anything meaningful remains
+    (() => {
+      let t = title!.toLowerCase();
+      for (const variants of Object.values(EMPLOYMENT_SYNONYMS)) {
+        for (const v of variants) {
+          const pattern = v
+            .toLowerCase()
+            .replace(/\s*-\s*/g, "[-\\s]?")
+            .replace(/\s+/g, "\\s*");
+          t = t.replace(new RegExp(`\\b${pattern}\\b`, "ig"), " ");
+        }
+      }
+      // if nothing but whitespace remains, it's only employment intent
+      return t.trim().length === 0;
+    })();
+
+  let filter: any = { ...baseFilter };
+  if (title && !onlyEmploymentIntent) {
+    // Use $text only when there's more than just employment-type intent
+    filter.$text = { $search: title };
   }
 
   let [totalJobs, jobs] = await Promise.all([
     Job.countDocuments(filter),
-    Job.find(filter, title ? { score: { $meta: "textScore" } } : {})
+    Job.find(filter, filter.$text ? { score: { $meta: "textScore" } } : {})
       .skip(skip)
       .limit(limit)
-      .sort(title ? { score: { $meta: "textScore" } } : { createdAt: -1 })
-      .populate("companyId recruiterId"),
+      .sort(filter.$text ? { score: { $meta: "textScore" } } : { createdAt: -1 })
+      .populate("companyId recruiterId")
+      .lean(),
   ]);
 
-  // 🧠 Fallback to regex search if no text search results
-  if (title && jobs.length === 0) {
-    const regex = { $regex: title, $options: "i" };
+  // Fallback regex search if we used $text and got nothing
+  if (title && !onlyEmploymentIntent && jobs.length === 0) {
+    const looseRe = makeLooseRegexFromQuery(title);
 
     const regexFilter: any = {
-      arcrivedJob: false,
-      jobApprove: "approved",
-      adminApprove: true,
+      ...baseFilter,
       $or: [
-        { title: regex },
-        { description: regex },
-        { location: regex },
-        { location_Type: regex },
-        { employement_Type: regex },
-      ],
-      // ⏰ Again, exclude past deadlines
-      $and: [
-        {
-          $or: [
-            { deadline: { $exists: false } },
-            { deadline: null },
-            { deadline: { $gte: new Date() } },
-          ],
-        },
+        { title: { $regex: looseRe } },
+        { description: { $regex: looseRe } },
+        { location: { $regex: looseRe } },
+        { location_Type: { $regex: looseRe } },
+        // also try to match employement_Type textually for flexibility
+        { employement_Type: { $regex: looseRe } },
       ],
     };
 
@@ -404,7 +473,22 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 })
-        .populate("companyId recruiterId"),
+        .populate("companyId recruiterId")
+        .lean(),
+    ]);
+  }
+
+  // Special path: query is ONLY employment-type (e.g., "full time")
+  // We already put the enum filter in baseFilter; just run a simple find.
+  if (title && onlyEmploymentIntent) {
+    [totalJobs, jobs] = await Promise.all([
+      Job.countDocuments(baseFilter),
+      Job.find(baseFilter)
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .populate("companyId recruiterId")
+        .lean(),
     ]);
   }
 
@@ -880,7 +964,10 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
       let derivedStatus = "Pending";
 
-      if (job.publishDate && job.adminApprove) {
+      // ✅ Mark as Expired if the job's deadline has passed
+      if (job.deadline && job.deadline < today) {
+        derivedStatus = "Expired";
+      } else if (job.publishDate && job.adminApprove) {
         if (job.publishDate <= today) {
           derivedStatus = "Live";
         } else {
@@ -895,7 +982,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       return {
         ...job.toObject(),
         applicantCount,
-        derivedStatus, // 👈 new status field
+        derivedStatus, // 👈 new status field with "Expired" logic
       };
     })
   );
@@ -907,6 +994,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
     data: jobsWithApplicants,
   });
 });
+
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;
@@ -978,7 +1066,10 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
       let derivedStatus = "Pending";
 
-      if (job.publishDate && job.adminApprove) {
+      // ✅ Mark as Expired if the job's deadline has passed
+      if (job.deadline && job.deadline < today) {
+        derivedStatus = "Expired";
+      } else if (job.publishDate && job.adminApprove) {
         if (job.publishDate <= today) {
           derivedStatus = "Live";
         } else {
@@ -993,7 +1084,7 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
       return {
         ...job.toObject(),
         applicantCount,
-        derivedStatus, // 👈 new status field
+        derivedStatus, // 👈 includes "Expired" logic
       };
     })
   );
@@ -1005,6 +1096,7 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
     data: jobsWithApplicants,
   });
 });
+
 
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *

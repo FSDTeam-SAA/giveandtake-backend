@@ -28,7 +28,7 @@ export const validateElevatorPitchAccess = async (
       if (duration > 30) {
         throw new AppError(
           httpStatus.PAYMENT_REQUIRED,
-          'Free users can upload only up to 30 seconds'
+          'Kindly subscribe to upload videos over your free 30 seconds allowance'
         )
       }
     } else {

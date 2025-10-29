@@ -86,6 +86,7 @@ jobSchema.index(
     description: "text",
     location: "text",
     location_Type: "text",
+    employement_Type: "text", // ← added
   },
   {
     weights: {
@@ -93,6 +94,7 @@ jobSchema.index(
       description: 3,
       location: 2,
       location_Type: 2,
+      employement_Type: 3, // ← weight for employment type
     },
     name: "JobTextIndex",
   }
