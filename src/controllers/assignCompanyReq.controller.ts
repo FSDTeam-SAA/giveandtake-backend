@@ -5,9 +5,14 @@ import { Company } from "../models/company.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
+import { createNotification } from "../sockets/notification.service";
 
 export const employeeReq = catchAsync(async (req, res) => {
     const { companyId } = req.body;
+    const company = await Company.findById(companyId)
+    if (!company) {
+        throw new AppError(404, "Company not Found")
+    }
 
     const check = await ReqCompany.findOne({ company: companyId, userId: req.user?._id })
     if (check) {
@@ -17,6 +22,12 @@ export const employeeReq = catchAsync(async (req, res) => {
         userId: req.user?._id,
         company: companyId
     })
+    await createNotification({
+        to: company.userId as any,
+        message: `Recruiter connection request received`,
+        type: "req_application",
+        id: reqCom._id,
+    });
 
     sendResponse(res, {
         statusCode: 200,
@@ -39,8 +50,8 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
     if (status === "accepted") {
         const company1 = await Company.findById(companyId)
         const company = await Company.findByIdAndUpdate(
-           
-            {_id:companyId},
+
+            { _id: companyId },
             { $addToSet: { employeesId: userId } }, // avoids duplicates
             { new: true }
         );
@@ -48,11 +59,18 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
 
         const recuirter = await RecruiterAccount.findOneAndUpdate(
             { userId: userId },
-         { companyId: companyId } , // avoids duplicates
+            { companyId: companyId }, // avoids duplicates
             { new: true }
         );
 
-       
+        await createNotification({
+            to: userId as any,
+            message: `You are now connected to ${company?.cname}`,
+            type: "req_application",
+            id: id as any,
+        });
+
+
     }
     const reqCom = await ReqCompany.findByIdAndUpdate(id, {
         status: status
@@ -70,12 +88,12 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
     const { employeeIds, companyId } = req.body;
 
     const company = await Company.findOneAndUpdate(
-        {userId:companyId},
+        { userId: companyId },
         { $addToSet: { employeesId: employeeIds } }, // avoids duplicates
         { new: true }
     );
 
-    sendResponse(res,{
+    sendResponse(res, {
         statusCode: 200,
         success: true,
         message: "Employee added to the company",
@@ -84,24 +102,24 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
 })
 
 export const companyEmployeeRemove = catchAsync(async (req, res) => {
-  const { employeeId, companyId } = req.body
+    const { employeeId, companyId } = req.body
 
-  console.log(companyId, employeeId)
+    console.log(companyId, employeeId)
 
-  const company = await Company.findOneAndUpdate(
-    { userId: new mongoose.Types.ObjectId(companyId) },
-    { $pull: { employeesId: new mongoose.Types.ObjectId(employeeId) } }, // remove employeeId
-    { new: true }
-  )
+    const company = await Company.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(companyId) },
+        { $pull: { employeesId: new mongoose.Types.ObjectId(employeeId) } }, // remove employeeId
+        { new: true }
+    )
 
-  if (!company) {
-    throw new AppError(404, "Company not found")
-  }
+    if (!company) {
+        throw new AppError(404, "Company not found")
+    }
 
-  sendResponse(res, {
-    statusCode: 200,
-    success: true,
-    message: "Employee removed from the company",
-    data: company,
-  })
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Employee removed from the company",
+        data: company,
+    })
 })

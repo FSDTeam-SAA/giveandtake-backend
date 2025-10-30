@@ -51,6 +51,28 @@ import { MessageRoom } from '../models/messageRoom.model'
 //   })
 // })
 
+
+export const getUnreadRoomCount = async (userId : any) => {
+  const unreadRooms = await Message.aggregate([
+    {
+      $match: {
+        userId: { $ne: new mongoose.Types.ObjectId(userId) }, // not sent by this user
+        readBy: { $ne: new mongoose.Types.ObjectId(userId) } // not yet read
+      }
+    },
+    {
+      $group: {
+        _id: "$roomId", // group by room
+      }
+    },
+    {
+      $count: "roomCount" // count number of rooms with unread messages
+    }
+  ]);
+
+  return unreadRooms.length ? unreadRooms[0].roomCount : 0;
+};
+
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const { message, roomId, userId } = req.body
   const files = req.files as Express.Multer.File[]
@@ -99,6 +121,8 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
 
   // Emit socket event
   io.to(roomId).emit('newMessage', message1)
+  const count = await getUnreadRoomCount(userId);
+  io.to(userId.toString).emit('msg_count',count)
 
   res.status(httpStatus.CREATED).json({
     success: true,
