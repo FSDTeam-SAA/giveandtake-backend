@@ -122,9 +122,9 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   )
   let uid = '';
   if(req?.user?.role === 'candidate'){
-    uid = room.companyId ?? room?.recruiterId ;
+    uid = (room?.companyId ?? room?.recruiterId)?.toString() ?? '';
   }else{
-    uid = room?.userId || '';
+    uid = room?.userId?.toString() || '';
   }
   // Emit socket event
   io.to(roomId).emit('newMessage', message1)
