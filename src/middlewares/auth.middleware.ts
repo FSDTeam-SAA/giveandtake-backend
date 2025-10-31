@@ -6,7 +6,9 @@ import { User } from "../models/user.model";
 
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(" ")[1];
+  // console.log(req.headers)
   if (!token) throw new AppError(httpStatus.NOT_FOUND, "Token not found");
+  
 
   try {
     const decoded = await jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;

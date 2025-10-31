@@ -77,6 +77,8 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const { message, roomId, userId } = req.body
   const files = req.files as Express.Multer.File[]
 
+  const room = await MessageRoom.findById(roomId);
+
   if (!mongoose.Types.ObjectId.isValid(roomId)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
   }
@@ -118,11 +120,16 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     'userId',
     'name email avatar'
   )
-
+  let uid = '';
+  if(req?.user?.role === 'candidate'){
+    uid = (room?.companyId ?? room?.recruiterId)?.toString() ?? '';
+  }else{
+    uid = room?.userId?.toString() || '';
+  }
   // Emit socket event
   io.to(roomId).emit('newMessage', message1)
   const count = await getUnreadRoomCount(userId);
-  io.to(userId.toString).emit('msg_count',count)
+  io.to(uid.toString()).emit('msg_count', count)
 
   res.status(httpStatus.CREATED).json({
     success: true,
