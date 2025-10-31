@@ -598,121 +598,83 @@ function buildEvpEmail(opts: {
 }
 
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params; // candidate user id
-  const { status } = req.body;
+  const { id } = req.params;
 
-  if (!["shortlisted", "rejected", "pending"].includes(status)) {
-    throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
+  const job = await Job.findById(id).populate("userId");
+  if (!job) {
+    throw new AppError(400, "job not found");
   }
+  const user = job.userId as any;
 
-  const updated = await AppliedJob.findByIdAndUpdate(
-    id,
-    { status },
-    { new: true }
-  )
-    .populate("jobId", "title")
-    .populate("userId", "name email"); // fetch candidate info
+  if (req.body.adminApprove) {
+    // const recruiterName = (job.userId as any)?.name || 'Recruiter'
 
-  if (!updated) {
-    throw new AppError(httpStatus.NOT_FOUND, "Application not found");
-  }
+    const emailSubject = `Job Post Approved By Admin`;
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0;">Application Confirmation</h2>
+        <p>Dear ${user?.name || "Company"},</p> 
+        <p>Your post has been approved by Admin and will be posted at your scheduled time’,</br> Best regards, EVP Admin</p>
+      </div>
+    `;
 
-  const candidate = updated.userId as any;
-  const recruiter = req.user as any; // assuming you attach recruiter info in middleware
-  const jobTitle = (updated.jobId as any)?.title || "the job";
-
-  const firstName = getFirstName(candidate?.name);
-  const recruiterName = getFirstName(recruiter?.name) || "Recruiter";
-
-  let emailSubject = "";
-  let emailBody = "";
-
-  if (status === "rejected") {
-    emailSubject = `Application Update: ${jobTitle}`;
-    emailBody = buildEvpEmail({
-      heading: "Application Update",
-      subheading: "Status: Unsuccessful",
-      greetingName: firstName,
-      signer: recruiterName,
-      titleTag: "EVP — Application Update",
-      bodyHtml: `
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-            I’m sorry to let you know your application for <strong>${jobTitle}</strong> has been
-            <strong>unsuccessful</strong> on this occasion. Due to the high volume of applications, we
-            can’t provide personalised feedback at this stage.
-          </p>
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-            Please keep applying and remain hopeful — the best of your career is yet to come!
-          </p>
-        `,
+    await sendEmail(user?.email, emailSubject, emailBody);
+    let notification = await createNotification({
+      to: job.userId._id as mongoose.Types.ObjectId,
+      message: "Job Post Approved By Admin",
+      type: "job_application_status",
+      id: job._id as mongoose.Types.ObjectId,
     });
-  } else if (status === "shortlisted") {
-    emailSubject = `Application Update: ${jobTitle}`;
-    emailBody = buildEvpEmail({
-      heading: "Application Update",
-      subheading: "Status: Shortlisted",
-      greetingName: firstName,
-      signer: recruiterName,
-      titleTag: "EVP — Application Update",
-      bodyHtml: `
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-            Great news! Your application for <strong>${jobTitle}</strong> has been
-            <strong>forwarded to the hiring manager</strong>. You may be contacted outside of EVP’s
-            platform if they wish to progress your application.
-          </p>
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-            Good luck!
-          </p>
-        `,
+    const count = await Notification.countDocuments({
+      to: job.userId._id,
+      isViewed: false,
     });
-  } else if (status === "pending") {
-    // Optional: send a "still under review" message. Keep subject/body minimal or skip entirely.
-    emailSubject = `Application Update: ${jobTitle}`;
-    emailBody = buildEvpEmail({
-      heading: "Application Update",
-      subheading: "Status: Under Review",
-      greetingName: firstName,
-      signer: recruiterName,
-      titleTag: "EVP — Application Update",
-      bodyHtml: `
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-            Your application for <strong>${jobTitle}</strong> is still under review. We’ll reach out as
-            soon as there’s an update.
-          </p>
-        `,
+    // Emit socket event
+    io.to(job.userId._id.toString()).emit("newNotification", {
+      notification,
+      count,
+    });
+  } else {
+    const emailSubject = `Job Post Denied By Admin`;
+    const emailBody = `
+      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0;">Application Denied</h2>
+        <p>Dear ${user?.name || "Company"},</p>  
+        <p>‘Please reach out to Admin for support regarding your job post’ on info@evpitch.com</p>
+      </div>
+    `;
+
+    await sendEmail(user?.email, emailSubject, emailBody);
+
+    let notification = await createNotification({
+      to: job.userId._id as mongoose.Types.ObjectId,
+      message: "Job Post Denied By Admin",
+      type: "job_application_status",
+      id: job._id as mongoose.Types.ObjectId,
+    });
+    const count = await Notification.countDocuments({
+      to: job.userId._id,
+      isViewed: false,
+    });
+
+    // Emit socket event
+    io.to(job.userId._id.toString()).emit("newNotification", {
+      notification,
+      count,
     });
   }
 
-  // send email (only if we actually built one and the candidate has an email)
-  if (candidate?.email && emailSubject && emailBody) {
-    await sendEmail(candidate.email, emailSubject, emailBody);
-  }
+  const updated = await Job.findByIdAndUpdate(id, req.body, { new: true });
 
-  // also send notification in-app
-  const notification = await createNotification({
-    to: updated.userId as mongoose.Types.ObjectId,
-    message: `"${jobTitle}" application status updated. Check your email.`,
-    type: "job_application_status",
-    id: updated._id,
-  });
-  const count = await Notification.countDocuments({
-    to: updated.userId,
-    isViewed: false,
-  });
+  if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
-  // Emit socket event
-  io.to(updated.userId.toString()).emit("newNotification", {
-    notification,
-    count,
-  });
-
-  res.status(httpStatus.OK).json({
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
     success: true,
-    message: "Application status updated",
+    message: "Job updated successfully",
     data: updated,
   });
 });
-
 /*******************
  * // DELETE A JOB *
  *******************/
