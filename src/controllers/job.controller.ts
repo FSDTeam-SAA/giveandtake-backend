@@ -604,60 +604,81 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   if (!job) {
     throw new AppError(400, "job not found");
   }
+
   const user = job.userId as any;
+  const greetingName = getFirstName(user?.name);
 
   if (req.body.adminApprove) {
-    // const recruiterName = (job.userId as any)?.name || 'Recruiter'
-
-    const emailSubject = `Job Post Approved By Admin`;
-    const emailBody = `
-      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
-        <h2 style="margin-top: 0;">Application Confirmation</h2>
-        <p>Dear ${user?.name || "Company"},</p> 
-        <p>Your post has been approved by Admin and will be posted at your scheduled time’,</br> Best regards, EVP Admin</p>
-      </div>
-    `;
+    // ✅ Admin Approved Email
+    const emailSubject = "Job Post Updated By Admin";
+    const emailBody = buildEvpEmail({
+      heading: "Job Post Status",
+      subheading: "Approved",
+      greetingName,
+      signer: "EVP Admin",
+      titleTag: "EVP — Job Post Approved",
+      bodyHtml: `
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Your job post has been <strong>approved</strong> by the admin team and will go live at your scheduled time.
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Thank you for using <strong>Elevator Video Pitch© Ltd</strong> to find great candidates.
+        </p>
+      `,
+    });
 
     await sendEmail(user?.email, emailSubject, emailBody);
-    let notification = await createNotification({
+
+    const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
-      message: "Job Post Approved By Admin",
+      message: "Job Post Updated By Admin",
       type: "job_application_status",
       id: job._id as mongoose.Types.ObjectId,
     });
+
     const count = await Notification.countDocuments({
       to: job.userId._id,
       isViewed: false,
     });
-    // Emit socket event
+
     io.to(job.userId._id.toString()).emit("newNotification", {
       notification,
       count,
     });
   } else {
-    const emailSubject = `Job Post Denied By Admin`;
-    const emailBody = `
-      <div style="font-family: Arial, sans-serif; background: rgb(43,127,208); color: white; padding: 20px; border-radius: 8px;">
-        <h2 style="margin-top: 0;">Application Denied</h2>
-        <p>Dear ${user?.name || "Company"},</p>  
-        <p>‘Please reach out to Admin for support regarding your job post’ on info@evpitch.com</p>
-      </div>
-    `;
+    // ❌ Admin Denied Email
+    const emailSubject = "Job Post Updated By Admin";
+    const emailBody = buildEvpEmail({
+      heading: "Job Post Status",
+      subheading: "Denied",
+      greetingName,
+      signer: "EVP Admin",
+      titleTag: "EVP — Job Post Denied",
+      bodyHtml: `
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          Unfortunately, your job post did not meet our publishing criteria and has been <strong>denied</strong> at this time.
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+          If you need assistance or clarification, please reach out to us at
+          <a href="mailto:info@evpitch.com" style="color:#2B7FD0;text-decoration:none;">info@evpitch.com</a>.
+        </p>
+      `,
+    });
 
     await sendEmail(user?.email, emailSubject, emailBody);
 
-    let notification = await createNotification({
+    const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: "Job Post Denied By Admin",
       type: "job_application_status",
       id: job._id as mongoose.Types.ObjectId,
     });
+
     const count = await Notification.countDocuments({
       to: job.userId._id,
       isViewed: false,
     });
 
-    // Emit socket event
     io.to(job.userId._id.toString()).emit("newNotification", {
       notification,
       count,
@@ -675,6 +696,7 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     data: updated,
   });
 });
+
 /*******************
  * // DELETE A JOB *
  *******************/
