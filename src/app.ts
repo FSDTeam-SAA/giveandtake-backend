@@ -31,6 +31,8 @@ import courencyRoutes from "./routes/courency.routes";
 import languageRoutes from "./routes/language.routes";
 import universityRoutes from "./routes/university.routes";
 import contentRoutes from "./routes/contentRoutes";
+import faqRoutes from "./routes/faq.routes";
+import chatbotRoutes from "./routes/chatbot.routes";
 
 
 const app = express();
@@ -148,6 +150,9 @@ app.use("/api/v1/language", languageRoutes);
 app.use("/api/v1/courency", courencyRoutes);
 
 app.use("/api/v1/content", contentRoutes);
+
+app.use("/api/faqs", faqRoutes);
+app.use("/api/v1/chatbot", chatbotRoutes);
 
 app.use(notFound as never);
 app.use(globalErrorHandler);

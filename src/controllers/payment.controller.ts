@@ -112,7 +112,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="vertical-align:middle;">
-                    <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                    <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Payment Receipt</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
@@ -133,7 +133,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                 Dear <strong>${user.name}</strong>,
               </p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch© Ltd</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
+                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch©</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
               </p>
 
               <!-- Receipt card -->
@@ -166,7 +166,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
               <p style="margin:8px 0 0;font-size:14px;color:#374151;">
                 Best regards,<br>
                 <strong>Admin</strong><br>
-                Elevator Video Pitch© Ltd
+                Elevator Video Pitch©
               </p>
             </td>
           </tr>
@@ -175,7 +175,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
           <tr>
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
-                <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
+                <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
                 <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
               </div>
             </td>

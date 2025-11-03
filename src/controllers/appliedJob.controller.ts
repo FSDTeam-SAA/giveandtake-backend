@@ -174,7 +174,7 @@ if (candidate.email) {
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="vertical-align:middle;">
-                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
                       <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Application Confirmation</p>
                     </td>
                     <td style="text-align:right;vertical-align:middle;">
@@ -195,14 +195,14 @@ if (candidate.email) {
                   We’re pleased to inform you that your application for <strong>${job.title}</strong> has been received and is now under review.
                 </p>
                 <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                  Thank you for your interest in joining Elevator Video Pitch© Ltd. Our team will reach out if your qualifications match our requirements.
+                  Thank you for your interest in joining Elevator Video Pitch©. Our team will reach out if your qualifications match our requirements.
                 </p>
                 <p style="margin:0 0 16px;font-size:14px;color:#374151;">We wish you the best of luck!</p>
 
                 <p style="margin:8px 0 0;font-size:14px;color:#374151;">
                   Best regards,<br>
                   <strong>${recruiterName}</strong><br>
-                  Elevator Video Pitch© Ltd
+                  Elevator Video Pitch©
                 </p>
               </td>
             </tr>
@@ -211,7 +211,7 @@ if (candidate.email) {
             <tr>
               <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
                 <div style="max-width:520px;margin:0 auto;">
-                  <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
+                  <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
                   <p style="margin:0;">If you have any questions, please contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
                 </div>
               </td>
@@ -434,7 +434,7 @@ function buildEvpEmail(opts: {
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="vertical-align:middle;">
-                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch© Ltd</h1>
+                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
                       <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${heading}${subheading ? ` — ${subheading}` : ""}</p>
                     </td>
                     <td style="text-align:right;vertical-align:middle;">
@@ -455,7 +455,7 @@ function buildEvpEmail(opts: {
                 <p style="margin:16px 0 0;font-size:14px;color:#374151;">
                   Best regards,<br>
                   <strong>${signer}</strong><br>
-                  Elevator Video Pitch© Ltd
+                  Elevator Video Pitch©
                 </p>
               </td>
             </tr>
@@ -464,7 +464,7 @@ function buildEvpEmail(opts: {
             <tr>
               <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
                 <div style="max-width:520px;margin:0 auto;">
-                  <p style="margin:0 0 8px;">Elevator Video Pitch© Ltd</p>
+                  <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
                   <p style="margin:0;">If you have any questions, contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
                 </div>
               </td>

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Content, { IContent } from "../models/Content";
+import chatbotService from "../services/chatbot.service";
 
 export const upsertContent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -10,6 +11,10 @@ export const upsertContent = async (req: Request, res: Response): Promise<void> 
       { title, description },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
+
+    if (content?.id) {
+      await chatbotService.syncSingleContent(content.id);
+    }
 
     res.status(200).json(content);
   } catch (error: any) {
