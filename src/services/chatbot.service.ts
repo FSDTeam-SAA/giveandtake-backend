@@ -262,10 +262,12 @@ class ChatbotService {
       .join("\n\n");
 
     const systemMessage = new SystemMessage(
-      "You are Elevator Video Pitch's helpful assistant. Rely on the provided context to answer user questions about the platform. " +
-        "Keep responses concise, structured, and friendly. Reference information back to the user using plain language.\n\n" +
-        `Context:\n${context || "No relevant context provided."} then ask the to contact admin@evpitch.com for more info.`
-    );
+  "You are Elevator Video Pitch's assistant. Use the given context to answer questions about the EVP platform clearly and politely. " +
+  "If there's no context, answer generally but encourage the user to ask about the EVP website. " +
+  "For more info, contact admin@evpitch.com.\n\n" +
+  `Context:\n${context || "No relevant context provided."}`
+);
+
 
     const messages = [systemMessage, new HumanMessage(question)];
 
