@@ -146,24 +146,44 @@ export const notifyJobExpiryToRecruiters = async () => {
   const jobsExpiringSoon = await Job.find({
     deadline: { $gte: now, $lte: next24h },
     status: "active",
-  }).populate("recruiterId");
+  }).populate("recruiterId companyId");
 
   for (const job of jobsExpiringSoon) {
-    const recruiter = job.recruiterId as any;
-    if (!recruiter?.email) continue;
+    let recruiter
+    if(job.recruiterId){
+      recruiter = job.recruiterId as any
+    }else{
+      recruiter = job.companyId as any
+    }
+    // if (!recruiter?.email) continue;
 
-    const subject = "Your job post is about to expire";
+    // const subject = "Your job post is about to expire";
 
     const deadline =
       job.deadline ? new Date(job.deadline).toUTCString() : "soon";
 
-    const body = buildEvpEmail({
-      heading: "Job Expiry Notice",
-      subheading: "Expires in ~24 hours",
-      greetingName: getFirstName(recruiter?.name),
-      signer: "EVP Admin",
-      titleTag: "EVP — Job Expiry Notice",
-      bodyHtml: `
+    // const body = buildEvpEmail({
+    //   heading: "Job Expiry Notice",
+    //   subheading: "Expires in ~24 hours",
+    //   greetingName: getFirstName(recruiter?.name),
+    //   signer: "EVP Admin",
+    //   titleTag: "EVP — Job Expiry Notice",
+    //   bodyHtml: `
+    //     <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+    //       Your job advert titled <strong>${job.title || "your job post"}</strong> is due to expire
+    //       <strong>${deadline}</strong>.
+    //     </p>
+    //     <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+    //       Kindly remember to update each applicant on the final status of their application using our
+    //       intuitive one-click feedback tool in your job applicants panel.
+    //     </p>
+    //   `,
+    // });
+
+    // await sendEmail(recruiter.email, subject, body);
+    await createNotification({
+      to: recruiter.userId as any,
+      message: `
         <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
           Your job advert titled <strong>${job.title || "your job post"}</strong> is due to expire
           <strong>${deadline}</strong>.
@@ -173,9 +193,9 @@ export const notifyJobExpiryToRecruiters = async () => {
           intuitive one-click feedback tool in your job applicants panel.
         </p>
       `,
-    });
-
-    await sendEmail(recruiter.email, subject, body);
+      type: "Expire",
+      id: recruiter._id
+    })
   }
 
   console.log(`${jobsExpiringSoon.length} recruiters notified of job expiry.`);

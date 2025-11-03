@@ -22,13 +22,15 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
     },
     paymentStatus: {
       type: String,
-      enum: ['complete', 'pending', 'failed'],
+      enum: ['complete', 'pending', 'failed','refunded'],
       default: 'pending',
     },
     duration: { type: String, enum: ['monthly', 'yearly'] },
     seasonId: { type: String },
     transactionId: { type: String, required: true },
     paymentMethod: { type: String },
+    refundDate:{type: Date},
+    refundTransactionId: {type: String},
     planStatus: {
       type: String,
       enum: ['active', 'deactivate'],

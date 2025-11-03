@@ -14,7 +14,7 @@ export const employeeReq = catchAsync(async (req, res) => {
         throw new AppError(404, "Company not Found")
     }
 
-    const check = await ReqCompany.findOne({ company: companyId, userId: req.user?._id })
+    const check = await ReqCompany.findOne({ company: companyId, userId: req.user?._id ,status: {$ne: "accepted"}})
     if (check) {
         throw new AppError(400, "You have already requested to join this company")
     }
@@ -111,6 +111,8 @@ export const companyEmployeeRemove = catchAsync(async (req, res) => {
         { $pull: { employeesId: new mongoose.Types.ObjectId(employeeId) } }, // remove employeeId
         { new: true }
     )
+
+    const employee = await RecruiterAccount.findByIdAndUpdate(employeeId,{companyId: null}, {new: true})
 
     if (!company) {
         throw new AppError(404, "Company not found")

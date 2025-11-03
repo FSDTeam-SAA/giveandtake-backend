@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { paypalClient } from '../config/paypal'
 import * as paypal from '@paypal/checkout-server-sdk'
 
@@ -26,3 +27,29 @@ export const captureOrder = async (orderId: string) => {
   const capture = await paypalClient.execute(request)
   return capture.result
 }
+
+export const refundOrder = async (
+  captureId: string,
+  amount?: number // optional partial refund
+) => {
+  const request = new paypal.payments.CapturesRefundRequest(captureId);
+
+  // Optional partial refund
+  if (amount) {
+    // request.requestBody({
+    //   amount: {
+    //     value: amount.toFixed(2),
+    //     currency_code: "USD",
+    //   },
+    // });
+  } else {
+    request.requestBody({
+      amount: amount as any,
+      invoice_id: '',
+      note_to_payer: ''
+    });
+  }
+
+  const refund = await paypalClient.execute(request);
+  return refund.result;
+};

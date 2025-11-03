@@ -3,11 +3,11 @@ import { paymentInfo } from "../models/paymentInfo.model";
 import catchAsync from "../utils/catchAsync";
 import { SubscriptionPlan } from "../models/subscriptionPlan.model";
 import { User } from "../models/user.model";
-import { createOrder, captureOrder } from "../services/paypal.service";
+import { createOrder, captureOrder, refundOrder } from "../services/paypal.service";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
-
+// import { refundOrder } from "../services/paypal.service"; // new service function
 // JSON validation middleware
 const validateJsonBody = (
   err: any,
@@ -266,3 +266,76 @@ export const getPaymentsByUserId = catchAsync(
     });
   }
 );
+
+
+export const refundPaypalPayment = catchAsync(async (req: Request, res: Response) => {
+  const { paymentId } = req.body;
+
+  // Validate payment exists
+  const payment = await paymentInfo.findById(paymentId);
+  if (!payment) {
+    throw new AppError(404, "Payment not found");
+  }
+
+  // Check if already refunded
+  if (payment.paymentStatus === "refunded") {
+    throw new AppError(400, "Payment already refunded");
+  }
+
+  // Get user info
+  const user = await User.findById(payment.userId);
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  // Initiate refund from PayPal API
+  const refundResponse = await refundOrder(payment.transactionId, payment.amount);
+  if (!refundResponse || refundResponse.status !== "COMPLETED") {
+    throw new AppError(400, "Refund failed or not completed");
+  }
+
+  // Update payment status
+  payment.paymentStatus = "refunded";
+  payment.refundTransactionId = refundResponse.id;
+  payment.refundDate = new Date();
+  await payment.save();
+
+  // Send refund confirmation email
+  const emailBody = `
+  <html>
+    <body style="font-family: Arial, sans-serif;">
+      <h2>Refund Processed Successfully</h2>
+      <p>Dear ${user.name},</p>
+      <p>Your refund for payment <strong>${payment.transactionId}</strong> has been successfully processed.</p>
+      <table style="border: 1px solid #ddd; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px;">Amount</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${payment.amount}</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px;">Refund ID</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${refundResponse.id}</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px;">Date</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${new Date().toLocaleString()}</td>
+        </tr>
+      </table>
+      <p>If you have questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
+      <p>Thank you,<br>Elevator Video Pitch©</p>
+    </body>
+  </html>
+  `;
+
+  await sendEmail(user.email, "Refund Processed", emailBody);
+
+  res.status(200).json({
+    success: true,
+    message: "Refund processed successfully",
+    data: {
+      refundTransactionId: refundResponse.id,
+      status: refundResponse.status,
+      payment,
+    },
+  });
+});

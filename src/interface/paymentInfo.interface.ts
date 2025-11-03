@@ -1,6 +1,6 @@
 import { Document, Model, Types } from 'mongoose'
 
-export type PaymentStatus = 'complete' | 'pending' | 'failed'
+export type PaymentStatus = 'complete' | 'pending' | 'failed'| 'refunded'
 
 export interface IPaymentInfo extends Document {
   userId: Types.ObjectId
@@ -11,9 +11,11 @@ export interface IPaymentInfo extends Document {
   seasonId: string
   duration: string
   transactionId: string
+  refundTransactionId: string
   paymentMethod: string
   planStatus: string
   createdAt?: Date
+  refundDate?: Date
   updatedAt?: Date
 }
 
