@@ -151,7 +151,7 @@ app.use("/api/v1/courency", courencyRoutes);
 
 app.use("/api/v1/content", contentRoutes);
 
-app.use("/api/faqs", faqRoutes);
+app.use("/api/v1/faqs", faqRoutes);
 app.use("/api/v1/chatbot", chatbotRoutes);
 
 app.use(notFound as never);
