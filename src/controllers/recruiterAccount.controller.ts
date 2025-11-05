@@ -104,6 +104,8 @@ export const getRecruiterAccountByUserId = catchAsync(
       '-verificationInfo -password_reset_token -deactivate'
     )
 
+    const slug = await User.findById(userId).select('slug');
+
     if (!account) {
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
@@ -117,7 +119,7 @@ export const getRecruiterAccountByUserId = catchAsync(
       success: true,
       message: 'Recruiter account fetched successfully',
       data: {
-        ...account.toObject(), elevatorPitch: pitch || null, // add pitch data or null
+        ...account.toObject(), elevatorPitch: pitch || null, slug // add pitch data or null
       },
     })
   }
