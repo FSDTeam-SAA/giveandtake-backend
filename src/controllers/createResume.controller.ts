@@ -156,14 +156,29 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
  * GET A USER RESUME *
  *********************/
 export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.params.userId
+  const { slug } = req.params
 
-  const resume = await CreateResume.findOne({ userId })
-  const experiences = await Experience.find({ userId })
-  const education = await Education.find({ userId })
-  const awardsAndHonors = await AwardsAndHonor.find({ userId })
-  const elevatorPitch = await ElevatorPitch.find({ userId })
+  // Step 1: Find user by slug
+  const user = await User.findOne({ slug }).select('_id')
+  if (!user) {
+    return res.status(httpStatus.NOT_FOUND).json({
+      success: false,
+      message: 'User not found',
+    })
+  }
 
+  const userId = user._id
+
+  // Step 2: Fetch related resources using userId
+  const [resume, experiences, education, awardsAndHonors, elevatorPitch] = await Promise.all([
+    CreateResume.findOne({ userId }),
+    Experience.find({ userId }),
+    Education.find({ userId }),
+    AwardsAndHonor.find({ userId }),
+    ElevatorPitch.find({ userId }),
+  ])
+
+  // Step 3: Send unified response
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
