@@ -4,6 +4,7 @@ export interface IUser {
   _id(_id: any): unknown
   save(): unknown
   name: string
+  slug: string
   email: string
   phoneNum: string
   password: string
