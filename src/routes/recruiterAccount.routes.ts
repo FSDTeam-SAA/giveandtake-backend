@@ -1,6 +1,7 @@
 import express from 'express'
 import {
   createRecruiterAccount,
+  getRecruiterAccountByUserId,
   updateRecruiterAccount,
   deleteRecruiterAccount,
   getRecruiterAccountByUserSlug,
@@ -22,7 +23,8 @@ router.post(
   createRecruiterAccount
 )
 
-router.get('/recruiter-account/:slug', getRecruiterAccountByUserSlug)
+router.get('/recruiter-account/:userId', getRecruiterAccountByUserId)
+router.get('/recruiter-account/slug/:slug', getRecruiterAccountByUserSlug)
 router.patch(
   '/recruiter-account/:userId',
   protect,

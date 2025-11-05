@@ -95,19 +95,10 @@ export const createRecruiterAccount = catchAsync(
 /************************************
  * GET RECRUITER ACCOUNT BY USER ID *
  ************************************/
-export const getRecruiterAccountByUserSlug = catchAsync(
+export const getRecruiterAccountByUserId = catchAsync(
   async (req: Request, res: Response) => {
-    const { slug } = req.params
+    const { userId } = req.params
 
-    // Step 1 — Find user by slug
-    const user = await User.findOne({ slug }).select('_id')
-    if (!user) {
-      throw new AppError(httpStatus.NOT_FOUND, 'User not found')
-    }
-
-    const userId = user._id
-
-    // Step 2 — Get recruiter account and related data
     const account = await RecruiterAccount.findOne({ userId }).populate(
       'companyId',
       '-verificationInfo -password_reset_token -deactivate'
@@ -117,20 +108,53 @@ export const getRecruiterAccountByUserSlug = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
 
-    const pitch = await ElevatorPitch.findOne({ userId })
+    const pitch = await ElevatorPitch.findOne({ userId: userId })
 
-    // Step 3 — Send formatted response
+
+
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'Recruiter account fetched successfully',
       data: {
-        ...account.toObject(),
-        elevatorPitch: pitch || null, // Include pitch or null if not found
+        ...account.toObject(), elevatorPitch: pitch || null, // add pitch data or null
       },
     })
   }
 )
+
+export const getRecruiterAccountByUserSlug = catchAsync(async (req: Request, res: Response) => {
+  const { slug } = req.params
+
+  const user = await User.findOne({ slug }).select('_id')
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
+  }
+
+  const userId = user._id
+
+  const account = await RecruiterAccount.findOne({ userId }).populate(
+    'companyId',
+    '-verificationInfo -password_reset_token -deactivate'
+  )
+
+  if (!account) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
+  }
+
+  const pitch = await ElevatorPitch.findOne({ userId })
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Recruiter account fetched successfully',
+    data: {
+      ...account.toObject(),
+      elevatorPitch: pitch || null,
+    },
+  })
+})
+
 
 /****************************
  * UPDATE RECRUITER ACCOUNT *

@@ -2,6 +2,7 @@ import express from 'express'
 import {
   createCompany,
   updateCompany,
+  getCompanyByUserId,
   deleteCompany,
   getCompanyEmployeesWithSkills,
   getCompanyByEmployeeId,
@@ -21,7 +22,8 @@ router.put('/:id',upload.fields([
     { name: "clogo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
   ]),protect, updateCompany)
-router.get('/user/:slug', getCompanyByUserSlug)
+router.get('/user/:userId', getCompanyByUserId)
+router.get('/companies/slug/:slug', getCompanyByUserSlug)
 router.get('/employee/:userId', getCompanyByEmployeeId)
 router.delete('/:id', deleteCompany)
 router.get('/company-employess/skills/:userId', getCompanyEmployeesWithSkills)
