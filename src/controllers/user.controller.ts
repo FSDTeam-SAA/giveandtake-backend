@@ -1164,7 +1164,7 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
 // fetch all user without admin
 export const fetchAllUsers = catchAsync(async (req, res) => {
   const users = await User.find({ role: { $ne: "admin" } }).select(
-    "name avatar address phoneNum role"
+    "name avatar address phoneNum role slug"
   );
 
   // Enrich users with photo and immediatelyAvailable (for candidates)
