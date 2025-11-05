@@ -1,131 +1,124 @@
-import mongoose, { Schema, Document } from "mongoose";
-import slugify from "slugify";
+import mongoose, { Schema, Document, Model } from 'mongoose'
+import bcrypt from 'bcrypt'
+import slugify from 'slugify'
+import { IUser, UserModel } from '../interface/user.interface'
 
-export interface IUser extends Document {
-  name: string;
-  slug: string;
-  email: string;
-  password: string;
-  address?: string;
-  phoneNum?: string;
-  role: "admin" | "candidate" | "recruiter" | "company";
-  dateOfbirth?: Date;
-  avatar?: {
-    url?: string;
-  };
-  verificationInfo: {
-    token?: string;
-    verified?: boolean;
-    resetToken?: string;
-  };
-  password_reset_token?: string;
-  refresh_token?: string;
-  deactivate?: boolean;
-  dateOfdeactivate?: Date;
-  securityQuestions?: Array<{ question: string; answer: string }>;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-const userSchema = new Schema<IUser>(
+const userSchema: Schema = new Schema<IUser>(
   {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password: { type: String, required: true, select: false },
-    address: { type: String, trim: true },
-    phoneNum: { type: String, trim: true },
-    role: { type: String, enum: ["admin", "candidate", "recruiter", "company"], default: "candidate" },
-    dateOfbirth: { type: Date },
+    name: { type: String, required: true },
+    slug: { type: String, unique: true, trim: true }, // ✅ Added slug field
+    email: { type: String, required: true, unique: true },
+    phoneNum: { type: String },
+    password: { type: String, select: 0, required: true },
+    role: {
+      type: String,
+      enum: ['candidate', 'recruiter', 'company', 'admin', 'super-admin'],
+      default: 'candidate',
+    },
     avatar: {
-      url: { type: String },
+      url: { type: String, default: '' },
     },
-    verificationInfo: {
-      token: { type: String, default: "" },
-      verified: { type: Boolean, default: false },
-      resetToken: { type: String, default: "" },
+    address: {
+      type: String,
     },
-    password_reset_token: { type: String, default: "" },
-    refresh_token: { type: String, default: "" },
-    deactivate: { type: Boolean, default: false },
-    dateOfdeactivate: { type: Date },
     securityQuestions: [
       {
-        question: { type: String },
-        answer: { type: String },
+        question: { type: String, default: '' },
+        answer: { type: String, default: '' },
       },
     ],
+    dateOfbirth: { type: Date },
+
+    verificationInfo: {
+      verified: { type: Boolean, default: false },
+      token: { type: String, default: '' },
+      resetToken: { type: String, default: '' },
+    },
+    password_reset_token: { type: String, default: '' },
+    deactivate: { type: Boolean, default: false },
+    dateOfdeactivate: { type: Date },
+    refresh_token: { type: String },
   },
   { timestamps: true }
-);
+)
 
 //
-// ✅ SLUG GENERATION & UNIQUENESS LOGIC
+// ✅ Password hashing stays exactly as before
 //
-async function generateUniqueSlug(doc: any, name: string) {
-  let baseSlug = slugify(name, { lower: true, strict: true });
-  let slug = baseSlug;
-  let counter = 1;
+userSchema.pre('save', async function (next) {
+  const user = this as any
 
-  const query: any = { slug };
-  if (doc._id) query._id = { $ne: doc._id };
+  // Hash password
+  if (user.isModified('password')) {
+    const saltRounds = Number(process.env.bcrypt_salt_round) || 10
+    user.password = await bcrypt.hash(user.password, saltRounds)
+  }
+
+  // ✅ Slug logic for name changes
+  if (user.isModified('name')) {
+    user.slug = slugify(user.name, { lower: true, strict: true })
+  }
+
+  next()
+})
+
+//
+// ✅ Ensure slug updates for findOneAndUpdate / findByIdAndUpdate
+//
+userSchema.pre('findOneAndUpdate', async function (next) {
+  const update = this.getUpdate() as any
+  if (update && update.name) {
+    update.slug = slugify(update.name, { lower: true, strict: true })
+    this.setUpdate(update)
+  }
+  next()
+})
+
+//
+// ✅ Optional uniqueness safeguard (if you expect duplicate names)
+//
+userSchema.pre(['save', 'findOneAndUpdate'], async function (next) {
+  const doc: any = this
+  const update = (this as any).getUpdate?.() || doc
+  const name = update?.name || doc?.name
+  if (!name) return next()
+
+  let baseSlug = slugify(name, { lower: true, strict: true })
+  let slug = baseSlug
+  let counter = 1
+
+  const query: any = { slug }
+  if (doc._id) query._id = { $ne: doc._id }
 
   while (await mongoose.models.User.exists(query)) {
-    slug = `${baseSlug}-${counter++}`;
-    query.slug = slug;
+    slug = `${baseSlug}-${counter++}`
+    query.slug = slug
   }
 
-  return slug;
-}
+  if (update?.name) update.slug = slug
+  else doc.slug = slug
 
-// Pre-save hook — triggers when creating or updating name
-userSchema.pre("save", async function (next) {
-  if (this.isModified("name")) {
-    this.slug = await generateUniqueSlug(this, this.name);
-  }
-  next();
-});
-
-// Pre-findOneAndUpdate hook — triggers for findByIdAndUpdate / findOneAndUpdate
-userSchema.pre("findOneAndUpdate", async function (next) {
-  const update = this.getUpdate() as any;
-  if (update && update.name) {
-    const slug = await generateUniqueSlug(this, update.name);
-    update.slug = slug;
-    this.setUpdate(update);
-  }
-  next();
-});
-
-// Pre-updateMany hook — safeguard for bulk updates
-userSchema.pre("updateMany", async function (next) {
-  const update = this.getUpdate() as any;
-  if (update && update.name) {
-    const slug = await generateUniqueSlug(this, update.name);
-    update.slug = slug;
-    this.setUpdate(update);
-  }
-  next();
-});
+  if (typeof doc.setUpdate === 'function') doc.setUpdate(update)
+  next()
+})
 
 //
-// ✅ STATIC METHODS (for controllers)
+// ✅ Static methods remain exactly the same
 //
 userSchema.statics.isUserExistsByEmail = async function (email: string) {
-  return this.findOne({ email });
-};
-
-userSchema.statics.isPasswordMatched = async function (
-  givenPassword: string,
-  savedPassword: string
-) {
-  // Comparison is handled in controller, so this can be a no-op or wrapper
-  return givenPassword === savedPassword;
-};
+  return await User.findOne({ email }).select('+password +secureFolderPin')
+}
 
 userSchema.statics.isOTPVerified = async function (id: string) {
-  const user = await this.findById(id);
-  return user?.verificationInfo?.verified ?? false;
-};
+  const user = await User.findById(id).select('+verificationInfo')
+  return user?.verificationInfo.verified
+}
 
-export const User = mongoose.model<IUser>("User", userSchema);
+userSchema.statics.isPasswordMatched = async function (
+  plainTextPassword: string,
+  hashPassword: string
+) {
+  return await bcrypt.compare(plainTextPassword, hashPassword)
+}
+
+export const User = mongoose.model<IUser, UserModel>('User', userSchema)

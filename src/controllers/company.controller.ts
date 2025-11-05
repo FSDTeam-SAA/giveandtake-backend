@@ -291,54 +291,55 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
 /**************************
  * GET COMPANY BY USER ID *
  **************************/
-export const getCompanyByUserId = catchAsync(
-  async (req: Request, res: Response) => {
-    const { userId } = req.params
+export const getCompanyByUserSlug = catchAsync(async (req: Request, res: Response) => {
+  const { slug } = req.params
+  const { page, limit, skip } = getPaginationParams(req.query)
 
-    const { page, limit, skip } = getPaginationParams(req.query)
-
-    // Count total companies for this user
-    const totalCompanies = await Company.countDocuments({ userId })
-
-    // Fetch companies with pagination
-    const companies = await Company.find({ userId })
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 })
-
-    let companiesWithPitch = await Promise.all(
-      companies.map(async (company) => {
-        // Find related pitch by companyId
-        const pitch = await ElevatorPitch.findOne({ userId: userId })
-
-        // Merge pitch into company object
-        return {
-          ...company.toObject(),
-          elevatorPitch: pitch || null, // add pitch data or null
-        }
-      })
-    )
-
-    // Get related AwardsAndHonor (if any), for all companies by user
-    const honors = await AwardsAndHonor.find({ userId }).sort({
-      programeDate: -1,
-    })
-
-    const meta = buildMetaPagination(totalCompanies, page, limit)
-
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: 'Companies and related honors fetched successfully',
-
-      data: {
-        meta,
-        companies: companiesWithPitch,
-        honors,
-      },
-    })
+  // Step 1: Find user by slug
+  const user = await User.findOne({ slug }).select('_id')
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
-)
+
+  const userId = user._id
+
+  // Step 2: Count total companies for this user
+  const totalCompanies = await Company.countDocuments({ userId })
+
+  // Step 3: Fetch companies with pagination
+  const companies = await Company.find({ userId })
+    .skip(skip)
+    .limit(limit)
+    .sort({ createdAt: -1 })
+
+  // Step 4: For each company, attach ElevatorPitch
+  const companiesWithPitch = await Promise.all(
+    companies.map(async (company) => {
+      const pitch = await ElevatorPitch.findOne({ userId })
+      return {
+        ...company.toObject(),
+        elevatorPitch: pitch || null, // Include pitch or null if not found
+      }
+    })
+  )
+
+  // Step 5: Fetch awards and honors related to this user
+  const honors = await AwardsAndHonor.find({ userId }).sort({ programeDate: -1 })
+
+  const meta = buildMetaPagination(totalCompanies, page, limit)
+
+  // Step 6: Send unified response
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Companies and related honors fetched successfully',
+    data: {
+      meta,
+      companies: companiesWithPitch,
+      honors,
+    },
+  })
+})
 
 export const getCompanyByEmployeeId = catchAsync(
   async (req: Request, res: Response) => {

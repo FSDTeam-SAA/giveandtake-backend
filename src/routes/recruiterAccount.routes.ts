@@ -1,9 +1,9 @@
 import express from 'express'
 import {
   createRecruiterAccount,
-  getRecruiterAccountByUserId,
   updateRecruiterAccount,
   deleteRecruiterAccount,
+  getRecruiterAccountByUserSlug,
 } from '../controllers/recruiterAccount.controller'
 // import { protect } from '../middlewares/auth.middleware'
 import { upload } from '../middlewares/multer.middleware'
@@ -22,7 +22,7 @@ router.post(
   createRecruiterAccount
 )
 
-router.get('/recruiter-account/:userId', getRecruiterAccountByUserId)
+router.get('/recruiter-account/:slug', getRecruiterAccountByUserSlug)
 router.patch(
   '/recruiter-account/:userId',
   protect,
