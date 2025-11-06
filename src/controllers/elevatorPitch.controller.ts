@@ -18,9 +18,14 @@ import { User } from '../models/user.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
 
-// --- Cloudflare R2 helper ---
-const extractR2Key = (url: string): string =>
-  url.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, '');
+const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
+
+const extractR2Key = (url: string): string => {
+  const afterHost = url.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, "");
+  return BUCKET && afterHost.startsWith(`${BUCKET}/`)
+    ? afterHost.slice(BUCKET.length + 1)
+    : afterHost;
+};
 
 
 const ensureString = (value: unknown, field: string) => {
@@ -373,7 +378,7 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
 
   if (isPrivateBucket) {
     // ✅ Use R2-aware key extraction
-    const s3Key = hlsUrl.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, "");
+    const s3Key = extractR2Key(hlsUrl);
     console.log("Resolved R2 key:", s3Key);
 
     const signedUrl = await getSignedS3Url(s3Key, 3600);
