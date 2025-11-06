@@ -487,7 +487,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 })
-        .populate("companyId recruiterId")
+        .populate("companyId recruiterId userId")
         .lean(),
     ]);
   }
@@ -721,7 +721,7 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const job = await Job.findById(id).populate("companyId recruiterId");
+  const job = await Job.findById(id).populate("companyId recruiterId userId");
 
   if (!job) {
     throw new AppError(httpStatus.NOT_FOUND, "Job not found");
@@ -800,7 +800,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       deadlineFilter, // 🆕 ensure no expired jobs
     ],
   })
-    .populate("companyId recruiterId")
+    .populate("companyId recruiterId userId")
     .limit(50)
     .lean();
 

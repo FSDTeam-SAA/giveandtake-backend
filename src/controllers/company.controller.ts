@@ -305,6 +305,7 @@ export const getCompanyByUserId = catchAsync(
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 })
+      const countJob = await Company.countDocuments({userId})
 
     let companiesWithPitch = await Promise.all(
       companies.map(async (company) => {
@@ -489,7 +490,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
     // 3. Fetch employee details from User model
     const employees = await User.find({
       _id: { $in: employeeIds },
-    }).select('_id name email phoneNum role avatar')
+    }).select('_id name email phoneNum role avatar slug')
 
     // 4. Fetch skills from CreateResume model for these employees
     const resumes = await CreateResume.find({
@@ -505,6 +506,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
     const employeesWithSkills = employees.map((employee) => ({
       _id: employee._id,
       name: employee.name,
+      slug: employee.slug,
       email: employee.email,
       phoneNum: employee.phoneNum,
       role: employee.role,
@@ -512,7 +514,7 @@ export const getCompanyEmployeesWithSkills = catchAsync(
       skills: skillsMap.get(employee._id.toString()) || [],
     }))
 
-    const request = await ReqCompany.find({company: company._id, status: "pending"}).populate('userId', '_id name email phoneNum role avatar')
+    const request = await ReqCompany.find({company: company._id, status: "pending"}).populate('userId', '_id name email phoneNum role avatar slug')
 
     // 6. Prepare the response data
     const responseData = {
