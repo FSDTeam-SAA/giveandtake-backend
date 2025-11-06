@@ -18,6 +18,11 @@ import { User } from '../models/user.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
 
+// --- Cloudflare R2 helper ---
+const extractR2Key = (url: string): string =>
+  url.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, '');
+
+
 const ensureString = (value: unknown, field: string) => {
   if (typeof value !== 'string' || !value.trim()) {
     throw new AppError(
@@ -351,63 +356,61 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
-export const streamElevatorPitch = catchAsync(
-  async (req: Request, res: Response) => {
-    const { id } = req.params
+export const streamElevatorPitch = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const pitch = await ElevatorPitch.findById(id);
 
-    const pitch = await ElevatorPitch.findById(id)
-    if (!pitch || !pitch.video?.hlsUrl) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
-    }
-
-    if (pitch.processing?.state !== 'ready') {
-      throw new AppError(
-        httpStatus.CONFLICT,
-        'Elevator pitch is still processing.'
-      )
-    }
-
-    const hlsUrl = pitch.video.hlsUrl
-
-    const isPrivateBucket = process.env.AWS_BUCKET_VISIBILITY === 'private'
-
-    if (isPrivateBucket) {
-      const s3Key = hlsUrl.replace(
-        `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
-        ''
-      )
-      const signedUrl = await getSignedS3Url(s3Key, 3600)
-
-      const playlistRes = await axios.get(signedUrl)
-      let playlistContent = playlistRes.data as string
-
-      const rewriteAssetLine = (line: string) => {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) {
-          return line
-        }
-        if (/\.(ts|m3u8)$/i.test(trimmed)) {
-          return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`
-        }
-        return line
-      }
-
-      playlistContent = playlistContent
-        .split('\n')
-        .map(rewriteAssetLine)
-        .join('\n')
-
-      res.set({
-        'Content-Type': 'application/vnd.apple.mpegurl',
-        'Cache-Control': 'no-cache',
-      })
-
-      res.send(playlistContent)
-    } else {
-      res.redirect(hlsUrl)
-    }
+  if (!pitch || !pitch.video?.hlsUrl) {
+    throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
   }
-)
+
+  if (pitch.processing?.state !== "ready") {
+    throw new AppError(httpStatus.CONFLICT, "Elevator pitch is still processing.");
+  }
+
+  const hlsUrl = pitch.video.hlsUrl;
+  const isPrivateBucket = process.env.AWS_BUCKET_VISIBILITY === "private";
+
+  if (isPrivateBucket) {
+    // ✅ Use R2-aware key extraction
+    const s3Key = hlsUrl.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, "");
+    console.log("Resolved R2 key:", s3Key);
+
+    const signedUrl = await getSignedS3Url(s3Key, 3600);
+    console.log("Signed R2 URL:", signedUrl);
+
+    // Fetch and rewrite playlist
+    const playlistRes = await axios.get(signedUrl);
+    let playlistContent = playlistRes.data as string;
+
+    const rewriteAssetLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return line;
+      if (/\.(ts|m3u8)$/i.test(trimmed)) {
+        return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`;
+      }
+      return line;
+    };
+
+    playlistContent = playlistContent
+      .split("\n")
+      .map(rewriteAssetLine)
+      .join("\n");
+
+    res.set({
+      "Content-Type": "application/vnd.apple.mpegurl",
+      "Cache-Control": "no-cache",
+    });
+
+    res.send(playlistContent);
+    return;
+  }
+
+  // If public
+  res.redirect(hlsUrl);
+  return;
+});
+
 
 export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const { userId, segment } = req.params
@@ -425,10 +428,8 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
   }
 
   const hlsUrl = pitch.video.hlsUrl
-  const baseS3Key = hlsUrl.replace(
-    `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
-    ''
-  )
+  const baseS3Key = extractR2Key(hlsUrl);
+
   const sanitizedSegment = segment.replace(/\\/g, '/')
   if (sanitizedSegment.includes('..')) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid segment reference')
@@ -478,10 +479,8 @@ export const getEncryptionKey = catchAsync(
 
     try {
       const encryptionKeyUrl = pitch.video.encryptionKeyUrl
-      const s3Key = encryptionKeyUrl.replace(
-        `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
-        ''
-      )
+      const s3Key = extractR2Key(encryptionKeyUrl);
+
 
       const signedKeyUrl = await getSignedS3Url(s3Key, 3600)
       const keyResponse = await axios.get(signedKeyUrl, {
