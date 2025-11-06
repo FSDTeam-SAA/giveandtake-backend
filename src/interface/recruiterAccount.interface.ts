@@ -19,6 +19,7 @@ export interface IRecruiterAccount extends Document {
   phoneNumber: string
   location: string
   roleAtCompany: string
+  slug: string
   awardTitle: string
   programName: string
   programDate: string

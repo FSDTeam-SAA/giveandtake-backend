@@ -447,7 +447,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
       .skip(skip)
       .limit(limit)
       .sort(filter.$text ? { score: { $meta: "textScore" } } : { createdAt: -1 })
-      .populate("companyId recruiterId")
+      .populate("companyId recruiterId userId")
       .lean(),
   ]);
 
@@ -473,7 +473,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 })
-        .populate("companyId recruiterId")
+        .populate("userId companyId recruiterId ")
         .lean(),
     ]);
   }

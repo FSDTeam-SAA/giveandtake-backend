@@ -256,7 +256,7 @@ export const getApplicationsByJob = catchAsync(
 
     // ✅ Fetch applications with pagination
     const applications = await AppliedJob.find({ jobId })
-      .populate("userId", "name email avatar")
+      .populate("userId", "name email avatar slug")
       .populate("resumeId")
       .skip(skip)
       .limit(limit)

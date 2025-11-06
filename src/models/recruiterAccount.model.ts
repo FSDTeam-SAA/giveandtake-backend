@@ -28,6 +28,7 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
       phoneNumber: { type: String },
       roleAtCompany: { type: String },
       awardTitle: { type: String },
+      slug: { type: String },
       programName: { type: String },
       programDate: { type: String },
       awardDescription: { type: String },

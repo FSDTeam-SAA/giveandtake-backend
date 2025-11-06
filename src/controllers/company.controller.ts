@@ -142,6 +142,7 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     // Optional: attach userId from req.user if available
     if (req.user?._id) {
       companyData.userId = req.user._id
+      companyData.slug = user.slug
     }
 
     // ✅ Create company document

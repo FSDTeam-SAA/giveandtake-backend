@@ -76,6 +76,7 @@ export const createRecruiterAccount = catchAsync(
     }
     await user.save();
     const recruiterAccount = await RecruiterAccount.create({
+      slug: user.slug,
       userId,
       videoFile: videoUrl,
       photo: photoUrl,

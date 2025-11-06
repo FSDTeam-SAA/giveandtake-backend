@@ -10,6 +10,7 @@ export interface ICompany extends Document {
   country: string
   city: string
   zipcode?: string
+  slug: string
   cemail: string
   cPhoneNumber: string
   sLink?: IResumeLink[]
