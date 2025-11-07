@@ -5,11 +5,12 @@ import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
 } from "@langchain/google-genai";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Collection } from "mongodb";
 
 import Content from "../models/Content";
 import Faq from "../models/Faq.model";
+import { Blog } from "../models/Blog.model";
 import ChatbotKnowledge, {
   ChatbotKnowledgeSource,
   IChatbotKnowledge,
@@ -27,12 +28,19 @@ export interface ChatAnswer {
   >;
 }
 
+export type ChatHistoryEntry = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type UpsertSourceOptions = {
   sourceType: ChatbotKnowledgeSource;
   sourceId?: string;
   text: string;
   metadata?: Record<string, unknown>;
 };
+
+type NormalizedHistoryEntry = ChatHistoryEntry & { index: number };
 
 type KnowledgeInsert = {
   _id: mongoose.Types.ObjectId;
@@ -87,6 +95,7 @@ class ChatbotService {
     await Promise.all([
       this.syncAllContentEntries(),
       this.syncAllFaqEntries(),
+      this.syncAllBlogEntries(),
       this.syncAllCustomQAEntries(),
     ]);
   }
@@ -114,6 +123,34 @@ class ChatbotService {
         metadata: {
           type: content.type,
           title: content.title,
+        },
+      });
+    }
+  }
+
+  /**
+   * Syncs (or resyncs) every Blog document into the knowledge base.
+   */
+  async syncAllBlogEntries(): Promise<void> {
+    const blogs = await Blog.find();
+    for (const blog of blogs) {
+      const textParts = [
+        blog.title,
+        stripHtml(blog.description ?? ""),
+      ].filter(Boolean);
+
+      if (!textParts.length) {
+        await this.removeSource("blog", blog.id);
+        continue;
+      }
+
+      await this.upsertSource({
+        sourceType: "blog",
+        sourceId: blog.id,
+        text: textParts.join("\n\n"),
+        metadata: {
+          title: blog.title,
+          type: "blog",
         },
       });
     }
@@ -156,6 +193,37 @@ class ChatbotService {
         },
       });
     }
+  }
+
+  /**
+   * Syncs a single Blog entry, typically after create/update.
+   */
+  async syncSingleBlog(blogId: string): Promise<void> {
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      await this.removeSource("blog", blogId);
+      return;
+    }
+
+    const textParts = [
+      blog.title,
+      stripHtml(blog.description ?? ""),
+    ].filter(Boolean);
+
+    if (!textParts.length) {
+      await this.removeSource("blog", blogId);
+      return;
+    }
+
+    await this.upsertSource({
+      sourceType: "blog",
+      sourceId: blog.id,
+      text: textParts.join("\n\n"),
+      metadata: {
+        title: blog.title,
+        type: "blog",
+      },
+    });
   }
 
   /**
@@ -251,7 +319,11 @@ class ChatbotService {
   /**
    * Answers a user question leveraging the stored knowledge base.
    */
-  async answerQuestion(question: string, topK = 5): Promise<ChatAnswer> {
+  async answerQuestion(
+    question: string,
+    topK = 5,
+    history?: ChatHistoryEntry[]
+  ): Promise<ChatAnswer> {
     const relevant = await this.retrieveRelevantKnowledge(question, topK);
 
     const context = relevant
@@ -269,7 +341,12 @@ class ChatbotService {
 );
 
 
-    const messages = [systemMessage, new HumanMessage(question)];
+    const historyMessages = this.buildCondensedHistoryMessages(history);
+    const messages = [
+      systemMessage,
+      ...historyMessages,
+      new HumanMessage(question),
+    ];
 
     const completion = await this.chatModel.invoke(messages);
     const answer =
@@ -289,6 +366,75 @@ class ChatbotService {
       answer,
       sources: relevant,
     };
+  }
+
+  private buildCondensedHistoryMessages(
+    history?: ChatHistoryEntry[]
+  ): Array<HumanMessage | AIMessage | SystemMessage> {
+    const normalized = this.normalizeHistory(history);
+    if (!normalized.length) {
+      return [];
+    }
+
+    const earliestSegment = normalized.slice(0, 2);
+    const lastSegment = normalized.slice(-3);
+
+    const condensed: Array<HumanMessage | AIMessage | SystemMessage> = [];
+
+    if (earliestSegment.length) {
+      condensed.push(
+        new SystemMessage(
+          `Early conversation summary (first ${earliestSegment.length} messages): ${this.summarizeHistorySegment(
+            earliestSegment
+          )}`
+        )
+      );
+    }
+
+    for (const entry of lastSegment) {
+      condensed.push(
+        entry.role === "assistant"
+          ? new AIMessage(entry.content)
+          : new HumanMessage(entry.content)
+      );
+    }
+
+    return condensed;
+  }
+
+  private normalizeHistory(
+    history?: ChatHistoryEntry[]
+  ): NormalizedHistoryEntry[] {
+    if (!history?.length) {
+      return [];
+    }
+
+    return history
+      .map((entry, index) => ({
+        role: entry.role,
+        content: entry.content.trim(),
+        index,
+      }))
+      .filter((entry) => Boolean(entry.content.length));
+  }
+
+  private summarizeHistorySegment(entries: NormalizedHistoryEntry[]): string {
+    return entries
+      .map((entry) => {
+        const speaker = entry.role === "assistant" ? "Assistant" : "User";
+        return `${speaker} message ${entry.index + 1}: ${this.compressHistoryText(
+          entry.content
+        )}`;
+      })
+      .join(" | ");
+  }
+
+  private compressHistoryText(text: string, maxLength = 220): string {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+    return `${normalized.slice(0, maxLength - 3)}...`;
   }
 
   private async upsertSource(options: UpsertSourceOptions): Promise<void> {

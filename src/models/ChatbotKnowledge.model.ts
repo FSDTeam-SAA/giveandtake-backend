@@ -1,6 +1,6 @@
 import { Schema, model, Document, Types } from "mongoose";
 
-export type ChatbotKnowledgeSource = "faq" | "content" | "custom";
+export type ChatbotKnowledgeSource = "faq" | "content" | "custom" | "blog";
 
 export interface IChatbotKnowledge extends Document {
   sourceType: ChatbotKnowledgeSource;
@@ -16,7 +16,7 @@ const ChatbotKnowledgeSchema = new Schema<IChatbotKnowledge>(
   {
     sourceType: {
       type: String,
-      enum: ["faq", "content", "custom"],
+      enum: ["faq", "content", "custom", "blog"],
       required: true,
     },
     sourceId: {

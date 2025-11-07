@@ -7,6 +7,7 @@ import sendResponse from '../utils/sendResponse'
 import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
 import fs from 'fs'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
+import chatbotService from '../services/chatbot.service'
 
 /***************
  * CREATE BLOG *
@@ -48,6 +49,8 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
     image: imageUrl,
     imagePublicId,
   })
+
+  await chatbotService.syncSingleBlog(blog.id)
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
@@ -142,6 +145,8 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
 
   await blog.save()
 
+  await chatbotService.syncSingleBlog(blog.id)
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -160,6 +165,8 @@ export const deleteBlog = catchAsync(async (req: Request, res: Response) => {
   if (!deleted) {
     throw new AppError(httpStatus.NOT_FOUND, 'Blog not found')
   }
+
+  await chatbotService.removeSource('blog', id)
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

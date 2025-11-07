@@ -1,11 +1,54 @@
 import { Request, Response } from "express";
 import ChatbotQA from "../models/ChatbotQA.model";
-import chatbotService from "../services/chatbot.service";
+import chatbotService, {
+  ChatHistoryEntry,
+} from "../services/chatbot.service";
+
+const parseHistoryPayload = (
+  rawHistory: unknown
+): ChatHistoryEntry[] | undefined => {
+  if (!Array.isArray(rawHistory)) {
+    return undefined;
+  }
+
+  const parsed: ChatHistoryEntry[] = [];
+
+  for (const entry of rawHistory) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const roleRaw = (entry as { role?: unknown }).role;
+    const contentRaw = (entry as { content?: unknown }).content;
+
+    if (typeof roleRaw !== "string" || typeof contentRaw !== "string") {
+      continue;
+    }
+
+    const normalizedRole = roleRaw.toLowerCase();
+    if (normalizedRole !== "user" && normalizedRole !== "assistant") {
+      continue;
+    }
+
+    const trimmedContent = contentRaw.trim();
+    if (!trimmedContent) {
+      continue;
+    }
+
+    parsed.push({
+      role: normalizedRole as ChatHistoryEntry["role"],
+      content: trimmedContent,
+    });
+  }
+
+  return parsed.length ? parsed : undefined;
+};
 
 export const chatWithBot = async (req: Request, res: Response): Promise<void> => {
-  const { question, topK } = req.body as {
+  const { question, topK, history } = req.body as {
     question?: string;
     topK?: number;
+    history?: unknown;
   };
 
   if (!question?.trim()) {
@@ -17,9 +60,11 @@ export const chatWithBot = async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
+    const parsedHistory = parseHistoryPayload(history);
     const answer = await chatbotService.answerQuestion(
       question.trim(),
-      Number.isFinite(topK) ? Math.min(Math.max(Number(topK), 1), 10) : 5
+      Number.isFinite(topK) ? Math.min(Math.max(Number(topK), 1), 10) : 5,
+      parsedHistory
     );
 
     res.status(200).json({
