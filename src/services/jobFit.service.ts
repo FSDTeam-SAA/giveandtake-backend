@@ -1,4 +1,4 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+﻿import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type {
   IApplicationRequirement,
@@ -7,10 +7,18 @@ import type {
 import type { ICreateResume } from "../interface/createResume.interface";
 import type { IExperience } from "../interface/experience.interface";
 import type { IEducation } from "../interface/education.interface";
+import {
+  areEmbeddingsEnabled,
+  cosineSimilarity,
+  generateJobEmbeddingVector,
+  generateProfileEmbeddingVector,
+} from "./embedding.service";
+import { buildJobText, buildProfileText } from "../utils/jobFitText";
+import { mapSkillSynonym } from "./skillMapper.service";
+import stripHtml from "../utils/stripHtml";
 
 const DEFAULT_CHAT_MODEL =
   process.env.GEMINI_CHAT_MODEL ?? "gemini-2.5-flash-lite";
-const MAX_CONTEXT_CHAR = 3200;
 
 type MaybeArray<T> = T | T[] | undefined | null;
 
@@ -22,6 +30,43 @@ type FitAiResponse = {
   matchPercentage?: number;
   summary?: string;
 };
+
+type WeightedSkillSource = {
+  data: MaybeArray<string | string[]>;
+  weight?: number;
+};
+
+const VERB_PREFIXES = new Set([
+  "develop",
+  "design",
+  "implement",
+  "optimize",
+  "write",
+  "collaborate",
+  "translate",
+  "ensure",
+  "maintain",
+  "participate",
+  "build",
+  "stay",
+  "deliver",
+  "create",
+  "drive",
+]);
+
+const BANNED_WORDS_ANYWHERE = new Set([
+  "resume",
+  "required",
+  "responsibilities",
+  "overall",
+  "loading",
+  "times",
+  "maintainable",
+  "clean",
+  "kpi",
+  "targets",
+  "objectives",
+]);
 
 const SCORE_LABELS = [
   {
@@ -80,24 +125,40 @@ type EvaluatePayload = {
 };
 
 class JobFitService {
-  private readonly chatModel: ChatGoogleGenerativeAI;
+  private chatModel?: ChatGoogleGenerativeAI;
+  private aiEnabled: boolean;
 
   constructor() {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Missing GEMINI_API_KEY for job fit analysis");
-    }
+    this.aiEnabled = (process.env.JOB_FIT_AI ?? "on").toLowerCase() !== "off";
+  }
 
+  private ensureChatModel(): boolean {
+    if (!this.aiEnabled) {
+      return false;
+    }
+    if (this.chatModel) {
+      return true;
+    }
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn(
+        "[job-fit] GEMINI_API_KEY missing; falling back to heuristic+embedding mode."
+      );
+      this.aiEnabled = false;
+      return false;
+    }
     this.chatModel = new ChatGoogleGenerativeAI({
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey,
       model: DEFAULT_CHAT_MODEL,
       temperature: 0.2,
       maxOutputTokens: 512,
     });
+    return true;
   }
 
   async evaluate(payload: EvaluatePayload): Promise<JobFitSummary> {
-    const jobText = this.composeJobText(payload.job);
-    const profileText = this.composeProfileText(
+    const jobText = buildJobText(payload.job);
+    const profileText = buildProfileText(
       payload.resume,
       payload.experiences,
       payload.education
@@ -105,36 +166,49 @@ class JobFitService {
 
     const aiResponse = await this.callGemini(jobText, profileText);
 
+    const resumeSkillList = (payload.resume.skills ?? [])
+      .map((skill) => stripHtml(String(skill ?? "")).trim())
+      .filter((skill) => skill.length);
+
     const heuristicJobSkills = this.extractHeuristicSkills([
-      payload.job.title,
-      payload.job.role,
-      payload.job.description,
-      payload.job.responsibilities,
-      payload.job.educationExperience,
-      payload.job.benefits,
-      payload.job.applicationRequirement?.map(
-        (item: Partial<IApplicationRequirement>) =>
-          `${item.requirement ?? ""} ${item.status ?? ""}`
-      ),
+      { data: payload.job.title, weight: 0.4 },
+      { data: payload.job.role, weight: 0.4 },
+      { data: payload.job.description, weight: 0.8 },
+      { data: payload.job.responsibilities, weight: 1.3 },
+      { data: payload.job.educationExperience, weight: 1.1 },
+      { data: payload.job.benefits, weight: 0.3 },
+      {
+        data: payload.job.applicationRequirement?.map(
+          (item: Partial<IApplicationRequirement>) =>
+            `${item.requirement ?? ""} ${item.status ?? ""}`
+        ),
+        weight: 1.5,
+      },
     ]);
 
     const heuristicProfileSkills = this.extractHeuristicSkills([
-      payload.resume.title,
-      payload.resume.aboutUs,
-      payload.resume.professionalSummary,
-      payload.resume.skills,
-      payload.resume.languages,
-      payload.resume.certifications,
-      payload.experiences?.map(
-        (exp: Partial<IExperience>) =>
-          `${exp.position ?? ""} ${exp.jobDescription ?? ""} ${
-            exp.careerField ?? ""
-          }`
-      ),
-      payload.education?.map(
-        (ed: Partial<IEducation>) =>
-          `${ed.degree ?? ""} ${ed.fieldOfStudy ?? ""}`
-      ),
+      { data: payload.resume.title, weight: 0.5 },
+      { data: payload.resume.aboutUs, weight: 0.4 },
+      { data: payload.resume.professionalSummary, weight: 0.8 },
+      { data: payload.resume.skills, weight: 1.4 },
+      { data: payload.resume.languages, weight: 0.2 },
+      { data: payload.resume.certifications, weight: 0.8 },
+      {
+        data: payload.experiences?.map(
+          (exp: Partial<IExperience>) =>
+            `${exp.position ?? ""} ${exp.jobDescription ?? ""} ${
+              exp.careerField ?? ""
+            }`
+        ),
+        weight: 1.1,
+      },
+      {
+        data: payload.education?.map(
+          (ed: Partial<IEducation>) =>
+            `${ed.degree ?? ""} ${ed.fieldOfStudy ?? ""}`
+        ),
+        weight: 0.6,
+      },
     ]);
 
     const parsedJobSkills = this.dedupeSkills([
@@ -142,6 +216,7 @@ class JobFitService {
       ...heuristicJobSkills,
     ]);
     const parsedProfileSkills = this.dedupeSkills([
+      ...resumeSkillList,
       ...(aiResponse?.profileSkills ?? []),
       ...heuristicProfileSkills,
     ]);
@@ -160,11 +235,53 @@ class JobFitService {
       ? matchedSkills.length / parsedProfileSkills.list.length
       : jobCoverage;
 
-    const blendedScore =
-      (jobCoverage * 0.7 + profileCoverage * 0.3) * 100;
+    const heuristicScore = this.safeScore(
+      (jobCoverage * 0.7 + profileCoverage * 0.3) * 100
+    );
+
+    let embeddingScore: number | null = null;
+    if (areEmbeddingsEnabled()) {
+      const [jobEmbedding, profileEmbedding] = await Promise.all([
+        generateJobEmbeddingVector(payload.job),
+        generateProfileEmbeddingVector(
+          payload.resume,
+          payload.experiences,
+          payload.education
+        ),
+      ]);
+
+      const similarity = cosineSimilarity(jobEmbedding, profileEmbedding);
+      if (similarity > 0) {
+        embeddingScore = this.safeScore(similarity * 100);
+      }
+    }
+
+    const weightedScores = [{ value: heuristicScore, weight: 0.5 }];
+
+    if (embeddingScore !== null) {
+      weightedScores.push({ value: embeddingScore, weight: 0.3 });
+    }
+
+    if (
+      this.aiEnabled &&
+      typeof aiResponse?.matchPercentage === "number"
+    ) {
+      weightedScores.push({
+        value: aiResponse.matchPercentage,
+        weight: 0.5,
+      });
+    }
+
+    const totalWeight = weightedScores.reduce(
+      (sum, item) => sum + item.weight,
+      0
+    );
 
     const score = this.safeScore(
-      aiResponse?.matchPercentage ?? blendedScore
+      weightedScores.reduce(
+        (sum, item) => sum + item.value * item.weight,
+        0
+      ) / totalWeight
     );
 
     const verdict = SCORE_LABELS.find(
@@ -189,7 +306,9 @@ class JobFitService {
         profileSkillCount: parsedProfileSkills.list.length,
         matchedSkillCount: matchedSkills.length,
       },
-      model: DEFAULT_CHAT_MODEL,
+      model: this.aiEnabled && this.chatModel
+        ? DEFAULT_CHAT_MODEL
+        : "heuristic+GeminiEmb",
     };
   }
 
@@ -197,15 +316,19 @@ class JobFitService {
     jobText: string,
     profileText: string
   ): Promise<FitAiResponse | null> {
-    if (!jobText || !profileText) {
+    if (!this.aiEnabled || !jobText || !profileText) {
+      return null;
+    }
+    if (!this.ensureChatModel() || !this.chatModel) {
       return null;
     }
 
     try {
       const systemPrompt = new SystemMessage(
-        "You compare job descriptions with candidate profiles. " +
+        "You compare job descriptions with candidate profiles across all job types (technical, non-technical, operations, creative, sales, etc.). " +
           "Return a compact JSON object with up to 12 job skills and 12 profile skills. " +
-          "Do not use prose outside the JSON."
+          "Each entry must be a concise skill/qualification (1-3 words): technologies, tools, methods, certifications, soft skills (e.g., Communication), or role-specific competencies. " +
+          "Do NOT include verbs, responsibilities, sentences, or numbered items. Use strict JSON only."
       );
       const instruction = new HumanMessage(
         [
@@ -216,6 +339,8 @@ class JobFitService {
           jobText,
           "PROFILE:",
           profileText,
+          "Prioritize explicit skills listed in the candidate profile (e.g., Skills section). " +
+            "Return only genuine skills/technologies â€” no responsibilities, verbs, or requirements.",
         ].join("\n\n")
       );
 
@@ -237,100 +362,26 @@ class JobFitService {
     }
   }
 
-  private composeJobText(job: Partial<IJob>): string {
-    const segments: string[] = [];
-    if (job.title) {
-      segments.push(`Title: ${job.title}`);
-    }
-    if (job.companyName) {
-      segments.push(`Company: ${job.companyName}`);
-    }
-    if (job.description) {
-      segments.push(`Description: ${job.description}`);
-    }
-    if (job.responsibilities?.length) {
-      segments.push(
-        `Responsibilities:\n- ${job.responsibilities.join("\n- ")}`
-      );
-    }
-    if (job.educationExperience?.length) {
-      segments.push(
-        `Required Experience:\n- ${job.educationExperience.join("\n- ")}`
-      );
-    }
-    if (job.applicationRequirement?.length) {
-      segments.push(
-        `Application Requirements:\n- ${job.applicationRequirement
-          .map((req: Partial<IApplicationRequirement>) =>
-            `${req.requirement ?? ""} ${req.status ?? ""}`.trim()
-          )
-          .filter(Boolean)
-          .join("\n- ")}`
-      );
-    }
-    if (job.employement_Type || job.location_Type || job.career_Stage) {
-      segments.push(
-        `Role Details: ${[
-          job.employement_Type,
-          job.location_Type,
-          job.career_Stage,
-        ]
-          .filter(Boolean)
-          .join(" | ")}`
-      );
-    }
-    return this.truncateText(segments.join("\n\n"));
-  }
-
-  private composeProfileText(
-    resume: Partial<ICreateResume>,
-    experiences?: Array<Partial<IExperience>>,
-    education?: Array<Partial<IEducation>>
-  ): string {
-    const segments: string[] = [];
-    if (resume.title) {
-      segments.push(`Headline: ${resume.title}`);
-    }
-    if (resume.aboutUs) {
-      segments.push(`Summary: ${resume.aboutUs}`);
-    }
-    if (resume.professionalSummary) {
-      segments.push(`Professional Summary: ${resume.professionalSummary}`);
-    }
-    if (resume.skills?.length) {
-      segments.push(`Skills:\n- ${resume.skills.join("\n- ")}`);
-    }
-    if (resume.certifications?.length) {
-      segments.push(`Certifications:\n- ${resume.certifications.join("\n- ")}`);
-    }
-    if (experiences?.length) {
-      segments.push(
-        `Experience:\n- ${experiences
-          .map(
-            (exp: Partial<IExperience>) =>
-              `${exp.position ?? exp.company ?? ""} ${exp.jobDescription ?? ""}`
-          )
-          .filter(Boolean)
-          .join("\n- ")}`
-      );
-    }
-    if (education?.length) {
-      segments.push(
-        `Education:\n- ${education
-          .map((ed: Partial<IEducation>) =>
-            `${ed.degree ?? ""} ${ed.fieldOfStudy ?? ""}`.trim()
-          )
-          .filter(Boolean)
-          .join("\n- ")}`
-      );
-    }
-    if (resume.languages?.length) {
-      segments.push(`Languages:\n- ${resume.languages.join("\n- ")}`);
-    }
-    return this.truncateText(segments.join("\n\n"));
-  }
-
   private extractHeuristicSkills(
+    sources: WeightedSkillSource[]
+  ): string[] {
+    const scores = new Map<string, number>();
+    for (const source of sources) {
+      const tokens = this.tokenizeSkillCandidates(source.data);
+      if (!tokens.length) continue;
+      const weight = source.weight ?? 1;
+      if (weight <= 0) continue;
+      for (const token of tokens) {
+        scores.set(token, (scores.get(token) ?? 0) + weight);
+      }
+    }
+
+    return Array.from(scores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([skill]) => skill);
+  }
+
+  private tokenizeSkillCandidates(
     rawInput: MaybeArray<string | undefined | null | string[]>
   ): string[] {
     const accumulator: string[] = [];
@@ -345,7 +396,10 @@ class JobFitService {
         );
         return;
       }
-      accumulator.push(value);
+      const sanitized = stripHtml(String(value ?? "")).trim();
+      if (sanitized) {
+        accumulator.push(sanitized);
+      }
     };
 
     flatten(rawInput as MaybeArray<string | string[] | undefined | null>);
@@ -363,31 +417,48 @@ class JobFitService {
       "an",
       "our",
       "your",
-      "experience",
       "skills",
-      "required",
-      "responsibilities",
       "ability",
       "work",
+      "preferred",
     ]);
 
     const skills: string[] = [];
 
     for (const chunk of accumulator) {
       if (!chunk) continue;
-      const tokens = chunk
-        .split(/[\n\r,;•\u2022\-|]/)
+      const normalizedChunk = chunk.replace(/\. (?=[A-Z])/g, "\n");
+      const tokens = normalizedChunk
+        .split(/[\n\r,;â€¢\u2022|]+/)
         .map((token) =>
           token
-            .replace(/[^a-z0-9+#/.&\s]/gi, " ")
-            .replace(/\s+/g, " ")
+            .replace(/^\d+(\.|-)?\s*/, "")
+            .replace(/[.?!,:]+$/g, "")
             .trim()
         )
         .filter((token) => token.length > 1 && token.length <= 45);
 
-      for (const token of tokens) {
-        const normalized = token.toLowerCase();
-        if (stopWords.has(normalized)) continue;
+      for (const rawToken of tokens) {
+        let token = rawToken;
+        if (!token) continue;
+        const normalized = token
+          .toLowerCase()
+          .replace(/[^a-z0-9+#\/.&\s-]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!normalized) continue;
+        if (/\d/.test(normalized)) continue;
+        const words = normalized.split(/\s+/).filter(Boolean);
+        if (!words.length) continue;
+        if (words.length > 4) continue;
+        if (VERB_PREFIXES.has(words[0])) continue;
+        if (words.some((word) => BANNED_WORDS_ANYWHERE.has(word))) continue;
+        if (words.every((word) => stopWords.has(word))) continue;
+        token = token
+          .replace(/^\d+(\.|-)?\s*/, "")
+          .replace(/[.?!,:]+$/g, "")
+          .trim();
+        if (!/[a-z]/i.test(token)) continue;
         skills.push(token);
       }
     }
@@ -400,7 +471,8 @@ class JobFitService {
     const normalizedSet = new Set<string>();
 
     for (const skill of skills) {
-      const formatted = this.formatSkill(skill);
+      const canonical = mapSkillSynonym(skill);
+      const formatted = this.formatSkill(canonical);
       const normalized = this.normalizeSkill(formatted);
       if (!normalized || normalizedSet.has(normalized)) {
         continue;
@@ -419,7 +491,11 @@ class JobFitService {
   }
 
   private normalizeSkill(skill: string): string {
-    return skill
+    if (!skill) {
+      return "";
+    }
+    const canonical = mapSkillSynonym(skill);
+    return canonical
       .toLowerCase()
       .replace(/[^a-z0-9+#/.&\s]/g, "")
       .replace(/\s+/g, " ")
@@ -480,16 +556,6 @@ class JobFitService {
     return "";
   }
 
-  private truncateText(value: string, limit = MAX_CONTEXT_CHAR): string {
-    if (!value) {
-      return "";
-    }
-    if (value.length <= limit) {
-      return value;
-    }
-    return `${value.slice(0, limit)}…`;
-  }
-
   private safeScore(score: number | undefined | null): number {
     if (typeof score !== "number" || Number.isNaN(score)) {
       return 0;
@@ -509,3 +575,8 @@ class JobFitService {
 }
 
 export const jobFitService = new JobFitService();
+
+
+
+
+
