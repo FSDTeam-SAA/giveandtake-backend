@@ -40,7 +40,7 @@ export const createSubscriptionPlan = catchAsync(
 // GET ALL
 export const getAllSubscriptionPlans = catchAsync(
   async (req: Request, res: Response) => {
-    const plans = await SubscriptionPlan.find().sort({ createdAt: 1 })
+    const plans = await SubscriptionPlan.find().sort({ price: 1 })
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
