@@ -10,7 +10,6 @@ import { checkIfUserCanPostJob } from "../helper/canPostJob";
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
-import { AppliedJob } from "../models/appliedJob.model";
 import { sendEmail } from "../utils/sendEmail";
 import { io } from "../server";
 import { createNotification } from "../sockets/notification.service";
@@ -942,10 +941,6 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({
-        jobId: job._id,
-      });
-
       let derivedStatus = "Pending";
 
       // ✅ Mark as Expired if the job's deadline has passed
@@ -965,7 +960,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
       return {
         ...job.toObject(),
-        applicantCount,
+        applicantCount: job.counter ?? 0,
         derivedStatus, // 👈 new status field with "Expired" logic
       };
     })
@@ -1044,10 +1039,6 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({
-        jobId: job._id,
-      });
-
       let derivedStatus = "Pending";
 
       // ✅ Mark as Expired if the job's deadline has passed
@@ -1067,7 +1058,7 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
       return {
         ...job.toObject(),
-        applicantCount,
+        applicantCount: job.counter ?? 0,
         derivedStatus, // 👈 includes "Expired" logic
       };
     })
