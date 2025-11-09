@@ -14,7 +14,10 @@ import {
   generateProfileEmbeddingVector,
 } from "./embedding.service";
 import { buildJobText, buildProfileText } from "../utils/jobFitText";
-import { mapSkillSynonym } from "./skillMapper.service";
+import {
+  mapSkillSynonym,
+  mapSkillSynonymSmart,
+} from "./skillMapper.service";
 import stripHtml from "../utils/stripHtml";
 
 const DEFAULT_CHAT_MODEL =
@@ -52,6 +55,11 @@ const VERB_PREFIXES = new Set([
   "deliver",
   "create",
   "drive",
+  "manage",
+  "lead",
+  "coordinate",
+  "assist",
+  "support",
 ]);
 
 const BANNED_WORDS_ANYWHERE = new Set([
@@ -66,6 +74,10 @@ const BANNED_WORDS_ANYWHERE = new Set([
   "kpi",
   "targets",
   "objectives",
+  "experience",
+  "role",
+  "duties",
+  "requirements",
 ]);
 
 const SCORE_LABELS = [
@@ -133,12 +145,9 @@ class JobFitService {
   }
 
   private ensureChatModel(): boolean {
-    if (!this.aiEnabled) {
-      return false;
-    }
-    if (this.chatModel) {
-      return true;
-    }
+    if (!this.aiEnabled) return false;
+    if (this.chatModel) return true;
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.warn(
@@ -147,12 +156,18 @@ class JobFitService {
       this.aiEnabled = false;
       return false;
     }
+
+    // Optional generationConfig: some LangChain versions pass this through.
+    // Safe to keep; ignored if unsupported.
+    // @ts-ignore
     this.chatModel = new ChatGoogleGenerativeAI({
       apiKey,
       model: DEFAULT_CHAT_MODEL,
       temperature: 0.2,
       maxOutputTokens: 512,
+      // generationConfig: { responseMimeType: "application/json" },
     });
+
     return true;
   }
 
@@ -211,14 +226,16 @@ class JobFitService {
       },
     ]);
 
-    const parsedJobSkills = this.dedupeSkills([
-      ...(aiResponse?.jobSkills ?? []),
-      ...heuristicJobSkills,
-    ]);
-    const parsedProfileSkills = this.dedupeSkills([
-      ...resumeSkillList,
-      ...(aiResponse?.profileSkills ?? []),
-      ...heuristicProfileSkills,
+    const [parsedJobSkills, parsedProfileSkills] = await Promise.all([
+      this.dedupeSkills([
+        ...(aiResponse?.jobSkills ?? []),
+        ...heuristicJobSkills,
+      ]),
+      this.dedupeSkills([
+        ...resumeSkillList,
+        ...(aiResponse?.profileSkills ?? []),
+        ...heuristicProfileSkills,
+      ]),
     ]);
 
     const matchedSkills = parsedJobSkills.list.filter((skill) =>
@@ -262,10 +279,7 @@ class JobFitService {
       weightedScores.push({ value: embeddingScore, weight: 0.3 });
     }
 
-    if (
-      this.aiEnabled &&
-      typeof aiResponse?.matchPercentage === "number"
-    ) {
+    if (this.aiEnabled && typeof aiResponse?.matchPercentage === "number") {
       weightedScores.push({
         value: aiResponse.matchPercentage,
         weight: 0.5,
@@ -278,19 +292,20 @@ class JobFitService {
     );
 
     const score = this.safeScore(
-      weightedScores.reduce(
-        (sum, item) => sum + item.value * item.weight,
-        0
-      ) / totalWeight
+      weightedScores.reduce((sum, item) => sum + item.value * item.weight, 0) /
+        totalWeight
     );
 
-    const verdict = SCORE_LABELS.find(
-      (label) => score >= label.min && score < label.max
-    ) ?? SCORE_LABELS[0];
+    const verdict =
+      SCORE_LABELS.find((label) => score >= label.min && score < label.max) ??
+      SCORE_LABELS[0];
 
     const aiSummary =
       aiResponse?.summary ??
-      this.buildDefaultSummary(matchedSkills.length, parsedJobSkills.list.length);
+      this.buildDefaultSummary(
+        matchedSkills.length,
+        parsedJobSkills.list.length
+      );
 
     return {
       score,
@@ -306,65 +321,126 @@ class JobFitService {
         profileSkillCount: parsedProfileSkills.list.length,
         matchedSkillCount: matchedSkills.length,
       },
-      model: this.aiEnabled && this.chatModel
-        ? DEFAULT_CHAT_MODEL
-        : "heuristic+GeminiEmb",
+      model:
+        this.aiEnabled && this.chatModel ? DEFAULT_CHAT_MODEL : "heuristic+GeminiEmb",
     };
   }
+
+  // ---------- NEW: compact, cross-industry prompt + sanitizer ----------
 
   private async callGemini(
     jobText: string,
     profileText: string
   ): Promise<FitAiResponse | null> {
-    if (!this.aiEnabled || !jobText || !profileText) {
-      return null;
-    }
-    if (!this.ensureChatModel() || !this.chatModel) {
-      return null;
-    }
+    if (!this.aiEnabled || !jobText || !profileText) return null;
+    if (!this.ensureChatModel() || !this.chatModel) return null;
 
     try {
       const systemPrompt = new SystemMessage(
-        "You compare job descriptions with candidate profiles across all job types (technical, non-technical, operations, creative, sales, etc.). " +
-          "Return a compact JSON object with up to 12 job skills and 12 profile skills. " +
-          "Each entry must be a concise skill/qualification (1-3 words): technologies, tools, methods, certifications, soft skills (e.g., Communication), or role-specific competencies. " +
-          "Do NOT include verbs, responsibilities, sentences, or numbered items. Use strict JSON only."
-      );
-      const instruction = new HumanMessage(
         [
-          "Compare the following job description and candidate profile.",
-          "Return strict JSON with keys: jobSkills (string[]), profileSkills (string[]),",
-          "matchedSkills (string[]), missingSkills (string[]), matchPercentage (0-100 number), summary (<=40 words).",
-          "JOB DESCRIPTION:",
-          jobText,
-          "PROFILE:",
-          profileText,
-          "Prioritize explicit skills listed in the candidate profile (e.g., Skills section). " +
-            "Return only genuine skills/technologies â€” no responsibilities, verbs, or requirements.",
-        ].join("\n\n")
+          "You are a cross-industry job↔profile skill matcher (tech and non-tech).",
+          'Return STRICT JSON ONLY with keys (in this order): {"jobSkills":[],"profileSkills":[],"matchedSkills":[],"missingSkills":[],"matchPercentage":0,"summary":""}',
+          "Extract atomic skills (1–3 words): tools, methods, certifications, licenses, platforms, soft skills (e.g., Communication). No verbs/responsibilities/sentences.",
+          "Canonicalize families unless materially different:",
+          "  HTML5→HTML; CSS3→CSS; ES6/ES2015→JavaScript; Node/NodeJS→Node.js; ReactJS→React; TS→TypeScript;",
+          "  GitHub/GitLab/Bitbucket→Git; AdWords/Google AdWords→Google Ads; Facebook Ads/Meta Ads→Meta Ads;",
+          "  MS Excel→Excel; MS Word→Word; Office Suite→Microsoft Office; EMR/EHR→EHR;",
+          "  GMP/Good Manufacturing Practice→GMP; HACCP stays HACCP; ISO 9001 stays ISO 9001; FAA Part 107 stays FAA Part 107.",
+          "Keep distinct MAJOR differences (Python 2 vs 3; AngularJS vs Angular; CPR vs BLS vs ACLS).",
+          "Cleanup: split on 'and', '/', '&', '+', ',', '•', '|', ';'. Never output these as skills. No trailing punctuation. Deduplicate case-insensitively after canonicalization.",
+          "Format: Title Case words; use UPPERCASE for ≤4-char acronyms (SQL, AWS, EHR, GMP, ISO, CPR, BLS, ACLS).",
+          "Matching is computed AFTER canonicalization (treat HTML==HTML5, CSS==CSS3, Git==GitHub/GitLab/Bitbucket, etc.).",
+          "Limit jobSkills and profileSkills to ≤12 each (most relevant). matchPercentage = 0–100 (number). summary ≤40 words, neutral.",
+          "No markdown, no comments, no extra keys."
+        ].join("\n")
       );
 
-      const completion = await this.chatModel.invoke([
-        systemPrompt,
-        instruction,
-      ]);
-      const raw = this.extractText(completion.content);
-      if (!raw) {
-        return null;
-      }
-      return this.parseAiJson(raw);
-    } catch (error) {
-      console.warn(
-        "[job-fit] Gemini comparison failed:",
-        (error as Error).message
+      const instruction = new HumanMessage(
+        ["JOB:", jobText, "", "PROFILE:", profileText].join("\n")
       );
+
+      const completion = await this.chatModel.invoke([systemPrompt, instruction]);
+      const raw = this.extractText(completion.content);
+      if (!raw) return null;
+
+      const parsed = this.parseAiJson(raw);
+      return this.sanitizeAiLists(parsed);
+    } catch (error) {
+      console.warn("[job-fit] Gemini comparison failed:", (error as Error).message);
       return null;
     }
   }
 
-  private extractHeuristicSkills(
-    sources: WeightedSkillSource[]
-  ): string[] {
+  private sanitizeAiLists(resp: FitAiResponse | null): FitAiResponse | null {
+    if (!resp) return resp;
+
+    const SEP = /(?:\s+and\s+|\/|&|,|·|•|\||;|\+)+/i;
+    const BAD = new Set(["and", "or", "with", "the"]);
+
+    const normalizeFamily = (p: string): string => {
+      const lower = p.toLowerCase();
+      if (lower === "html5") return "HTML";
+      if (lower === "css3") return "CSS";
+      if (["github", "gitlab", "bitbucket"].includes(lower)) return "Git";
+      if (["adwords", "google adwords"].includes(lower)) return "Google Ads";
+      if (["facebook ads", "meta ads"].includes(lower)) return "Meta Ads";
+      if (lower === "ms excel") return "Excel";
+      if (lower === "ms word") return "Word";
+      if (["office suite", "microsoft office"].includes(lower))
+        return "Microsoft Office";
+      if (["emr", "ehr"].includes(lower)) return "EHR";
+      if (["good manufacturing practice"].includes(lower)) return "GMP";
+      return p;
+    };
+
+    const cleanList = (arr?: string[]) => {
+      if (!arr) return [];
+      const out: string[] = [];
+      const seen = new Set<string>();
+      for (const item of arr) {
+        if (!item) continue;
+        const pieces = String(item)
+          .split(SEP)
+          .map((s) =>
+            this.formatSkill(
+              s
+                .replace(/[.?!,:]+$/g, "")
+                .trim()
+            )
+          )
+          .filter((s) => s && !BAD.has(s.toLowerCase()));
+
+        for (let p of pieces) {
+          p = normalizeFamily(p);
+          const key = this.normalizeSkill(p);
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            out.push(p);
+          }
+        }
+      }
+      return out.slice(0, 12);
+    };
+
+    resp.jobSkills = cleanList(resp.jobSkills);
+    resp.profileSkills = cleanList(resp.profileSkills);
+    resp.matchedSkills = cleanList(resp.matchedSkills);
+    resp.missingSkills = cleanList(resp.missingSkills);
+
+    if (typeof resp.matchPercentage !== "number" || isNaN(resp.matchPercentage)) {
+      resp.matchPercentage = 0;
+    } else {
+      resp.matchPercentage = this.safeScore(resp.matchPercentage);
+    }
+
+    if (typeof resp.summary !== "string") resp.summary = "";
+
+    return resp;
+  }
+
+  // ---------------- heuristic helpers ----------------
+
+  private extractHeuristicSkills(sources: WeightedSkillSource[]): string[] {
     const scores = new Map<string, number>();
     for (const source of sources) {
       const tokens = this.tokenizeSkillCandidates(source.data);
@@ -397,9 +473,7 @@ class JobFitService {
         return;
       }
       const sanitized = stripHtml(String(value ?? "")).trim();
-      if (sanitized) {
-        accumulator.push(sanitized);
-      }
+      if (sanitized) accumulator.push(sanitized);
     };
 
     flatten(rawInput as MaybeArray<string | string[] | undefined | null>);
@@ -421,6 +495,8 @@ class JobFitService {
       "ability",
       "work",
       "preferred",
+      "responsibilities",
+      "requirements",
     ]);
 
     const skills: string[] = [];
@@ -429,7 +505,7 @@ class JobFitService {
       if (!chunk) continue;
       const normalizedChunk = chunk.replace(/\. (?=[A-Z])/g, "\n");
       const tokens = normalizedChunk
-        .split(/[\n\r,;â€¢\u2022|]+/)
+        .split(/[\n\r,;•\u2022|/+&]+/g)
         .map((token) =>
           token
             .replace(/^\d+(\.|-)?\s*/, "")
@@ -441,24 +517,32 @@ class JobFitService {
       for (const rawToken of tokens) {
         let token = rawToken;
         if (!token) continue;
+
+        // Keep alphanumerics (to allow ISO 9001, FAA Part 107, A320, etc.)
         const normalized = token
           .toLowerCase()
           .replace(/[^a-z0-9+#\/.&\s-]/g, "")
           .replace(/\s+/g, " ")
           .trim();
+
         if (!normalized) continue;
-        if (/\d/.test(normalized)) continue;
+
+        // Skip items that are purely numeric or punctuation-like
+        if (/^[0-9\s\-/.]+$/.test(normalized)) continue;
+
         const words = normalized.split(/\s+/).filter(Boolean);
         if (!words.length) continue;
         if (words.length > 4) continue;
         if (VERB_PREFIXES.has(words[0])) continue;
         if (words.some((word) => BANNED_WORDS_ANYWHERE.has(word))) continue;
         if (words.every((word) => stopWords.has(word))) continue;
+
         token = token
           .replace(/^\d+(\.|-)?\s*/, "")
           .replace(/[.?!,:]+$/g, "")
           .trim();
-        if (!/[a-z]/i.test(token)) continue;
+        if (!/[a-z]/i.test(token) && !/[0-9]/.test(token)) continue;
+
         skills.push(token);
       }
     }
@@ -466,22 +550,19 @@ class JobFitService {
     return skills;
   }
 
-  private dedupeSkills(skills: string[]) {
+  private async dedupeSkills(skills: string[]) {
     const displayList: string[] = [];
     const normalizedSet = new Set<string>();
 
     for (const skill of skills) {
-      const canonical = mapSkillSynonym(skill);
-      const formatted = this.formatSkill(canonical);
-      const normalized = this.normalizeSkill(formatted);
-      if (!normalized || normalizedSet.has(normalized)) {
-        continue;
-      }
+      if (!skill) continue;
+      const canonical = await mapSkillSynonymSmart(skill);
+      const normalized = this.normalizeCanonicalSkill(canonical);
+      if (!normalized || normalizedSet.has(normalized)) continue;
+
       normalizedSet.add(normalized);
-      displayList.push(formatted);
-      if (displayList.length >= 25) {
-        break;
-      }
+      displayList.push(this.formatSkill(canonical));
+      if (displayList.length >= 25) break;
     }
 
     return {
@@ -491,11 +572,13 @@ class JobFitService {
   }
 
   private normalizeSkill(skill: string): string {
-    if (!skill) {
-      return "";
-    }
+    if (!skill) return "";
     const canonical = mapSkillSynonym(skill);
-    return canonical
+    return this.normalizeCanonicalSkill(canonical);
+  }
+
+  private normalizeCanonicalSkill(skill: string): string {
+    return skill
       .toLowerCase()
       .replace(/[^a-z0-9+#/.&\s]/g, "")
       .replace(/\s+/g, " ")
@@ -504,12 +587,8 @@ class JobFitService {
 
   private formatSkill(skill: string): string {
     const trimmed = skill.trim();
-    if (!trimmed) {
-      return "";
-    }
-    if (trimmed.length <= 4) {
-      return trimmed.toUpperCase();
-    }
+    if (!trimmed) return "";
+    if (trimmed.length <= 4) return trimmed.toUpperCase();
     return trimmed
       .split(" ")
       .map((word) =>
@@ -522,61 +601,44 @@ class JobFitService {
   }
 
   private parseAiJson(raw: string): FitAiResponse | null {
-    const clean = raw
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim();
+    const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
     try {
       const parsed = JSON.parse(clean) as FitAiResponse;
       return parsed;
-    } catch (error) {
+    } catch {
       console.warn("[job-fit] Failed to parse AI JSON:", clean);
       return null;
     }
   }
 
   private extractText(content: unknown): string {
-    if (typeof content === "string") {
-      return content;
-    }
+    if (typeof content === "string") return content;
     if (Array.isArray(content)) {
       return content
         .map((part) =>
           typeof part === "string"
             ? part
-            : typeof part?.text === "string"
-            ? part.text
+            : typeof (part as any)?.text === "string"
+            ? (part as any).text
             : ""
         )
         .join("");
     }
-    if (content && typeof content === "object" && "text" in content) {
+    if (content && typeof content === "object" && "text" in (content as any)) {
       return String((content as { text?: string }).text ?? "");
     }
     return "";
   }
 
   private safeScore(score: number | undefined | null): number {
-    if (typeof score !== "number" || Number.isNaN(score)) {
-      return 0;
-    }
+    if (typeof score !== "number" || Number.isNaN(score)) return 0;
     return Math.min(100, Math.max(0, Math.round(score * 10) / 10));
   }
 
-  private buildDefaultSummary(
-    matched: number,
-    totalRequired: number
-  ): string {
-    if (!totalRequired) {
-      return "Not enough job data to calculate a skill match.";
-    }
+  private buildDefaultSummary(matched: number, totalRequired: number): string {
+    if (!totalRequired) return "Not enough job data to calculate a skill match.";
     return `Matched ${matched} of ${totalRequired} highlighted requirements.`;
   }
 }
 
 export const jobFitService = new JobFitService();
-
-
-
-
-
