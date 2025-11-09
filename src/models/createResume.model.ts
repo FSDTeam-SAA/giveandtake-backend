@@ -43,7 +43,6 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
   { timestamps: true }
 )
 
-
 export const CreateResume = mongoose.model<ICreateResume, CreateResumeModel>(
   'CreateResume',
   createResumeSchema

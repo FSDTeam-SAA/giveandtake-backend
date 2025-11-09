@@ -10,7 +10,6 @@ import { checkIfUserCanPostJob } from "../helper/canPostJob";
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
-import { AppliedJob } from "../models/appliedJob.model";
 import { sendEmail } from "../utils/sendEmail";
 import { io } from "../server";
 import { createNotification } from "../sockets/notification.service";
@@ -18,6 +17,43 @@ import mongoose from "mongoose";
 import { Notification } from "../models/notification.model";
 import { Following } from "../models/following.model";
 import { compileFunction } from "vm";
+import {
+  applyJobEmbeddingToDoc,
+  areEmbeddingsEnabled,
+  cosineSimilarity as embeddingCosineSimilarity,
+  generateJobEmbeddingVector,
+  generateProfileEmbeddingVector,
+} from "../services/embedding.service";
+
+const logEmbeddingWarning = (context: string, error: unknown) => {
+  console.warn(
+    `[job-embedding] ${context}:`,
+    (error as Error)?.message ?? error
+  );
+};
+
+const attachEmbeddingBeforeSave = async (jobDoc: any) => {
+  try {
+    await applyJobEmbeddingToDoc(jobDoc);
+  } catch (error) {
+    logEmbeddingWarning("attach-before-save", error);
+  }
+};
+
+const refreshEmbeddingAfterDirectUpdate = async (jobDoc: any) => {
+  if (!jobDoc) return;
+  try {
+    const changed = await applyJobEmbeddingToDoc(jobDoc);
+    if (changed) {
+      await Job.updateOne(
+        { _id: jobDoc._id },
+        { embedding: jobDoc.embedding }
+      );
+    }
+  } catch (error) {
+    logEmbeddingWarning("refresh-after-update", error);
+  }
+};
 
 /*******************
  * // CREATE A JOB *
@@ -128,6 +164,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     role,
   });
 
+  await attachEmbeddingBeforeSave(job);
   await job.save();
 
   // 🔹 Find followers
@@ -279,6 +316,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   // Keep authorship associations intact—do not allow swapping owners from edit
   // If you DO want to allow company/recruiter switching, handle explicitly here.
 
+  await attachEmbeddingBeforeSave(job);
   await job.save();
 
   // ---- Optional: notify followers if the job just became active or newly published now ----
@@ -689,6 +727,8 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
 
   if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
+  await refreshEmbeddingAfterDirectUpdate(updated);
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -790,12 +830,16 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     ],
   };
 
+  const baseFilters = {
+    arcrivedJob: false,
+    adminApprove: true,
+    jobApprove: "approved",
+  };
+
   const jobs = await Job.find({
     $and: [
       { $or: matchConditions },
-      { arcrivedJob: false },
-      { adminApprove: true },
-      { jobApprove: "approved" },
+      baseFilters,
       dateFilter,
       deadlineFilter, // 🆕 ensure no expired jobs
     ],
@@ -807,7 +851,16 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const exactMatches: any[] = [];
   const partialMatches: any[] = [];
 
-  jobs.forEach((job) => {
+  const embeddingsEnabled = areEmbeddingsEnabled();
+  const profileEmbedding = embeddingsEnabled
+    ? await generateProfileEmbeddingVector(resume, undefined, undefined)
+    : null;
+  const seenJobIds = new Set<string>();
+
+  for (const job of jobs) {
+    if (job._id) {
+      seenJobIds.add(job._id.toString());
+    }
     let score = 0;
 
     const jobTitle = job.title?.toLowerCase() || "";
@@ -828,12 +881,48 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     if (matchedSkillsInResponsibilities.length > 0) score += 1;
     if (matchedSkillsInDescription.length > 0) score += 1;
 
+    if (profileEmbedding) {
+      const jobEmbedding = await generateJobEmbeddingVector(job);
+      const similarity = embeddingCosineSimilarity(
+        jobEmbedding,
+        profileEmbedding
+      );
+      if (similarity >= 0.65) {
+        score += 2;
+      } else if (similarity >= 0.45) {
+        score += 1;
+      }
+    }
+
     if (score >= 5) exactMatches.push({ job, score });
     else partialMatches.push({ job, score });
-  });
+  }
 
   exactMatches.sort((a, b) => b.score - a.score);
   partialMatches.sort((a, b) => b.score - a.score);
+
+  if (
+    profileEmbedding &&
+    exactMatches.length === 0 &&
+    partialMatches.length === 0
+  ) {
+    const embeddingMatches = await findEmbeddingRecommendedJobs(
+      profileEmbedding,
+      seenJobIds,
+      baseFilters,
+      dateFilter,
+      deadlineFilter
+    );
+
+    if (embeddingMatches.length) {
+      partialMatches.push(
+        ...embeddingMatches.map(({ job, similarity }) => ({
+          job,
+          score: Math.min(4.5, Math.max(1, similarity * 10)),
+        }))
+      );
+    }
+  }
 
   // 🧠 Fallback jobs if no matches found
   if (exactMatches.length === 0 && partialMatches.length === 0) {
@@ -863,6 +952,56 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     data: { exactMatches, partialMatches },
   });
 });
+
+const EMBEDDING_SIMILARITY_THRESHOLD = 0.45;
+const EMBEDDING_RECOMMENDATION_LIMIT = 6;
+
+const findEmbeddingRecommendedJobs = async (
+  profileEmbedding: number[],
+  excludeIds: Set<string>,
+  baseFilters: Record<string, unknown>,
+  dateFilter: Record<string, unknown>,
+  deadlineFilter: Record<string, unknown>,
+  limit = EMBEDDING_RECOMMENDATION_LIMIT
+) => {
+  if (!areEmbeddingsEnabled()) {
+    return [];
+  }
+
+  const exclude = Array.from(excludeIds).map(
+    (id) => new mongoose.Types.ObjectId(id)
+  );
+
+  const queryFilters = {
+    ...baseFilters,
+    ...dateFilter,
+    ...deadlineFilter,
+    ...(exclude.length ? { _id: { $nin: exclude } } : {}),
+  };
+
+  const candidates = await Job.find(queryFilters)
+    .sort({ createdAt: -1 })
+    .limit(limit * 4)
+    .populate("companyId recruiterId userId")
+    .lean();
+
+  const scored: Array<{ job: any; similarity: number }> = [];
+
+  for (const job of candidates) {
+    const jobEmbedding = await generateJobEmbeddingVector(job);
+    const similarity = embeddingCosineSimilarity(
+      jobEmbedding,
+      profileEmbedding
+    );
+    if (similarity >= EMBEDDING_SIMILARITY_THRESHOLD) {
+      scored.push({ job, similarity });
+    }
+  }
+
+  return scored
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit);
+};
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *
@@ -942,10 +1081,6 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({
-        jobId: job._id,
-      });
-
       let derivedStatus = "Pending";
 
       // ✅ Mark as Expired if the job's deadline has passed
@@ -965,7 +1100,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
       return {
         ...job.toObject(),
-        applicantCount,
+        applicantCount: job.counter ?? 0,
         derivedStatus, // 👈 new status field with "Expired" logic
       };
     })
@@ -1044,10 +1179,6 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      const applicantCount = await AppliedJob.countDocuments({
-        jobId: job._id,
-      });
-
       let derivedStatus = "Pending";
 
       // ✅ Mark as Expired if the job's deadline has passed
@@ -1067,7 +1198,7 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
       return {
         ...job.toObject(),
-        applicantCount,
+        applicantCount: job.counter ?? 0,
         derivedStatus, // 👈 includes "Expired" logic
       };
     })

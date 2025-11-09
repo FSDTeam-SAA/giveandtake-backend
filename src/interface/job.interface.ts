@@ -31,6 +31,8 @@ export interface IJob extends Document {
   experience: string;
   deadline: Date;
   status: JobStatus;
+  counter: number;
+  embedding?: number[];
   arcrivedJob: boolean;
   jobCategoryId: Types.ObjectId;
   compensation: string;

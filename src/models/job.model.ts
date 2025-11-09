@@ -16,6 +16,11 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     educationExperience: [{ type: String }],
     benefits: [{ type: String }],
     vacancy: { type: Number, default: 1 },
+    counter: { type: Number, default: 0 },
+    embedding: {
+      type: [Number],
+      default: [],
+    },
     experience: { type: String },
     deadline: { type: Date },
     status: {

@@ -1254,6 +1254,20 @@ export const getAllUser = catchAsync(async (req, res) => {
   })
 })
 
+const decrementJobCountersForFilter = async (filter: Record<string, any>) => {
+  const jobCounts = await AppliedJob.aggregate([
+    { $match: filter },
+    { $group: { _id: "$jobId", count: { $sum: 1 } } },
+  ]);
+
+  const updates = jobCounts.filter((group) => group._id);
+
+  await Promise.all(
+    updates.map(({ _id, count }) =>
+      Job.findByIdAndUpdate(_id, { $inc: { counter: -count } })
+    )
+  );
+};
 
 export const deleteUser = catchAsync(async (req, res) => {
   const id = req.params.id
@@ -1268,11 +1282,15 @@ export const deleteUser = catchAsync(async (req, res) => {
     await Experience.deleteMany({ userId: user._id })
     await AwardsAndHonor.deleteMany({ userId: user._id })
     await ElevatorPitch.findOneAndDelete({ userId: user._id })
+    await decrementJobCountersForFilter({ userId: user._id });
     await AppliedJob.deleteMany({ userId: user._id })
   } else if (user.role === "recruiter") {
     const jobs = await Job.find({ userId: user._id });
     const jobIds = jobs.map((j) => j._id);
-    await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    if (jobIds.length) {
+      await decrementJobCountersForFilter({ jobId: { $in: jobIds } });
+      await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    }
     await Job.deleteMany({ userId: user._id });
     await Job.findOneAndDelete({ userId: user._id })
     await RecruiterAccount.findOneAndDelete({ userId: user._id })
@@ -1283,7 +1301,10 @@ export const deleteUser = catchAsync(async (req, res) => {
   } else if (user.role === "company") {
     const jobs = await Job.find({ userId: user._id });
     const jobIds = jobs.map((j) => j._id);
-    await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    if (jobIds.length) {
+      await decrementJobCountersForFilter({ jobId: { $in: jobIds } });
+      await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
+    }
     await Job.deleteMany({ userId: user._id });
     await Job.findOneAndDelete({ userId: user._id })
     await RecruiterAccount.findOneAndDelete({ userId: user._id })

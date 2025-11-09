@@ -16,11 +16,13 @@ import {
   toggleArchiveJob,
   editJob,
 } from "../controllers/job.controller";
+import { getJobFitInsight } from "../controllers/jobFit.controller";
 import { protect } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
 router.route("/jobs").post(createJob).get(getAllJobs);
+router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
 
 /************************
  * JOB RECOMMEND SYSTEM *

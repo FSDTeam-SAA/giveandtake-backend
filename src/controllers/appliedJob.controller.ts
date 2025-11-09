@@ -109,6 +109,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     answer,
   });
 
+  await Job.findByIdAndUpdate(jobId, { $inc: { counter: 1 } });
+
   // 🔹 Fetch candidate info
   const candidate = await User.findById(userId).select("name email");
   if (!candidate) {
@@ -605,6 +607,13 @@ export const deleteApplication = catchAsync(
 
     if (!deleted) {
       throw new AppError(httpStatus.NOT_FOUND, "Application not found");
+    }
+
+    if (deleted.jobId) {
+      await Job.findOneAndUpdate(
+        { _id: deleted.jobId, counter: { $gt: 0 } },
+        { $inc: { counter: -1 } }
+      );
     }
 
     res.status(httpStatus.OK).json({
