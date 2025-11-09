@@ -71,8 +71,8 @@ export const createRecruiterAccount = catchAsync(
         { upsert: true, new: true } // create if not exists, return the doc
       );
     }
-    if (saferest.firstName || saferest.lastName) {
-      user.name = `${saferest.firstName} ${saferest.lastName}`
+    if (saferest.firstName || saferest.sureName) {
+      user.name = `${saferest.firstName} ${saferest.sureName}`
     }
     await user.save();
     const recruiterAccount = await RecruiterAccount.create({
