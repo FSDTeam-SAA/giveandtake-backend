@@ -30,25 +30,18 @@ export const captureOrder = async (orderId: string) => {
 
 export const refundOrder = async (
   captureId: string,
-  amount?: number // optional partial refund
+  amount: number
 ) => {
   const request = new paypal.payments.CapturesRefundRequest(captureId);
 
-  // Optional partial refund
-  if (amount) {
-    // request.requestBody({
-    //   amount: {
-    //     value: amount.toFixed(2),
-    //     currency_code: "USD",
-    //   },
-    // });
-  } else {
-    request.requestBody({
-      amount: amount as any,
-      invoice_id: '',
-      note_to_payer: ''
-    });
-  }
+  request.requestBody({
+    amount: {
+      value: amount.toFixed(2),
+      currency_code: 'USD',
+    },
+    invoice_id: '',
+    note_to_payer: '',
+  });
 
   const refund = await paypalClient.execute(request);
   return refund.result;

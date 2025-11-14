@@ -7,6 +7,8 @@ import { createOrder, captureOrder, refundOrder } from "../services/paypal.servi
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
+import { Job } from "../models/job.model";
+import { AppliedJob } from "../models/appliedJob.model";
 // import { refundOrder } from "../services/paypal.service"; // new service function
 // JSON validation middleware
 const validateJsonBody = (
@@ -68,28 +70,75 @@ const mapPaypalStatusToEnum = (
   }
 };
 
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+const PAYG_FALLBACK_RATE = Number(process.env.PAYG_DEDUCTION_FALLBACK ?? 99);
+
+const addDays = (date: Date, days: number) =>
+  new Date(date.getTime() + days * MILLIS_PER_DAY);
+
+const normalizePlanValid = (valid?: string | null) =>
+  (valid || "").trim().toLowerCase();
+
+/***********************
+ * REFUND CALC HELPERS *
+ ***********************/
+const formatCurrency = (value: number) => Number(value.toFixed(2));
+
+const resolvePaygRate = async (audience: string) => {
+  const paygPlan = await SubscriptionPlan.findOne({
+    for: audience,
+    valid: "PayAsYouGo",
+  }).sort({ price: 1 });
+
+  if (paygPlan?.price && paygPlan.price > 0) {
+    return paygPlan.price;
+  }
+  return PAYG_FALLBACK_RATE;
+};
+
 /****************************
  * PAYPAL CAPTUREPAYPALPAYMENT *
  ****************************/
 export const capturePaypalPayment = async (req: Request, res: Response) => {
   try {
     const { orderId, userId, planId, seasonId } = req.body;
+    if (!planId) {
+      throw new AppError(400, "Plan ID is required");
+    }
     const capture = await captureOrder(orderId);
     const user = await User.findById(userId);
     if (!user) {
       throw new AppError(400, "User not found");
     }
 
+    const plan = await SubscriptionPlan.findById(planId);
+    if (!plan) {
+      throw new AppError(404, "Subscription plan not found");
+    }
+
     const captureDetails = capture.purchase_units[0].payments.captures[0];
+    const numericAmount = Number(captureDetails.amount.value);
+    if (Number.isNaN(numericAmount)) {
+      throw new AppError(400, "Unable to determine payment amount");
+    }
+
+    const planValidity = (plan.valid || "").toLowerCase();
+    const derivedDuration =
+      planValidity === "monthly"
+        ? "monthly"
+        : planValidity === "yearly"
+        ? "yearly"
+        : "payg";
 
     const newPayment = await paymentInfo.create({
       userId,
       planId,
-      amount: captureDetails.amount.value,
+      amount: numericAmount,
       paymentStatus: mapPaypalStatusToEnum(captureDetails.status),
       transactionId: captureDetails.id,
       paymentMethod: "PayPal",
       seasonId,
+      duration: derivedDuration,
     });
 
     const emailBody = `<!doctype html>
@@ -151,7 +200,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                       </tr>
                       <tr>
                         <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-bottom:8px;">Amount</td>
-                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${captureDetails.amount.value}</strong></td>
+                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${numericAmount.toFixed(2)}</strong></td>
                       </tr>
                     </table>
                   </td>
@@ -271,58 +320,171 @@ export const getPaymentsByUserId = catchAsync(
 export const refundPaypalPayment = catchAsync(async (req: Request, res: Response) => {
   const { paymentId } = req.body;
 
-  // Validate payment exists
-  const payment = await paymentInfo.findById(paymentId);
+  if (!paymentId) {
+    throw new AppError(400, "Payment ID is required");
+  }
+
+  const payment = await paymentInfo
+    .findById(paymentId)
+    .populate("planId", "title valid for price");
+
   if (!payment) {
     throw new AppError(404, "Payment not found");
   }
 
-  // Check if already refunded
   if (payment.paymentStatus === "refunded") {
     throw new AppError(400, "Payment already refunded");
   }
 
-  // Get user info
   const user = await User.findById(payment.userId);
   if (!user) {
     throw new AppError(404, "User not found");
   }
 
-  // Initiate refund from PayPal API
-  const refundResponse = await refundOrder(payment.transactionId, payment.amount);
-  if (!refundResponse || refundResponse.status !== "COMPLETED") {
-    throw new AppError(400, "Refund failed or not completed");
+  const plan: any = payment.planId;
+  if (!plan) {
+    throw new AppError(400, "Subscription plan metadata is missing for this payment");
   }
 
-  // Update payment status
+  const audience = (plan.for || "").toLowerCase();
+  const planValidity = normalizePlanValid(plan.valid);
+  const paymentStart = payment.createdAt ?? payment.updatedAt ?? new Date();
+  const now = new Date();
+  const notes: string[] = [];
+  let deductions = 0;
+  let refundWindowDays: number | null = null;
+
+  if (audience === "candidate") {
+    if (planValidity === "monthly") {
+      throw new AppError(
+        400,
+        "Monthly Candidates’ subscriptions are nonrefundable as the admin fees will exceed the refund fees."
+      );
+    }
+
+    if (planValidity === "yearly") {
+      refundWindowDays = 30;
+      const cutoff = addDays(paymentStart, refundWindowDays);
+      if (now > cutoff) {
+        throw new AppError(
+          400,
+          "Yearly Candidates’ subscriptions are non-refundable after 30 days."
+        );
+      }
+
+      const appliedJobExists = await AppliedJob.exists({
+        userId: payment.userId,
+        createdAt: { $gte: paymentStart },
+      });
+
+      if (appliedJobExists) {
+        throw new AppError(
+          400,
+          "Yearly Candidates’ subscriptions are non-refundable once a job application has been made."
+        );
+      }
+    } else {
+      throw new AppError(
+        400,
+        "Refunds are only available for yearly candidate upgrades."
+      );
+    }
+  } else if (audience === "company" || audience === "recruiter") {
+    if (planValidity === "monthly") {
+      refundWindowDays = 7;
+    } else if (planValidity === "yearly") {
+      refundWindowDays = 30;
+    } else {
+      throw new AppError(
+        400,
+        "Refunds are only available for monthly or yearly subscriptions."
+      );
+    }
+
+    const cutoff = addDays(paymentStart, refundWindowDays);
+    if (now > cutoff) {
+      throw new AppError(
+        400,
+        `This ${planValidity} ${audience} subscription is nonrefundable after ${refundWindowDays} days.`
+      );
+    }
+
+    const jobPostsDuringWindow = await Job.countDocuments({
+      userId: payment.userId,
+      createdAt: {
+        $gte: paymentStart,
+        $lte: cutoff,
+      },
+    });
+
+    if (jobPostsDuringWindow > 0) {
+      const paygRate = await resolvePaygRate(audience);
+      deductions = formatCurrency(jobPostsDuringWindow * paygRate);
+      notes.push(
+        `Deducted ${jobPostsDuringWindow} × PAYG rate ($${paygRate.toFixed(
+          2
+        )}) for job posts made during the refund window.`
+      );
+    }
+  } else {
+    throw new AppError(
+      400,
+      "Refund policy is not defined for this subscription type."
+    );
+  }
+
+  const grossRefund = Math.max(payment.amount - deductions, 0);
+  const adminFee = formatCurrency(grossRefund * 0.1);
+  const refundAmount = formatCurrency(grossRefund - adminFee);
+
+  if (refundAmount <= 0) {
+    throw new AppError(
+      400,
+      "No refundable balance remains after deductions and admin fees."
+    );
+  }
+
+  notes.push("10% admin fee applied.");
+
+  const refundResponse = await refundOrder(payment.transactionId, refundAmount);
+  if (!refundResponse || refundResponse.status !== "COMPLETED") {
+    throw new AppError(400, "Refund failed or was not completed");
+  }
+
   payment.paymentStatus = "refunded";
   payment.refundTransactionId = refundResponse.id;
   payment.refundDate = new Date();
+  payment.refundAdminFee = adminFee;
+  payment.refundDeductions = deductions;
+  payment.refundNotes = notes.join(" | ");
   await payment.save();
 
-  // Send refund confirmation email
   const emailBody = `
   <html>
     <body style="font-family: Arial, sans-serif;">
       <h2>Refund Processed Successfully</h2>
       <p>Dear ${user.name},</p>
-      <p>Your refund for payment <strong>${payment.transactionId}</strong> has been successfully processed.</p>
+      <p>Your refund for payment <strong>${payment.transactionId}</strong> has been processed according to our policy.</p>
       <table style="border: 1px solid #ddd; border-collapse: collapse; margin-top: 10px;">
         <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Amount</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${payment.amount}</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">Original Amount</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">$${payment.amount.toFixed(2)}</td>
         </tr>
         <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Refund ID</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${refundResponse.id}</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">PAYG Deductions</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">$${deductions.toFixed(2)}</td>
         </tr>
         <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Date</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${new Date().toLocaleString()}</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">Admin Fee (10%)</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">$${adminFee.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px;">Refunded Amount</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">$${refundAmount.toFixed(2)}</td>
         </tr>
       </table>
-      <p>If you have questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
-      <p>Thank you,<br>Elevator Video PitchÂ©</p>
+      <p>If you have any questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
+      <p>Thank you,<br>Elevator Video PitchAc</p>
     </body>
   </html>
   `;
@@ -335,6 +497,9 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     data: {
       refundTransactionId: refundResponse.id,
       status: refundResponse.status,
+      refundAmount,
+      deductions,
+      adminFee,
       payment,
     },
   });

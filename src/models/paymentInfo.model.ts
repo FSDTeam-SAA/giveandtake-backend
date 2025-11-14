@@ -22,20 +22,28 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
     },
     paymentStatus: {
       type: String,
-      enum: ['complete', 'pending', 'failed','refunded'],
+      enum: ['complete', 'pending', 'failed', 'refunded'],
       default: 'pending',
     },
-    duration: { type: String, enum: ['monthly', 'yearly'] },
+    duration: { type: String, enum: ['monthly', 'yearly', 'payg'] },
     seasonId: { type: String },
     transactionId: { type: String, required: true },
     paymentMethod: { type: String },
-    refundDate:{type: Date},
-    refundTransactionId: {type: String},
+    refundDate: { type: Date },
+    refundTransactionId: { type: String },
     planStatus: {
       type: String,
       enum: ['active', 'deactivate'],
       default: 'active',
     },
+    consumedForJobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Job',
+    },
+    pitchRemovedAt: { type: Date },
+    refundAdminFee: { type: Number, default: 0 },
+    refundDeductions: { type: Number, default: 0 },
+    refundNotes: { type: String },
   },
   { timestamps: true }
 )
