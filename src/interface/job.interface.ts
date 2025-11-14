@@ -47,6 +47,11 @@ export interface IJob extends Document {
   career_Stage: string;
   name: string;
   role: string;
+  billingPlanType?: 'payg' | 'subscription' | 'free';
+  billingPlanId?: Types.ObjectId;
+  paygStartedAt?: Date;
+  paygExpiresAt?: Date;
+  deactivatedAt?: Date | null;
 }
 
 export interface JobModel extends Model<IJob> {}

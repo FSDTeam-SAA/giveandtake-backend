@@ -75,6 +75,18 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       enum: ["New Entry", "Experienced Professional", "Career Returner"],
     },
     website_Url: { type: String },
+    billingPlanType: {
+      type: String,
+      enum: ['payg', 'subscription', 'free'],
+      default: 'free',
+    },
+    billingPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PaymentInfo",
+    },
+    paygStartedAt: { type: Date },
+    paygExpiresAt: { type: Date },
+    deactivatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

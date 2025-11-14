@@ -1335,6 +1335,7 @@ export const emailChange = catchAsync(async (req, res) => {
   if (user.email == email) {
     throw new AppError(400, "New email must be different from the current email")
   }
+  const oldEmail = user.email
   const existingUser = await User.findOne({ email })
   if (existingUser) {
     throw new AppError(404, "This email is already associated with another account")
@@ -1353,7 +1354,14 @@ export const emailChange = catchAsync(async (req, res) => {
   user.verificationInfo.token = otptoken;
   user.verificationInfo.verified = false
   await user.save();
-  await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
+
+  await Promise.all([
+    CreateResume.updateMany({ userId: id, email: oldEmail }, { email }),
+    Company.updateMany({ userId: id, cemail: oldEmail }, { cemail: email }),
+    RecruiterAccount.updateMany({ userId: id, emailAddress: oldEmail }, { emailAddress: email }),
+  ]);
+
+  await sendEmail(user.email, "OTP - Elevator Video PitchAc", resetOtpTemplate(user.name, otp));
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -1361,5 +1369,7 @@ export const emailChange = catchAsync(async (req, res) => {
     message: "Email changed successfully. Please verify your OTP",
     data: { email: user.email },
   });
-
 })
+
+
+

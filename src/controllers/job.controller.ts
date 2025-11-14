@@ -17,6 +17,7 @@ import mongoose from "mongoose";
 import { Notification } from "../models/notification.model";
 import { Following } from "../models/following.model";
 import { compileFunction } from "vm";
+import { paymentInfo } from "../models/paymentInfo.model";
 import {
   applyJobEmbeddingToDoc,
   areEmbeddingsEnabled,
@@ -55,6 +56,138 @@ const refreshEmbeddingAfterDirectUpdate = async (jobDoc: any) => {
   }
 };
 
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+const PAYG_DURATION_DAYS = 30;
+const PAYG_EDIT_ERROR =
+  "Your PAYG payment has expired, please subscribe or purchase a new PAYG voucher.";
+const PAYG_WINDOW_ERROR =
+  "Pay As You Go adverts cannot run beyond 30 days from the original publication date.";
+
+const computePaygExpiryDate = (start?: Date | null) =>
+  start ? new Date(start.getTime() + PAYG_DURATION_DAYS * MILLIS_PER_DAY) : null;
+
+const ensurePaygWindowMetadata = (job: any) => {
+  if (job.billingPlanType !== "payg") return;
+  if (!job.paygStartedAt) {
+    const baseline =
+      job.publishDate ??
+      job.createdAt ??
+      new Date();
+    job.paygStartedAt = baseline;
+  }
+  if (!job.paygExpiresAt && job.paygStartedAt) {
+    job.paygExpiresAt = computePaygExpiryDate(
+      job.paygStartedAt instanceof Date
+        ? job.paygStartedAt
+        : new Date(job.paygStartedAt)
+    );
+  }
+};
+
+const sendPaygExpiryNotification = async (job: any) => {
+  const ownerId =
+    (job.userId && job.userId._id
+      ? job.userId._id
+      : job.userId) as mongoose.Types.ObjectId | undefined;
+  if (!ownerId) return;
+  try {
+    await createNotification({
+      to: ownerId,
+      message: PAYG_EDIT_ERROR,
+      type: "payg_expired",
+      id: job._id as mongoose.Types.ObjectId,
+    });
+  } catch (error) {
+    console.warn("Failed to dispatch PAYG expiry notification:", error);
+  }
+};
+
+const enforcePaygEditRestriction = async (job: any) => {
+  if (job.billingPlanType !== "payg") return;
+  ensurePaygWindowMetadata(job);
+  const expiry = job.paygExpiresAt
+    ? new Date(job.paygExpiresAt)
+    : computePaygExpiryDate(
+        job.paygStartedAt ??
+          job.publishDate ??
+          job.createdAt
+      );
+
+  if (expiry && new Date() > expiry) {
+    await sendPaygExpiryNotification(job);
+    throw new AppError(httpStatus.FORBIDDEN, PAYG_EDIT_ERROR);
+  }
+};
+
+const enforcePaygDateBounds = (
+  job: any,
+  nextPublishDate?: Date,
+  nextDeadline?: Date
+) => {
+  if (job.billingPlanType !== "payg") return;
+  ensurePaygWindowMetadata(job);
+  const expiry =
+    job.paygExpiresAt ||
+    computePaygExpiryDate(
+      job.paygStartedAt ?? job.publishDate ?? job.createdAt
+    );
+  if (!expiry) return;
+  const expiryDate = new Date(expiry);
+
+  if (nextPublishDate && nextPublishDate > expiryDate) {
+    throw new AppError(httpStatus.FORBIDDEN, PAYG_WINDOW_ERROR);
+  }
+  if (nextDeadline && nextDeadline > expiryDate) {
+    throw new AppError(httpStatus.FORBIDDEN, PAYG_WINDOW_ERROR);
+  }
+};
+
+const determineJobBillingContext = async (
+  userId: mongoose.Types.ObjectId,
+  publishDate?: Date
+) => {
+  const latestPayment = await paymentInfo
+    .findOne({
+      userId,
+      paymentStatus: "complete",
+    })
+    .sort({ updatedAt: -1 })
+    .populate("planId", "valid");
+
+  if (!latestPayment) {
+    return {
+      billingPlanType: "free",
+      billingPlanId: undefined,
+      paygStartedAt: undefined,
+      paygExpiresAt: undefined,
+    };
+  }
+
+  const plan: any = latestPayment.planId;
+  if (plan?.valid === "PayAsYouGo") {
+    const startDate = publishDate ?? new Date();
+    return {
+      billingPlanType: "payg",
+      billingPlanId: latestPayment._id,
+      paygStartedAt: startDate,
+      paygExpiresAt: computePaygExpiryDate(startDate),
+    };
+  }
+
+  return {
+    billingPlanType: "subscription",
+    billingPlanId: latestPayment._id,
+    paygStartedAt: undefined,
+    paygExpiresAt: undefined,
+  };
+};
+
+const coerceDate = (value: unknown): Date | undefined => {
+  if (!value) return undefined;
+  const parsed = new Date(value as string);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 /*******************
  * // CREATE A JOB *
  *******************/
@@ -87,6 +220,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     name,
     role,
   } = req.body;
+  const publishDateValue = coerceDate(publishDate);
 
   if (!userId || !title || !description) {
     throw new AppError(
@@ -130,7 +264,10 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  // await checkIfUserCanPostJob(userId)
+  const billingContext = await determineJobBillingContext(
+    new mongoose.Types.ObjectId(userId),
+    publishDateValue ?? new Date()
+  );
 
   const job = new Job({
     userId,
@@ -157,11 +294,15 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     jobApprove,
     employement_Type,
     website_Url,
-    publishDate,
+    publishDate: publishDateValue ?? publishDate ?? undefined,
     location_Type,
     career_Stage,
     name,
     role,
+    billingPlanType: billingContext.billingPlanType,
+    billingPlanId: billingContext.billingPlanId,
+    paygStartedAt: billingContext.paygStartedAt,
+    paygExpiresAt: billingContext.paygExpiresAt,
   });
 
   await attachEmbeddingBeforeSave(job);
@@ -272,6 +413,21 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
+  ensurePaygWindowMetadata(job);
+  const incomingPublishDate = coerceDate(req.body?.publishDate);
+  const incomingDeadline = coerceDate(req.body?.deadline);
+
+  await enforcePaygEditRestriction(job);
+  enforcePaygDateBounds(job, incomingPublishDate, incomingDeadline);
+
+  const safeBody: Record<string, unknown> = { ...req.body };
+  if (incomingPublishDate) {
+    safeBody.publishDate = incomingPublishDate;
+  }
+  if (incomingDeadline) {
+    safeBody.deadline = incomingDeadline;
+  }
+
   // ---- Whitelist of fields allowed to be updated ----
   const updatableFields: (keyof typeof job)[] = [
     "title",
@@ -304,14 +460,33 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   // Track some state to optionally notify followers on activation
   const prevStatus = job.status;
   const prevPublishDate = job.publishDate;
+  const prevArchivedState = job.arcrivedJob;
 
   // ---- Apply updates safely ----
   for (const field of updatableFields) {
-    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+    if (Object.prototype.hasOwnProperty.call(safeBody, field)) {
       // @ts-ignore
-      job[field] = req.body[field];
+      job[field] = safeBody[field];
     }
   }
+
+  if (prevStatus !== "deactivate" && job.status === "deactivate") {
+    job.deactivatedAt = new Date();
+  } else if (
+    prevStatus === "deactivate" &&
+    job.status === "active" &&
+    job.arcrivedJob === false
+  ) {
+    job.deactivatedAt = null;
+  }
+
+  if (!prevArchivedState && job.arcrivedJob) {
+    job.deactivatedAt = job.deactivatedAt ?? new Date();
+  } else if (prevArchivedState && !job.arcrivedJob && job.status === "active") {
+    job.deactivatedAt = null;
+  }
+
+  ensurePaygWindowMetadata(job);
 
   // Keep authorship associations intact—do not allow swapping owners from edit
   // If you DO want to allow company/recruiter switching, handle explicitly here.
@@ -1035,7 +1210,18 @@ export const toggleArchiveJob = catchAsync(async (req, res) => {
   if (!job)
     throw new AppError(httpStatus.NOT_FOUND, "Job not found or unauthorized");
 
+  ensurePaygWindowMetadata(job);
+  const wasArchived = job.arcrivedJob;
+  if (wasArchived) {
+    await enforcePaygEditRestriction(job);
+  }
+
   job.arcrivedJob = !job.arcrivedJob;
+  if (job.arcrivedJob) {
+    job.deactivatedAt = job.deactivatedAt ?? new Date();
+  } else if (job.status === "active") {
+    job.deactivatedAt = null;
+  }
   await job.save();
 
   const message = job.arcrivedJob

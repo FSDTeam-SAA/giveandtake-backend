@@ -4,9 +4,20 @@ import { paymentInfo } from '../models/paymentInfo.model'
 import { User } from '../models/user.model'
 import { createNotification } from '../sockets/notification.service'
 import { sendEmail } from '../utils/sendEmail'
+import { ElevatorPitch } from '../models/elevatorPitch.model'
+import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
+import { AppliedJob } from '../models/appliedJob.model'
+
+const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+const JOB_EXPIRY_NOTICE =
+  'Your job advert recently posted is due to expire shortly. Kindly remember to update each applicant on the final status of their application, using our intuitive one-click feedback tool in your job applicants panel.';
+const SUBSCRIPTION_EXPIRY_NOTICE =
+  'Your subscription has expired, please renew or upload a free 30-second elevator pitch video today.';
+const PITCH_REMOVAL_NOTICE =
+  'Your upgraded Elevator Video Pitch© has been removed because your subscription expired. Renew your plan to upload a new video.';
 
 export const deleteOldDeactivatedUsers = async () => {
-  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+  const THIRTY_DAYS = 30 * MILLIS_PER_DAY
   const now = new Date()
 
   const result = await User.deleteMany({
@@ -36,6 +47,8 @@ export const updateExpiredPlans = async () => {
       expiryDate.setMonth(expiryDate.getMonth() + 1);
     } else if (plan.duration === 'yearly') {
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    } else if (plan.duration === 'payg') {
+      expiryDate.setDate(expiryDate.getDate() + 30);
     } else {
       continue;
     }
@@ -149,60 +162,22 @@ export const notifyJobExpiryToRecruiters = async () => {
   }).populate("recruiterId companyId");
 
   for (const job of jobsExpiringSoon) {
-    let recruiter
-    if(job.recruiterId){
-      recruiter = job.recruiterId as any
-    }else{
-      recruiter = job.companyId as any
-    }
-    // if (!recruiter?.email) continue;
+    const owner =
+      job.recruiterId ? (job.recruiterId as any) : (job.companyId as any);
+    const ownerUserId =
+      owner?.userId ?? (job.userId as mongoose.Types.ObjectId | undefined);
+    if (!ownerUserId) continue;
 
-    // const subject = "Your job post is about to expire";
-
-    const deadline =
-      job.deadline ? new Date(job.deadline).toUTCString() : "soon";
-
-    // const body = buildEvpEmail({
-    //   heading: "Job Expiry Notice",
-    //   subheading: "Expires in ~24 hours",
-    //   greetingName: getFirstName(recruiter?.name),
-    //   signer: "EVP Admin",
-    //   titleTag: "EVP — Job Expiry Notice",
-    //   bodyHtml: `
-    //     <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-    //       Your job advert titled <strong>${job.title || "your job post"}</strong> is due to expire
-    //       <strong>${deadline}</strong>.
-    //     </p>
-    //     <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-    //       Kindly remember to update each applicant on the final status of their application using our
-    //       intuitive one-click feedback tool in your job applicants panel.
-    //     </p>
-    //   `,
-    // });
-
-    // await sendEmail(recruiter.email, subject, body);
     await createNotification({
-      to: recruiter.userId as any,
-      message: `
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          Your job advert titled <strong>${job.title || "your job post"}</strong> is due to expire
-          <strong>${deadline}</strong>.
-        </p>
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          Kindly remember to update each applicant on the final status of their application using our
-          intuitive one-click feedback tool in your job applicants panel.
-        </p>
-      `,
-      type: "Expire",
-      id: recruiter._id
-    })
+      to: ownerUserId,
+      message: JOB_EXPIRY_NOTICE,
+      type: "job_expiry_warning",
+      id: job._id as mongoose.Types.ObjectId,
+    });
   }
 
   console.log(`${jobsExpiringSoon.length} recruiters notified of job expiry.`);
 };
-
-
-
 
 export const notifyExpiredSubscriptions = async () => {
   const today = new Date();
@@ -242,12 +217,94 @@ export const notifyExpiredSubscriptions = async () => {
     // Existing in-app notification
     await createNotification({
       to: (user?._id || payment.userId) as mongoose.Types.ObjectId,
-      message:
-        "Your subscription has expired, please renew or upload a 30-second elevator pitch video today.",
+      message: SUBSCRIPTION_EXPIRY_NOTICE,
       type: "Subscription Expired",
       id: payment._id as mongoose.Types.ObjectId,
     });
   }
 
   console.log(`${expiredPayments.length} users notified of expired subscriptions.`);
+};
+
+export const removeExpiredElevatorPitches = async () => {
+  const now = new Date();
+
+  const expiredPlans = await paymentInfo
+    .find({
+      planStatus: "deactivate",
+      paymentStatus: "complete",
+      pitchRemovedAt: { $exists: false },
+    })
+    .sort({ updatedAt: -1 });
+
+  for (const plan of expiredPlans) {
+    const duration = (plan.duration || "").toLowerCase();
+    if (duration !== "monthly" && duration !== "yearly") {
+      continue;
+    }
+
+    const startPoint = plan.updatedAt ?? plan.createdAt;
+    if (!startPoint) continue;
+
+    const baseExpiry =
+      duration === "yearly"
+        ? new Date(startPoint.getTime() + 365 * MILLIS_PER_DAY)
+        : new Date(startPoint.getTime() + 30 * MILLIS_PER_DAY);
+    const removalTime = new Date(baseExpiry.getTime() + MILLIS_PER_DAY);
+
+    if (now < removalTime) continue;
+
+    const hasActivePlan = await paymentInfo.exists({
+      userId: plan.userId,
+      planStatus: "active",
+      paymentStatus: "complete",
+    });
+    if (hasActivePlan) continue;
+
+    const pitch = await ElevatorPitch.findOne({ userId: plan.userId });
+    if (!pitch) {
+      plan.pitchRemovedAt = new Date();
+      await plan.save();
+      continue;
+    }
+
+    await removeElevatorPitchArtifacts({
+      userId: String(plan.userId),
+      rawKey: pitch.video?.rawKey ?? undefined,
+    });
+
+    await ElevatorPitch.deleteOne({ _id: pitch._id });
+    plan.pitchRemovedAt = new Date();
+    await plan.save();
+
+    await createNotification({
+      to: plan.userId as mongoose.Types.ObjectId,
+      message: PITCH_REMOVAL_NOTICE,
+      type: "elevator_pitch_removed",
+      id: pitch._id as mongoose.Types.ObjectId,
+    });
+  }
+
+  console.log(
+    `${expiredPlans.length} expired plans evaluated for elevator pitch cleanup.`
+  );
+};
+
+export const purgeExpiredJobApplications = async () => {
+  const cutoff = new Date(Date.now() - 30 * MILLIS_PER_DAY);
+
+  const staleJobs = await Job.find({
+    deactivatedAt: { $lte: cutoff },
+    $or: [{ status: "deactivate" }, { arcrivedJob: true }],
+  }).select("_id title");
+
+  let totalDeleted = 0;
+  for (const job of staleJobs) {
+    const result = await AppliedJob.deleteMany({ jobId: job._id });
+    totalDeleted += result.deletedCount ?? 0;
+  }
+
+  console.log(
+    `Purged ${totalDeleted} application(s) for ${staleJobs.length} deactivated job(s).`
+  );
 };
