@@ -1,165 +1,124 @@
-// src/controllers/subscriptionPlan.controller.ts
-
-import { Request, Response, NextFunction } from 'express'
+import { Request, Response } from 'express'
 import { SubscriptionPlan } from '../models/subscriptionPlan.model'
-import { ISubscriptionPlan } from '../interface/subscriptionPlan.interface'
+import catchAsync from '../utils/catchAsync'
+import sendResponse from '../utils/sendResponse'
+import httpStatus from 'http-status'
+import AppError from '../errors/AppError'
+import { paymentInfo } from '../models/paymentInfo.model'
+import { ElevatorPitch } from '../models/elevatorPitch.model'
 
-// Create a new subscription plan
-export const createSubscriptionPlan = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const {
-      title,
-      titleColor, // <-- added here
-      description,
-      price,
-      features,
-      for: forWhom,
-      valid,
-    } = req.body as Partial<ISubscriptionPlan>
+// CREATE
+export const createSubscriptionPlan = catchAsync(
+  async (req: Request, res: Response) => {
+    const { title, titleColor, description, price, features, for: planFor, valid } = req.body
+
+    if (!title || !description || !price || !planFor) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'All required fields must be provided'
+      )
+    }
 
     const plan = await SubscriptionPlan.create({
       title,
-      titleColor, // <-- saved here
       description,
+      titleColor,
       price,
       features,
-      for: forWhom,
-      valid,
+      for: planFor,
+      valid
     })
 
-    return res.status(201).json({
+    sendResponse(res, {
+      statusCode: httpStatus.CREATED,
       success: true,
+      message: 'Subscription plan created successfully',
       data: plan,
     })
-  } catch (error) {
-    next(error)
   }
-}
+)
 
-// Get all subscription plans
-export const getSubscriptionPlans = async (
-  _req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const plans = await SubscriptionPlan.find()
+// GET ALL
+export const getAllSubscriptionPlans = catchAsync(
+  async (req: Request, res: Response) => {
+    const plans = await SubscriptionPlan.find().sort({ price: 1 })
 
-    return res.status(200).json({
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
       success: true,
+      message: 'All subscription plans fetched successfully',
       data: plans,
     })
-  } catch (error) {
-    next(error)
   }
-}
+)
+// GET ALL
+export const getSingleSubscriptionPlans = catchAsync(
+  async (req: Request, res: Response) => {
+    const{id} = req.params
+    const plans = await SubscriptionPlan.findById(id)
 
-// Get a single subscription plan by id
-export const getSubscriptionPlanById = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'All subscription plans fetched successfully',
+      data: plans,
+    })
+  }
+)
+
+// UPDATE
+export const updateSubscriptionPlan = catchAsync(
+  async (req: Request, res: Response) => {
     const { id } = req.params
+    const updated = await SubscriptionPlan.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true,
+    })
 
-    const plan = await SubscriptionPlan.findById(id)
-
-    if (!plan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription plan not found',
-      })
+    if (!updated) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Subscription plan not found')
     }
 
-    return res.status(200).json({
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
       success: true,
-      data: plan,
+      message: 'Subscription plan updated successfully',
+      data: updated,
     })
-  } catch (error) {
-    next(error)
   }
-}
+)
 
-// Update subscription plan
-export const updateSubscriptionPlan = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
+// DELETE
+export const deleteSubscriptionPlan = catchAsync(
+  async (req: Request, res: Response) => {
     const { id } = req.params
-
-    const {
-      title,
-      titleColor, // <-- added here
-      description,
-      price,
-      features,
-      for: forWhom,
-      valid,
-    } = req.body as Partial<ISubscriptionPlan>
-
-    const updatedPlan = await SubscriptionPlan.findByIdAndUpdate(
-      id,
-      {
-        title,
-        titleColor, // <-- updated here
-        description,
-        price,
-        features,
-        for: forWhom,
-        valid,
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    )
-
-    if (!updatedPlan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription plan not found',
-      })
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: updatedPlan,
-    })
-  } catch (error) {
-    next(error)
-  }
-}
-
-// Delete subscription plan
-export const deleteSubscriptionPlan = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { id } = req.params
-
     const deleted = await SubscriptionPlan.findByIdAndDelete(id)
 
     if (!deleted) {
-      return res.status(404).json({
-        success: false,
-        message: 'Subscription plan not found',
-      })
+      throw new AppError(httpStatus.NOT_FOUND, 'Subscription plan not found')
     }
 
-    return res.status(200).json({
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
       success: true,
       message: 'Subscription plan deleted successfully',
+      data: null,
     })
-  } catch (error) {
-    next(error)
   }
-}
+)
+
+
+
+export const unSubscribePlan = catchAsync(async(req,res)=>{
+  const userId = req.user?._id
+
+  const deletePayment = await paymentInfo.deleteMany({userId})
+  const deleteElevatorPitch = await ElevatorPitch.deleteMany({userId})
+
+  sendResponse(res,{
+    statusCode: 200,
+    success:  true,
+    message: "You are Successfully unsubscribe this plan",
+    data: ""
+  })
+})
