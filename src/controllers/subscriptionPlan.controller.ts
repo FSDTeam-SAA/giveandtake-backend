@@ -1,123 +1,165 @@
-import { Request, Response } from 'express'
+// src/controllers/subscriptionPlan.controller.ts
+
+import { Request, Response, NextFunction } from 'express'
 import { SubscriptionPlan } from '../models/subscriptionPlan.model'
-import catchAsync from '../utils/catchAsync'
-import sendResponse from '../utils/sendResponse'
-import httpStatus from 'http-status'
-import AppError from '../errors/AppError'
-import { paymentInfo } from '../models/paymentInfo.model'
-import { ElevatorPitch } from '../models/elevatorPitch.model'
+import { ISubscriptionPlan } from '../interface/subscriptionPlan.interface'
 
-// CREATE
-export const createSubscriptionPlan = catchAsync(
-  async (req: Request, res: Response) => {
-    const { title, description, price, features, for: planFor, valid } = req.body
-
-    if (!title || !description || !price || !planFor) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'All required fields must be provided'
-      )
-    }
-
-    const plan = await SubscriptionPlan.create({
+// Create a new subscription plan
+export const createSubscriptionPlan = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
       title,
+      titleColor, // <-- added here
       description,
       price,
       features,
-      for: planFor,
-      valid
+      for: forWhom,
+      valid,
+    } = req.body as Partial<ISubscriptionPlan>
+
+    const plan = await SubscriptionPlan.create({
+      title,
+      titleColor, // <-- saved here
+      description,
+      price,
+      features,
+      for: forWhom,
+      valid,
     })
 
-    sendResponse(res, {
-      statusCode: httpStatus.CREATED,
+    return res.status(201).json({
       success: true,
-      message: 'Subscription plan created successfully',
       data: plan,
     })
+  } catch (error) {
+    next(error)
   }
-)
+}
 
-// GET ALL
-export const getAllSubscriptionPlans = catchAsync(
-  async (req: Request, res: Response) => {
-    const plans = await SubscriptionPlan.find().sort({ price: 1 })
+// Get all subscription plans
+export const getSubscriptionPlans = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const plans = await SubscriptionPlan.find()
 
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
+    return res.status(200).json({
       success: true,
-      message: 'All subscription plans fetched successfully',
       data: plans,
     })
+  } catch (error) {
+    next(error)
   }
-)
-// GET ALL
-export const getSingleSubscriptionPlans = catchAsync(
-  async (req: Request, res: Response) => {
-    const{id} = req.params
-    const plans = await SubscriptionPlan.findById(id)
+}
 
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
-      success: true,
-      message: 'All subscription plans fetched successfully',
-      data: plans,
-    })
-  }
-)
-
-// UPDATE
-export const updateSubscriptionPlan = catchAsync(
-  async (req: Request, res: Response) => {
+// Get a single subscription plan by id
+export const getSubscriptionPlanById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
     const { id } = req.params
-    const updated = await SubscriptionPlan.findByIdAndUpdate(id, req.body, {
-      new: true,
-      runValidators: true,
-    })
 
-    if (!updated) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Subscription plan not found')
+    const plan = await SubscriptionPlan.findById(id)
+
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subscription plan not found',
+      })
     }
 
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
+    return res.status(200).json({
       success: true,
-      message: 'Subscription plan updated successfully',
-      data: updated,
+      data: plan,
     })
+  } catch (error) {
+    next(error)
   }
-)
+}
 
-// DELETE
-export const deleteSubscriptionPlan = catchAsync(
-  async (req: Request, res: Response) => {
+// Update subscription plan
+export const updateSubscriptionPlan = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
     const { id } = req.params
+
+    const {
+      title,
+      titleColor, // <-- added here
+      description,
+      price,
+      features,
+      for: forWhom,
+      valid,
+    } = req.body as Partial<ISubscriptionPlan>
+
+    const updatedPlan = await SubscriptionPlan.findByIdAndUpdate(
+      id,
+      {
+        title,
+        titleColor, // <-- updated here
+        description,
+        price,
+        features,
+        for: forWhom,
+        valid,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    )
+
+    if (!updatedPlan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Subscription plan not found',
+      })
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: updatedPlan,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Delete subscription plan
+export const deleteSubscriptionPlan = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params
+
     const deleted = await SubscriptionPlan.findByIdAndDelete(id)
 
     if (!deleted) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Subscription plan not found')
+      return res.status(404).json({
+        success: false,
+        message: 'Subscription plan not found',
+      })
     }
 
-    sendResponse(res, {
-      statusCode: httpStatus.OK,
+    return res.status(200).json({
       success: true,
       message: 'Subscription plan deleted successfully',
-      data: null,
     })
+  } catch (error) {
+    next(error)
   }
-)
-
-
-
-export const unSubscribePlan = catchAsync(async(req,res)=>{
-  const userId = req.user?._id
-
-  const deletePayment = await paymentInfo.deleteMany({userId})
-  const deleteElevatorPitch = await ElevatorPitch.deleteMany({userId})
-
-  sendResponse(res,{
-    statusCode: 200,
-    success:  true,
-    message: "You are Successfully unsubscribe this plan",
-    data: ""
-  })
-})
+}
