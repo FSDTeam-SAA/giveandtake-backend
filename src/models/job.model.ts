@@ -75,6 +75,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
       enum: ["New Entry", "Experienced Professional", "Career Returner"],
     },
     website_Url: { type: String },
+    expiryDate: { type: Date },
     billingPlanType: {
       type: String,
       enum: ['payg', 'subscription', 'free'],
