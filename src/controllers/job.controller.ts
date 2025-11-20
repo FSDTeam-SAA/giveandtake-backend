@@ -6,7 +6,10 @@ import { Job } from "../models/job.model";
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
 import sendResponse from "../utils/sendResponse";
 import { CreateResume } from "../models/createResume.model";
-import { checkIfUserCanPostJob } from "../helper/canPostJob";
+import {
+  assertJobPostingAllowance,
+  evaluateJobPostingAllowance,
+} from "../helper/canPostJob";
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
@@ -264,6 +267,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
+  await assertJobPostingAllowance(new mongoose.Types.ObjectId(userId));
+
   const billingContext = await determineJobBillingContext(
     new mongoose.Types.ObjectId(userId),
     publishDateValue ?? new Date()
@@ -307,6 +312,10 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   await attachEmbeddingBeforeSave(job);
   await job.save();
+  const refreshedPostingAllowance = await evaluateJobPostingAllowance(
+    new mongoose.Types.ObjectId(userId),
+    { suppressErrors: true }
+  );
 
   // 🔹 Find followers
   let followers: any[] = [];
@@ -343,9 +352,48 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.CREATED,
     success: true,
     message: "Job created successfully",
-    data: job,
+    data: { job, postingUsage: refreshedPostingAllowance },
   });
 });
+
+export const getJobPostingUsage = catchAsync(
+  async (req: Request, res: Response) => {
+    const requesterId = req.user?._id;
+    const providedUserId =
+      typeof req.query.userId === "string" && req.query.userId.trim()
+        ? req.query.userId.trim()
+        : undefined;
+
+    const targetUserId =
+      providedUserId ?? (requesterId ? requesterId.toString() : null);
+
+    if (!targetUserId) {
+      throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
+    }
+
+    const isAdmin =
+      req.user?.role === "admin" || req.user?.role === "super-admin";
+
+    if (providedUserId && requesterId?.toString() !== providedUserId && !isAdmin) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "Only admins can view job posting usage for other users."
+      );
+    }
+
+    const usage = await evaluateJobPostingAllowance(
+      new mongoose.Types.ObjectId(targetUserId),
+      { suppressErrors: true }
+    );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Job posting usage fetched successfully",
+      data: usage,
+    });
+  }
+);
 
 export const editJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
