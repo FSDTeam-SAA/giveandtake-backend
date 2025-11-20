@@ -13,9 +13,9 @@ import chatbotService from '../services/chatbot.service'
  * CREATE BLOG *
  ***************/
 export const createBlog = catchAsync(async (req: Request, res: Response) => {
-  const { title, description, userId } = req.body
+  const { title, description, userId, authorName } = req.body
 
-  if (!title || !description || !userId) {
+  if (!title || !description || !userId || !authorName) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Missing required fields')
   }
 
@@ -46,6 +46,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
     title,
     description,
     userId,
+    authorName,
     image: imageUrl,
     imagePublicId,
   })
@@ -59,17 +60,19 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
     data: blog,
   })
 })
+
 /*********************************************
  * GET ALL BLOGS (OPTIONAL FILTER BY USERID) *
  *********************************************/
 export const getAllBlogs = catchAsync(async (req: Request, res: Response) => {
-
   const { page, limit, skip } = getPaginationParams(req.query)
-  const blogs = await Blog.find().sort({ createdAt: -1 })
+
+  const blogs = await Blog.find()
+    .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
 
-      const total = await Blog.countDocuments({  })
+  const total = await Blog.countDocuments({})
 
   const meta = buildMetaPagination(total, page, limit)
 
@@ -77,7 +80,7 @@ export const getAllBlogs = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Blogs fetched successfully',
-    data: {blogs,meta},
+    data: { blogs, meta },
   })
 })
 
@@ -105,7 +108,7 @@ export const getSingleBlog = catchAsync(async (req: Request, res: Response) => {
  ***************/
 export const updateBlog = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
-  const { title, description } = req.body
+  const { title, description, authorName } = req.body
 
   const blog = await Blog.findById(id)
   if (!blog) {
@@ -142,6 +145,7 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
   // Update other fields if provided
   if (title) blog.title = title
   if (description) blog.description = description
+  if (authorName) blog.authorName = authorName
 
   await blog.save()
 

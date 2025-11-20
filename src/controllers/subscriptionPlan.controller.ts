@@ -10,7 +10,7 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 // CREATE
 export const createSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
-    const { title, description, price, features, for: planFor, valid } = req.body
+    const { title, titleColor, description, price, features, for: planFor, valid } = req.body
 
     const normalizeNumericField = (value: any, field: string) => {
       if (value === undefined || value === null || value === '') return undefined
@@ -54,6 +54,7 @@ export const createSubscriptionPlan = catchAsync(
     const plan = await SubscriptionPlan.create({
       title,
       description,
+      titleColor,
       price,
       features,
       for: planFor,

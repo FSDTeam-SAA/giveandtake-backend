@@ -8,6 +8,7 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
   new Schema<ISubscriptionPlan>(
     {
       title: { type: String, required: true },
+      titleColor: {type: String, required: false}, 
       description: { type: String, required: true },
       price: { type: Number, required: true },
       features: [{ type: String }],

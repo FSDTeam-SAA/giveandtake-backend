@@ -6,6 +6,7 @@ export interface IBlog extends Document {
   image?: string
   userId: Types.ObjectId
   imagePublicId: string
+  authorName: string
 }
 
 export type BlogModel = Model<IBlog>

@@ -4,6 +4,7 @@ export type SubscriptionTarget = 'candidate' | 'recruiter' | 'company'
 
 export interface ISubscriptionPlan extends Document {
   title: string
+  titleColor?: string
   description: string
   price: number
   features: string[]
