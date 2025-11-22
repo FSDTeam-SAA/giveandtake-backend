@@ -130,6 +130,8 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
         ? "yearly"
         : "payg";
 
+    const isYearlyPlan = derivedDuration === "yearly";
+
     const newPayment = await paymentInfo.create({
       userId,
       planId,
@@ -184,6 +186,20 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
                 Thanks for choosing to upgrade your plan with <strong>Elevator Video PitchÂ©</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
               </p>
+
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                As you have paid for a subscription plan, you are now entitled to upload a 60-second elevator video pitch to your profile.
+              </p>
+              ${
+                isYearlyPlan
+                  ? `<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                Because you selected our yearly plan, you are also entitled to a complimentary half-hour career-mentoring call with our partner, <strong>The Ladder Back Down&reg;</strong>. Please book your appointment at <a href="https://www.ladderbackdown.com/mentoring" style="color:#2B7FD0;text-decoration:none;">www.ladderbackdown.com/mentoring</a>. During this session you will receive live mentoring plus feedback on your Elevator Video Pitch.
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                After booking, look out for a confirmation email from <a href="mailto:info@ladderbackdown.com" style="color:#2B7FD0;text-decoration:none;">info@ladderbackdown.com</a> that contains the UK phone/WhatsApp number to call at your scheduled time. Please check your inbox and any other folders to ensure you receive this acknowledgement.
+              </p>`
+                  : ""
+              }
 
               <!-- Receipt card -->
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e6eef6;border-radius:6px;">
@@ -358,7 +374,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     if (planValidity === "monthly") {
       throw new AppError(
         400,
-        "Monthly Candidates’ subscriptions are nonrefundable as the admin fees will exceed the refund fees."
+        "Monthly Candidatesï¿½ subscriptions are nonrefundable as the admin fees will exceed the refund fees."
       );
     }
 
@@ -368,7 +384,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
       if (now > cutoff) {
         throw new AppError(
           400,
-          "Yearly Candidates’ subscriptions are non-refundable after 30 days."
+          "Yearly Candidatesï¿½ subscriptions are non-refundable after 30 days."
         );
       }
 
@@ -380,7 +396,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
       if (appliedJobExists) {
         throw new AppError(
           400,
-          "Yearly Candidates’ subscriptions are non-refundable once a job application has been made."
+          "Yearly Candidatesï¿½ subscriptions are non-refundable once a job application has been made."
         );
       }
     } else {
@@ -421,7 +437,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
       const paygRate = await resolvePaygRate(audience);
       deductions = formatCurrency(jobPostsDuringWindow * paygRate);
       notes.push(
-        `Deducted ${jobPostsDuringWindow} × PAYG rate ($${paygRate.toFixed(
+        `Deducted ${jobPostsDuringWindow} ï¿½ PAYG rate ($${paygRate.toFixed(
           2
         )}) for job posts made during the refund window.`
       );
