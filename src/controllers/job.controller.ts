@@ -191,6 +191,21 @@ const coerceDate = (value: unknown): Date | undefined => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+type DocumentWithTimestamps = {
+  createdAt?: unknown;
+  get?: (path: string, type?: unknown) => unknown;
+};
+
+const getDocumentCreatedAt = (
+  doc: DocumentWithTimestamps | null | undefined
+): Date | undefined => {
+  if (!doc) return undefined;
+  const raw =
+    doc.createdAt ??
+    (typeof doc.get === "function" ? doc.get("createdAt") : undefined);
+  return coerceDate(raw);
+};
+
 type ExpiryInputs = {
   expirationDate?: unknown;
   expiryDate?: unknown;
@@ -328,7 +343,6 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     benefits,
     vacancy,
     experience,
-    deadline,
     status,
     jobCategoryId,
     compensation,
@@ -503,10 +517,11 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   ensurePaygWindowMetadata(job);
+  const jobCreatedAt = getDocumentCreatedAt(job);
   const incomingPublishDate = coerceDate(req.body?.publishDate);
   const incomingDeadline = coerceDate(req.body?.deadline);
   const derivedEditExpiry = deriveExpiryDate(
-    incomingPublishDate ?? job.publishDate ?? job.createdAt ?? new Date(),
+    incomingPublishDate ?? job.publishDate ?? jobCreatedAt ?? new Date(),
     {
       expirationDate: req.body?.expirationDate,
       expiryDate: req.body?.expiryDate,
@@ -1020,8 +1035,9 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   const incomingPublishDate = coerceDate(req.body?.publishDate);
+  const jobCreatedAt = getDocumentCreatedAt(job);
   const derivedAdminExpiry = deriveExpiryDate(
-    incomingPublishDate ?? job.publishDate ?? job.createdAt ?? new Date(),
+    incomingPublishDate ?? job.publishDate ?? jobCreatedAt ?? new Date(),
     {
       expirationDate: req.body?.expirationDate,
       expiryDate: req.body?.expiryDate,

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GiveAndTake � Change Story</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050912;
+      --panel: #0c1221;
+      --panel-2: #0c1328;
+      --card: #0f172a;
+      --accent: #7c3aed;
+      --accent-2: #22d3ee;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --glow: 0 15px 60px rgba(124, 58, 237, 0.25);
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.08), transparent 28%),
+        radial-gradient(circle at 80% 0%, rgba(124, 58, 237, 0.12), transparent 32%),
+        radial-gradient(circle at 20% 70%, rgba(34, 197, 94, 0.06), transparent 32%),
+        var(--bg);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .page { max-width: 1240px; margin: 0 auto; padding: 48px 20px 120px; }
+    header { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; margin-bottom: 32px; animation: floatUp 420ms ease both; }
+    h1 { margin: 0; font-size: clamp(30px, 4vw, 42px); letter-spacing: -0.4px; }
+    .chip { padding: 10px 14px; border-radius: 999px; background: linear-gradient(120deg, rgba(34, 211, 238, 0.12), rgba(124, 58, 237, 0.12)); border: 1px solid rgba(255, 255, 255, 0.08); display: inline-flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; box-shadow: var(--shadow); }
+    .badge { padding: 8px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-weight: 600; letter-spacing: 0.3px; color: var(--text); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { position: relative; background: linear-gradient(160deg, var(--panel), var(--panel-2)); border-radius: 18px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: var(--shadow); overflow: hidden; transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease; isolation: isolate; animation: floatUp 420ms ease both; }
+    .card::after { content: ''; position: absolute; inset: -40% -40% auto auto; height: 70%; background: radial-gradient(circle, rgba(124, 58, 237, 0.16), transparent 60%); transform: scale(0); transition: transform 300ms ease; z-index: 0; }
+    .card:hover { transform: translateY(-4px); border-color: rgba(124, 58, 237, 0.35); box-shadow: var(--glow); }
+    .card:hover::after { transform: scale(1); }
+    .card h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: -0.2px; position: relative; z-index: 1; }
+    .card p, .card li { color: var(--muted); line-height: 1.6; margin: 0 0 8px; position: relative; z-index: 1; }
+    .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    .list li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+    .dot { width: 8px; height: 8px; margin-top: 8px; border-radius: 50%; background: linear-gradient(120deg, var(--accent), var(--accent-2)); box-shadow: 0 0 0 6px rgba(124, 58, 237, 0.08); }
+    .section { margin: 24px 0; padding: 18px 20px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: linear-gradient(140deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.92)); box-shadow: var(--shadow); animation: floatUp 420ms ease both; }
+    .section h3 { margin: 0 0 10px; font-size: 16px; letter-spacing: -0.1px; }
+    .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .mini { padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); min-width: 210px; box-shadow: var(--shadow); }
+    .mini strong { display: block; color: var(--text); margin-bottom: 4px; font-size: 14px; }
+    .mini span { color: var(--muted); font-size: 13px; }
+    .hero { position: relative; padding: 28px 24px; border-radius: 18px; background: linear-gradient(120deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.12)); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 22px; animation: floatUp 420ms ease both; }
+    .hero::before, .hero::after { content: ''; position: absolute; border-radius: 50%; filter: blur(56px); opacity: 0.45; z-index: 0; }
+    .hero::before { width: 240px; height: 240px; background: var(--accent); top: -60px; left: -40px; }
+    .hero::after { width: 280px; height: 280px; background: var(--accent-2); bottom: -120px; right: -30px; }
+    .hero-content { position: relative; z-index: 1; display: grid; gap: 12px; }
+    .hero h2 { margin: 0; font-size: 22px; letter-spacing: -0.3px; }
+    .hero p { margin: 0; color: var(--text); max-width: 820px; line-height: 1.7; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 14px; }
+    .control-card { background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+    .toggle { position: relative; width: 80px; height: 36px; border-radius: 999px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); cursor: pointer; overflow: hidden; transition: background 200ms ease, border-color 200ms ease; }
+    .toggle .thumb { position: absolute; top: 4px; left: 4px; width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(120deg, var(--accent), var(--accent-2)); box-shadow: 0 8px 20px rgba(0,0,0,0.35); transition: transform 220ms ease; }
+    .toggle.on { background: rgba(124,58,237,0.18); border-color: rgba(124,58,237,0.36); }
+    .toggle.on .thumb { transform: translateX(44px); }
+    .simulator { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 16px; }
+    .progress { height: 10px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); }
+    .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 400ms ease; }
+    .people { position: relative; height: 220px; overflow: hidden; border-radius: 16px; background: radial-gradient(circle at 30% 30%, rgba(124, 58, 237, 0.18), transparent 40%), radial-gradient(circle at 70% 70%, rgba(34, 211, 238, 0.18), transparent 45%), rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: var(--shadow); }
+    .figure { position: absolute; width: 80px; height: 180px; border-radius: 40px; background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 18px 40px rgba(0,0,0,0.35); animation: float 5s ease-in-out infinite; }
+    .figure::before { content: ''; position: absolute; top: -26px; left: 16px; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(120deg, rgba(124, 58, 237, 0.85), rgba(34, 211, 238, 0.85)); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+    .figure.one { left: 12%; animation-delay: 0s; }
+    .figure.two { left: 42%; animation-delay: 0.8s; height: 160px; }
+    .figure.three { left: 68%; animation-delay: 1.2s; height: 190px; }
+    @keyframes float { 0% { transform: translateY(0px) scale(1); } 50% { transform: translateY(-10px) scale(1.02); } 100% { transform: translateY(0px) scale(1); } }
+    @keyframes floatUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <div class="chip"><span>GiveAndTake Backend</span><span>Interactive Report</span></div>
+        <h1>Paywall, Limits, Dashboards, and PAYG Edits � Visual Story</h1>
+      </div>
+      <div class="badge">Live Preview</div>
+    </header>
+
+    <div class="hero">
+      <div class="hero-content">
+        <h2>Experience the safeguards in motion</h2>
+        <p>Toggle the paywall, swap plans, and watch how job posting limits, PAYG rules, and dashboard usage cards respond. Cards animate, bars fill, and figures float to show the journey.</p>
+        <div class="controls">
+          <div class="control-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div>
+                <div style="font-weight:700;">Paywall Toggle (.env)</div>
+                <div style="color:var(--muted);font-size:13px;">JOB_POST_PAYWALL_ENABLED</div>
+              </div>
+              <div class="toggle" id="paywallToggle">
+                <div class="thumb"></div>
+              </div>
+            </div>
+            <p style="margin-top:10px;">Flip the switch to simulate turning the environment variable on/off. When off, posting is allowed even without a plan (for testing).</p>
+          </div>
+          <div class="control-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <div>
+                <div style="font-weight:700;">Select Plan</div>
+                <div style="color:var(--muted);font-size:13px;">Company / Recruiter / PAYG</div>
+              </div>
+              <select id="planSelect" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.16);background:rgba(0,0,0,0.2);color:var(--text);">
+                <option value="basic">Basic</option>
+                <option value="bronze">Premium Bronze</option>
+                <option value="silver">Premium Silver</option>
+                <option value="gold">Premium Gold</option>
+                <option value="platinum">Premium Platinum</option>
+                <option value="payg">PAYG</option>
+                <option value="none">No Plan</option>
+              </select>
+            </div>
+            <p style="margin-top:10px;">Monthly caps are annual/12 unless overridden. PAYG remains single-use within 30 days and publish date is locked after creation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card" style="grid-column: span 2;">
+        <h2>Interactive Posting Simulator</h2>
+        <p>Watch the quota bar and messaging react as you change plans or flip the paywall.</p>
+        <div class="simulator">
+          <div class="section" style="min-height:180px;">
+            <h3>Quota</h3>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div class="mini"><strong>Monthly Limit</strong><span id="monthlyLimit">�</span></div>
+              <div class="mini"><strong>Annual Limit</strong><span id="annualLimit">�</span></div>
+              <div class="mini"><strong>Remaining This Month</strong><span id="monthlyRemaining">�</span></div>
+            </div>
+            <div style="margin-top:12px;">
+              <div class="progress"><div class="progress-bar" id="quotaBar"></div></div>
+              <div style="display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-top:6px;">
+                <span id="quotaLabel">Awaiting selection�</span>
+                <span id="quotaPercent">0%</span>
+              </div>
+            </div>
+          </div>
+          <div class="section">
+            <h3>Attempt a Job Post</h3>
+            <p id="postMessage" style="margin-bottom:12px;">Choose a plan and click post.</p>
+            <button id="postButton" style="padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:linear-gradient(120deg,var(--accent),var(--accent-2));color:var(--text);font-weight:700;cursor:pointer;box-shadow:var(--shadow);">Post Job</button>
+          </div>
+          <div class="section">
+            <h3>PAYG Safety</h3>
+            <p id="paygMessage">PAYG: one job within 30 days; editing publish date is blocked; edits beyond window trigger a notification.</p>
+            <div class="progress" style="margin-top:10px;"><div class="progress-bar" id="paygBar"></div></div>
+            <div style="color:var(--muted);font-size:13px;margin-top:6px;">Window visual: 0�30 days since publish.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Code Touchpoints</h2>
+        <ul class="list">
+          <li><span class="dot"></span><span><code>src/helper/canPostJob.ts</code> � allowance engine, plan expiry, monthly/annual caps, paywall toggle.</span></li>
+          <li><span class="dot"></span><span><code>src/controllers/job.controller.ts</code> � create/edit enforce allowance; PAYG publish date locked; usage endpoint.</span></li>
+          <li><span class="dot"></span><span><code>src/routes/job.route.ts</code> � <code>/jobs/posting/usage</code> for dashboards.</span></li>
+          <li><span class="dot"></span><span><code>admin dashboard</code> � plan max jobs/year+month visible in list/details, job posts totals.</span></li>
+          <li><span class="dot"></span><span><code>company manage jobs</code> � usage cards (monthly/yearly remaining, plan label).</span></li>
+          <li><span class="dot"></span><span><code>recruiter dashboard</code> � usage cards with counts, totals.</span></li>
+          <li><span class="dot"></span><span><code>account page</code> � company/recruiter can see remaining/month/year in profile.</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Floating Team Animation</h2>
+        <p>Three abstract figures represent Company, Recruiter, and Candidate floating through the safeguarded journey.</p>
+        <div class="people">
+          <div class="figure one"></div>
+          <div class="figure two"></div>
+          <div class="figure three"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Job Posting Flow</h3>
+      <ul class="list">
+        <li><span class="dot"></span><span>Paywall ON + No Plan ? blocked with message: purchase subscription or PAYG.</span></li>
+        <li><span class="dot"></span><span>Monthly plan ? monthly cap = ceil(annual/12) unless overridden; progress tracks usage.</span></li>
+        <li><span class="dot"></span><span>Annual cap enforced to stop front-loading.</span></li>
+        <li><span class="dot"></span><span>PAYG ? single posting within 30 days; publish date cannot be edited after creation; edits beyond window blocked + notification.</span></li>
+        <li><span class="dot"></span><span>Paywall OFF (env) ? bypass limits for testing/staging.</span></li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h3>Dashboards & Visibility</h3>
+      <ul class="list">
+        <li><span class="dot"></span><span>Account page (company/recruiter): cards show monthly/yearly used/remaining and plan label.</span></li>
+        <li><span class="dot"></span><span>Recruiter dashboard: header cards show plan, monthly/yearly posts, remaining, total jobs.</span></li>
+        <li><span class="dot"></span><span>Company manage-jobs: cards show plan, monthly/yearly posts/remaining, total jobs.</span></li>
+        <li><span class="dot"></span><span>Admin plan list/details: columns for max jobs per year/month; job posts list shows totals/approved/pending counts.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const paywallToggle = document.getElementById('paywallToggle');
+    const planSelect = document.getElementById('planSelect');
+    const monthlyLimitEl = document.getElementById('monthlyLimit');
+    const annualLimitEl = document.getElementById('annualLimit');
+    const monthlyRemainingEl = document.getElementById('monthlyRemaining');
+    const quotaBar = document.getElementById('quotaBar');
+    const quotaLabel = document.getElementById('quotaLabel');
+    const quotaPercent = document.getElementById('quotaPercent');
+    const postMessage = document.getElementById('postMessage');
+    const paygBar = document.getElementById('paygBar');
+
+    const plans = {
+      basic: { name: 'Basic', annual: 24 },
+      bronze: { name: 'Premium Bronze', annual: 36 },
+      silver: { name: 'Premium Silver', annual: 48 },
+      gold: { name: 'Premium Gold', annual: 60 },
+      platinum: { name: 'Premium Platinum', annual: 180 },
+      payg: { name: 'PAYG', annual: null },
+      none: { name: 'No Plan', annual: null },
+    };
+
+    const state = {
+      paywall: true,
+      plan: 'basic',
+      monthlyUsed: 0,
+      annualUsed: 0,
+      paygDay: 6,
+    };
+
+    const updateToggleUI = () => {
+      paywallToggle.classList.toggle('on', state.paywall);
+    };
+
+    const updateQuotaUI = () => {
+      const plan = plans[state.plan];
+      if (!plan) return;
+
+      if (state.plan === 'payg') {
+        monthlyLimitEl.textContent = 'PAYG (single post)';
+        annualLimitEl.textContent = 'N/A';
+        monthlyRemainingEl.textContent = '1 if within 30 days';
+        quotaBar.style.width = '0%';
+        quotaLabel.textContent = 'PAYG does not track multi-post quotas.';
+        quotaPercent.textContent = 'single';
+      } else if (state.plan === 'none') {
+        monthlyLimitEl.textContent = state.paywall ? 'Blocked' : 'Dev Bypass';
+        annualLimitEl.textContent = state.paywall ? 'Blocked' : 'Dev Bypass';
+        monthlyRemainingEl.textContent = state.paywall ? '0 (blocked)' : 'Unlimited (dev)';
+        quotaBar.style.width = state.paywall ? '100%' : '0%';
+        quotaLabel.textContent = state.paywall ? 'Paywall blocks posting without a plan.' : 'Paywall off: bypass limits.';
+        quotaPercent.textContent = state.paywall ? '100%' : '0%';
+      } else {
+        const annual = plan.annual;
+        const monthly = Math.max(1, Math.ceil(annual / 12));
+        const monthlyRemaining = Math.max(monthly - state.monthlyUsed, 0);
+        const usedPct = Math.min(100, Math.round((state.monthlyUsed / monthly) * 100));
+
+        monthlyLimitEl.textContent = `${monthly} posts / month`;
+        annualLimitEl.textContent = `${annual} posts / year`;
+        monthlyRemainingEl.textContent = `${monthlyRemaining} left this month`;
+        quotaBar.style.width = `${usedPct}%`;
+        quotaLabel.textContent = `${state.monthlyUsed} used this month; annual used ${state.annualUsed}/${annual}`;
+        quotaPercent.textContent = `${usedPct}%`;
+      }
+
+      const paygPct = Math.min(100, Math.round((state.paygDay / 30) * 100));
+      paygBar.style.width = `${paygPct}%`;
+    };
+
+    const attemptPost = () => {
+      const plan = plans[state.plan];
+      if (!plan) return;
+
+      if (!state.paywall && state.plan === 'none') {
+        postMessage.textContent = 'Paywall OFF: Posting allowed (dev bypass).';
+        state.monthlyUsed++;
+        state.annualUsed++;
+        updateQuotaUI();
+        return;
+      }
+
+      if (state.plan === 'none') {
+        postMessage.textContent = 'Blocked: Paywall on and no plan present.';
+        return;
+      }
+
+      if (state.plan === 'payg') {
+        if (state.paygDay > 30) {
+          postMessage.textContent = 'PAYG expired: new voucher required.';
+          return;
+        }
+        if (state.annualUsed >= 1) {
+          postMessage.textContent = 'PAYG already consumed for this window.';
+          return;
+        }
+        state.annualUsed += 1;
+        postMessage.textContent = 'PAYG post accepted. Publish date locked; edits allowed until day 30.';
+        updateQuotaUI();
+        return;
+      }
+
+      const annual = plan.annual;
+      const monthly = Math.max(1, Math.ceil(annual / 12));
+
+      if (state.annualUsed >= annual) {
+        postMessage.textContent = 'Annual limit reached. Wait for renewal or upgrade.';
+        return;
+      }
+
+      if (state.monthlyUsed >= monthly) {
+        postMessage.textContent = 'Monthly cap reached. Next cycle required.';
+        return;
+      }
+
+      state.monthlyUsed++;
+      state.annualUsed++;
+      postMessage.textContent = 'Job posted successfully under this subscription.';
+      updateQuotaUI();
+    };
+
+    paywallToggle.addEventListener('click', () => {
+      state.paywall = !state.paywall;
+      updateToggleUI();
+      updateQuotaUI();
+    });
+
+    planSelect.addEventListener('change', (e) => {
+      const next = e.target.value;
+      state.plan = next;
+      state.monthlyUsed = 0;
+      state.annualUsed = 0;
+      postMessage.textContent = 'Plan switched. Quota refreshed for demo.';
+      updateQuotaUI();
+    });
+
+    document.getElementById('postButton').addEventListener('click', attemptPost);
+
+    updateToggleUI();
+    updateQuotaUI();
+  </script>
+</body>
+</html>
