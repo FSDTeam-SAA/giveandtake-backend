@@ -16,7 +16,8 @@ This application now performs a number of automated clean-up and compliance jobs
 
 ## PAYG Advert Restrictions
 
-- Jobs posted under a PAYG plan capture their original publication date and refuse further edits once the 30‑day window has passed. Recruiters/companies attempting to edit or reopen such adverts receive the notification “Your PAYG payment has expired, please subscribe or purchase a new PAYG voucher,” and the API returns a `403` with the same message.
+- Jobs posted under a PAYG plan capture their original publication date and refuse further edits once the 30‑day window has passed. Recruiters/companies attempting to edit or reopen such adverts receive the notification “Your PAYG payment has expired, plea
+se subscribe or purchase a new PAYG voucher,” and the API returns a `403` with the same message.
 - Deadline or publish-date updates are blocked if they would extend a PAYG advert past the original 30-day allowance.
 
 ## Email Change Hygiene

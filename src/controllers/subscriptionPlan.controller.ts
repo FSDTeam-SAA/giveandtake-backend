@@ -12,12 +12,44 @@ export const createSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
     const { title, titleColor, description, price, features, for: planFor, valid } = req.body
 
+    const normalizeNumericField = (value: any, field: string) => {
+      if (value === undefined || value === null || value === '') return undefined
+      const asNumber = Number(value)
+      if (Number.isNaN(asNumber) || asNumber < 0) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          `${field} must be a positive number`
+        )
+      }
+      return asNumber
+    }
+
+    const annualLimit = normalizeNumericField(req.body?.maxJobPostsPerYear, 'maxJobPostsPerYear')
+    const monthlyLimit = normalizeNumericField(req.body?.maxJobPostsPerMonth, 'maxJobPostsPerMonth')
+
     if (!title || !description || !price || !planFor) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'All required fields must be provided'
       )
     }
+
+    const isJobPostingPlan = ['company', 'recruiter'].includes(
+      (planFor as string)?.toLowerCase()
+    )
+
+    if (isJobPostingPlan && annualLimit === undefined) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'maxJobPostsPerYear is required for recruiter and company plans'
+      )
+    }
+
+    const resolvedMonthlyLimit =
+      monthlyLimit ??
+      (annualLimit !== undefined
+        ? Math.max(1, Math.ceil(annualLimit / 12))
+        : undefined)
 
     const plan = await SubscriptionPlan.create({
       title,
@@ -26,7 +58,9 @@ export const createSubscriptionPlan = catchAsync(
       price,
       features,
       for: planFor,
-      valid
+      valid,
+      maxJobPostsPerYear: annualLimit,
+      maxJobPostsPerMonth: resolvedMonthlyLimit,
     })
 
     sendResponse(res, {
@@ -70,7 +104,41 @@ export const getSingleSubscriptionPlans = catchAsync(
 export const updateSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
-    const updated = await SubscriptionPlan.findByIdAndUpdate(id, req.body, {
+
+    const normalizeNumericField = (value: any) => {
+      if (value === undefined || value === null || value === '') return undefined
+      const asNumber = Number(value)
+      if (Number.isNaN(asNumber) || asNumber < 0) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          'maxJobPostsPerYear / maxJobPostsPerMonth must be positive numbers'
+        )
+      }
+      return asNumber
+    }
+
+    const nextAnnualLimit = normalizeNumericField(req.body?.maxJobPostsPerYear)
+    const nextMonthlyLimit = normalizeNumericField(req.body?.maxJobPostsPerMonth)
+
+    const partialUpdate: Record<string, any> = {
+      ...req.body,
+    }
+
+    if (nextAnnualLimit !== undefined) {
+      partialUpdate.maxJobPostsPerYear = nextAnnualLimit
+      if (nextMonthlyLimit === undefined) {
+        partialUpdate.maxJobPostsPerMonth = Math.max(
+          1,
+          Math.ceil(nextAnnualLimit / 12)
+        )
+      }
+    }
+
+    if (nextMonthlyLimit !== undefined) {
+      partialUpdate.maxJobPostsPerMonth = nextMonthlyLimit
+    }
+
+    const updated = await SubscriptionPlan.findByIdAndUpdate(id, partialUpdate, {
       new: true,
       runValidators: true,
     })

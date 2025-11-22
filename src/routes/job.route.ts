@@ -15,6 +15,7 @@ import {
   getRicruitercompanyJobs3,
   toggleArchiveJob,
   editJob,
+  getJobPostingUsage,
 } from "../controllers/job.controller";
 import { getJobFitInsight } from "../controllers/jobFit.controller";
 import { protect } from "../middlewares/auth.middleware";
@@ -22,6 +23,7 @@ import { protect } from "../middlewares/auth.middleware";
 const router = express.Router();
 
 router.route("/jobs").post(createJob).get(getAllJobs);
+router.get("/jobs/posting/usage", protect, getJobPostingUsage);
 router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
 
 /************************

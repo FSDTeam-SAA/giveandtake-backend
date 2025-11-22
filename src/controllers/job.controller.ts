@@ -6,7 +6,10 @@ import { Job } from "../models/job.model";
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
 import sendResponse from "../utils/sendResponse";
 import { CreateResume } from "../models/createResume.model";
-import { checkIfUserCanPostJob } from "../helper/canPostJob";
+import {
+  assertJobPostingAllowance,
+  evaluateJobPostingAllowance,
+} from "../helper/canPostJob";
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
@@ -188,6 +191,36 @@ const coerceDate = (value: unknown): Date | undefined => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+type ExpiryInputs = {
+  expirationDate?: unknown;
+  expiryDate?: unknown;
+  expiaryDate?: unknown; // tolerate misspelling from clients
+  deadline?: unknown;
+};
+
+const deriveExpiryDate = (
+  publishDate: Date | undefined,
+  opts: ExpiryInputs
+): Date | undefined => {
+  const fromExplicit =
+    coerceDate((opts as any)?.expiryDate ?? (opts as any)?.expiaryDate) ??
+    coerceDate(opts.deadline); // legacy payload support
+
+  if (fromExplicit) return fromExplicit;
+
+  const daysRaw = opts.expirationDate;
+  if (daysRaw !== undefined && daysRaw !== null && daysRaw !== "") {
+    const days = Number(daysRaw);
+    if (!Number.isNaN(days) && days > 0) {
+      const base = publishDate ?? new Date();
+      const copy = new Date(base);
+      copy.setDate(copy.getDate() + days);
+      return copy;
+    }
+  }
+  return undefined;
+};
+
 /*******************
  * // CREATE A JOB *
  *******************/
@@ -219,6 +252,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     location_Type,
     name,
     role,
+    expirationDate,
+    expiryDate,
   } = req.body;
   const publishDateValue = coerceDate(publishDate);
 
@@ -264,10 +299,19 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
+  await assertJobPostingAllowance(new mongoose.Types.ObjectId(userId));
+
   const billingContext = await determineJobBillingContext(
     new mongoose.Types.ObjectId(userId),
     publishDateValue ?? new Date()
   );
+
+  const derivedExpiryDate = deriveExpiryDate(publishDateValue ?? new Date(), {
+    expirationDate,
+    expiryDate,
+    expiaryDate: (req.body as any)?.expiaryDate,
+    deadline,
+  });
 
   const job = new Job({
     userId,
@@ -299,6 +343,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     career_Stage,
     name,
     role,
+    deadline: derivedExpiryDate ?? coerceDate(deadline) ?? undefined,
+    expiryDate: derivedExpiryDate ?? coerceDate(deadline) ?? undefined,
     billingPlanType: billingContext.billingPlanType,
     billingPlanId: billingContext.billingPlanId,
     paygStartedAt: billingContext.paygStartedAt,
@@ -307,6 +353,10 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   await attachEmbeddingBeforeSave(job);
   await job.save();
+  const refreshedPostingAllowance = await evaluateJobPostingAllowance(
+    new mongoose.Types.ObjectId(userId),
+    { suppressErrors: true }
+  );
 
   // 🔹 Find followers
   let followers: any[] = [];
@@ -343,9 +393,48 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.CREATED,
     success: true,
     message: "Job created successfully",
-    data: job,
+    data: { job, postingUsage: refreshedPostingAllowance },
   });
 });
+
+export const getJobPostingUsage = catchAsync(
+  async (req: Request, res: Response) => {
+    const requesterId = req.user?._id;
+    const providedUserId =
+      typeof req.query.userId === "string" && req.query.userId.trim()
+        ? req.query.userId.trim()
+        : undefined;
+
+    const targetUserId =
+      providedUserId ?? (requesterId ? requesterId.toString() : null);
+
+    if (!targetUserId) {
+      throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
+    }
+
+    const isAdmin =
+      req.user?.role === "admin" || req.user?.role === "super-admin";
+
+    if (providedUserId && requesterId?.toString() !== providedUserId && !isAdmin) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "Only admins can view job posting usage for other users."
+      );
+    }
+
+    const usage = await evaluateJobPostingAllowance(
+      new mongoose.Types.ObjectId(targetUserId),
+      { suppressErrors: true }
+    );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Job posting usage fetched successfully",
+      data: usage,
+    });
+  }
+);
 
 export const editJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -416,9 +505,34 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   ensurePaygWindowMetadata(job);
   const incomingPublishDate = coerceDate(req.body?.publishDate);
   const incomingDeadline = coerceDate(req.body?.deadline);
+  const derivedEditExpiry = deriveExpiryDate(
+    incomingPublishDate ?? job.publishDate ?? job.createdAt ?? new Date(),
+    {
+      expirationDate: req.body?.expirationDate,
+      expiryDate: req.body?.expiryDate,
+      expiaryDate: req.body?.expiaryDate,
+      deadline: req.body?.deadline ?? job.deadline ?? job.expiryDate,
+    }
+  );
 
   await enforcePaygEditRestriction(job);
-  enforcePaygDateBounds(job, incomingPublishDate, incomingDeadline);
+  enforcePaygDateBounds(
+    job,
+    incomingPublishDate,
+    derivedEditExpiry ?? incomingDeadline
+  );
+
+  if (
+    job.billingPlanType === "payg" &&
+    incomingPublishDate &&
+    job.publishDate &&
+    incomingPublishDate.getTime() !== new Date(job.publishDate).getTime()
+  ) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "PAYG adverts cannot change their publish date."
+    );
+  }
 
   const safeBody: Record<string, unknown> = { ...req.body };
   if (incomingPublishDate) {
@@ -426,6 +540,12 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   }
   if (incomingDeadline) {
     safeBody.deadline = incomingDeadline;
+  }
+  if (derivedEditExpiry) {
+    safeBody.deadline = derivedEditExpiry;
+    safeBody.expiryDate = derivedEditExpiry;
+  } else if (incomingDeadline) {
+    safeBody.expiryDate = incomingDeadline;
   }
 
   // ---- Whitelist of fields allowed to be updated ----
@@ -455,6 +575,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
     "location_Type",
     "name",
     "role",
+    "expiryDate",
   ] as any;
 
   // Track some state to optionally notify followers on activation
@@ -898,7 +1019,33 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     });
   }
 
-  const updated = await Job.findByIdAndUpdate(id, req.body, { new: true });
+  const incomingPublishDate = coerceDate(req.body?.publishDate);
+  const derivedAdminExpiry = deriveExpiryDate(
+    incomingPublishDate ?? job.publishDate ?? job.createdAt ?? new Date(),
+    {
+      expirationDate: req.body?.expirationDate,
+      expiryDate: req.body?.expiryDate,
+      expiaryDate: req.body?.expiaryDate,
+      deadline: req.body?.deadline ?? job.deadline ?? job.expiryDate,
+    }
+  );
+
+  const nextBody: Record<string, unknown> = { ...req.body };
+  if (incomingPublishDate) {
+    nextBody.publishDate = incomingPublishDate;
+  }
+  if (derivedAdminExpiry) {
+    nextBody.deadline = derivedAdminExpiry;
+    nextBody.expiryDate = derivedAdminExpiry;
+  } else if (req.body?.deadline) {
+    const fallbackDeadline = coerceDate(req.body.deadline);
+    if (fallbackDeadline) {
+      nextBody.deadline = fallbackDeadline;
+      nextBody.expiryDate = fallbackDeadline;
+    }
+  }
+
+  const updated = await Job.findByIdAndUpdate(id, nextBody, { new: true });
 
   if (!updated) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
@@ -1241,6 +1388,9 @@ export const toggleArchiveJob = catchAsync(async (req, res) => {
 export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
+  const includeUsage =
+    typeof req.query.includeUsage === "string" &&
+    req.query.includeUsage.toLowerCase() === "true";
 
   // Get the company document for this user, if any
   const company = await Company.findOne({ userId });
@@ -1248,9 +1398,9 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   // Match jobs where:
   const Jobs = await Job.find({
     $or: [
-      { userId }, // jobs created by the user
-      { companyId: userId }, // user account itself is a company
-      ...(company ? [{ companyId: company._id }] : []), // jobs created by user's company
+      { userId },
+      { companyId: userId },
+      ...(company ? [{ companyId: company._id }] : []),
     ],
   }).sort({ createdAt: -1 });
 
@@ -1259,7 +1409,7 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       statusCode: httpStatus.OK,
       success: true,
       message: "No jobs found",
-      data: [],
+      data: includeUsage ? { jobs: [], postingUsage: null } : [],
     });
   }
 
@@ -1269,7 +1419,6 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
     Jobs.map(async (job) => {
       let derivedStatus = "Pending";
 
-      // ✅ Mark as Expired if the job's deadline has passed
       if (job.deadline && job.deadline < today) {
         derivedStatus = "Expired";
       } else if (job.publishDate && job.adminApprove) {
@@ -1287,19 +1436,27 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       return {
         ...job.toObject(),
         applicantCount: job.counter ?? 0,
-        derivedStatus, // 👈 new status field with "Expired" logic
+        derivedStatus,
       };
     })
   );
+
+  const postingUsage = includeUsage
+    ? await evaluateJobPostingAllowance(
+        new mongoose.Types.ObjectId(userId),
+        { suppressErrors: true }
+      )
+    : undefined;
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "Jobs fetched successfully",
-    data: jobsWithApplicants,
+    data: includeUsage
+      ? { jobs: jobsWithApplicants, postingUsage }
+      : jobsWithApplicants,
   });
 });
-
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;

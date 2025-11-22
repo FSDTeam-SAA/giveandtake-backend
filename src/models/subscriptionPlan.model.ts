@@ -20,7 +20,9 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
       valid:{
         type: String,
         enum: ["monthly","yearly","PayAsYouGo"]
-      }
+      },
+      maxJobPostsPerYear: { type: Number },
+      maxJobPostsPerMonth: { type: Number },
     },
     { timestamps: true }
   )

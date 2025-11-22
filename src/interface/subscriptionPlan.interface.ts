@@ -1,6 +1,6 @@
 import { Document, Model } from 'mongoose'
 
-export type SubscriptionTarget = 'candidate' | 'recruiter'
+export type SubscriptionTarget = 'candidate' | 'recruiter' | 'company'
 
 export interface ISubscriptionPlan extends Document {
   title: string
@@ -9,7 +9,9 @@ export interface ISubscriptionPlan extends Document {
   price: number
   features: string[]
   for: SubscriptionTarget
-  valid: String
+  valid: string
+  maxJobPostsPerYear?: number
+  maxJobPostsPerMonth?: number
 }
 
 export interface SubscriptionPlanModel extends Model<ISubscriptionPlan> {}

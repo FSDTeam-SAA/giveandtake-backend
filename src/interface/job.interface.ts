@@ -47,6 +47,7 @@ export interface IJob extends Document {
   career_Stage: string;
   name: string;
   role: string;
+  expiryDate?: Date;
   billingPlanType?: 'payg' | 'subscription' | 'free';
   billingPlanId?: Types.ObjectId;
   paygStartedAt?: Date;

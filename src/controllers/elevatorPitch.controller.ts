@@ -106,19 +106,11 @@ export const requestElevatorPitchUploadUrl = catchAsync(
 
     const existingPitch = await ElevatorPitch.findOne({ userId })
     if (existingPitch) {
-      const state = existingPitch.processing?.state
-      if (state === 'ready') {
-        throw new AppError(
-          httpStatus.CONFLICT,
-          'You already have an elevator pitch. Delete it before uploading a new one.'
-        )
-      }
-      if (state === 'queued' || state === 'processing') {
-        throw new AppError(
-          httpStatus.CONFLICT,
-          'A video upload is currently being processed. Please wait for it to finish or delete it before starting a new upload.'
-        )
-      }
+      await removeElevatorPitchArtifacts({
+        userId,
+        rawKey: existingPitch.video?.rawKey ?? undefined,
+      })
+      await ElevatorPitch.deleteMany({ userId })
     }
 
     const sanitizedName = ensureFileExtension(
@@ -127,29 +119,27 @@ export const requestElevatorPitchUploadUrl = catchAsync(
     )
     const rawKey = buildRawS3Key(userId, sanitizedName)
 
-    const pitch =
-      existingPitch ??
-      (await ElevatorPitch.create({
-        userId,
-        status: 'deactivate',
-        video: {
-          url: null,
-          hlsUrl: null,
-          encryptionKeyUrl: null,
-          rawKey: null,
-          rawBucket: null,
-          localPaths: {
-            original: null,
-            hls: null,
-            key: null,
-          },
+    const pitch = await ElevatorPitch.create({
+      userId,
+      status: 'deactivate',
+      video: {
+        url: null,
+        hlsUrl: null,
+        encryptionKeyUrl: null,
+        rawKey: null,
+        rawBucket: null,
+        localPaths: {
+          original: null,
+          hls: null,
+          key: null,
         },
-        processing: {
-          state: 'pending',
-          updatedAt: new Date(),
-          retries: 0,
-        },
-      }))
+      },
+      processing: {
+        state: 'pending',
+        updatedAt: new Date(),
+        retries: 0,
+      },
+    })
 
     pitch.video = {
       ...(pitch.video ?? {}),
@@ -170,8 +160,8 @@ export const requestElevatorPitchUploadUrl = catchAsync(
       fileSize: fileSize ?? null,
       fileName: sanitizedName,
     }
-    pitch.video.hlsUrl = existingPitch?.video?.hlsUrl ?? null
-    pitch.video.encryptionKeyUrl = existingPitch?.video?.encryptionKeyUrl ?? null
+    pitch.video.hlsUrl = null
+    pitch.video.encryptionKeyUrl = null
     pitch.status = 'deactivate'
     await pitch.save()
 
