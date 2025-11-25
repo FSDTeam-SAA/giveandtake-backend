@@ -159,7 +159,7 @@ export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => 
   const { slug } = req.params
 
   // Step 1: Find user by slug
-  const user = await User.findOne({ slug }).select('_id')
+  const user = await User.findOne({ slug }).select('_id deactivate')
   if (!user) {
     return res.status(httpStatus.NOT_FOUND).json({
       success: false,
@@ -184,6 +184,7 @@ export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => 
     success: true,
     message: 'Resume fetched successfully',
     data: {
+      deactivate: Boolean(user.deactivate),
       resume,
       experiences,
       education,

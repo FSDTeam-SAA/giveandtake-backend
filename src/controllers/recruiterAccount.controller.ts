@@ -105,7 +105,7 @@ export const getRecruiterAccountByUserId = catchAsync(
       '-verificationInfo -password_reset_token -deactivate'
     )
 
-    const slug = await User.findById(userId).select('slug');
+    const userDoc = await User.findById(userId).select('slug deactivate');
 
     if (!account) {
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
@@ -113,14 +113,15 @@ export const getRecruiterAccountByUserId = catchAsync(
 
     const pitch = await ElevatorPitch.findOne({ userId: userId })
 
-
-
     sendResponse(res, {
       statusCode: httpStatus.OK,
       success: true,
       message: 'Recruiter account fetched successfully',
       data: {
-        ...account.toObject(), elevatorPitch: pitch || null, slug // add pitch data or null
+        ...account.toObject(),
+        elevatorPitch: pitch || null,
+        slug: userDoc?.slug,
+        deactivate: Boolean(userDoc?.deactivate),
       },
     })
   }
@@ -129,7 +130,7 @@ export const getRecruiterAccountByUserId = catchAsync(
 export const getRecruiterAccountByUserSlug = catchAsync(async (req: Request, res: Response) => {
   const { slug } = req.params
 
-  const user = await User.findOne({ slug }).select('_id')
+  const user = await User.findOne({ slug }).select('_id deactivate')
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
@@ -154,6 +155,7 @@ export const getRecruiterAccountByUserSlug = catchAsync(async (req: Request, res
     data: {
       ...account.toObject(),
       elevatorPitch: pitch || null,
+      deactivate: Boolean(user.deactivate),
     },
   })
 })

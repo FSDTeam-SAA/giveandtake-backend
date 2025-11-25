@@ -348,7 +348,7 @@ export const getCompanyByUserSlug = catchAsync(async (req: Request, res: Respons
   const { page, limit, skip } = getPaginationParams(req.query)
 
   // Step 1 — Find user by slug
-  const user = await User.findOne({ slug }).select('_id')
+  const user = await User.findOne({ slug }).select('_id deactivate')
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found')
   }
@@ -385,6 +385,7 @@ export const getCompanyByUserSlug = catchAsync(async (req: Request, res: Respons
     success: true,
     message: 'Companies and related honors fetched successfully',
     data: {
+      deactivate: Boolean(user.deactivate),
       meta,
       companies: companiesWithPitch,
       honors,
