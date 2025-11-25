@@ -8,6 +8,27 @@ import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
 import fs from 'fs'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 import chatbotService from '../services/chatbot.service'
+import slugify from 'slugify'
+import { Types } from 'mongoose'
+
+const generateUniqueSlug = async (title: string, excludeId?: string) => {
+  const baseSlug =
+    slugify(title, { lower: true, strict: true }) || `blog-${Date.now()}`
+  let slug = baseSlug
+  let counter = 1
+
+  const query: Record<string, unknown> = { slug }
+  if (excludeId) {
+    query._id = { $ne: excludeId }
+  }
+
+  while (await Blog.exists(query)) {
+    slug = `${baseSlug}-${counter++}`
+    query.slug = slug
+  }
+
+  return slug
+}
 
 /***************
  * CREATE BLOG *
@@ -44,6 +65,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
 
   const blog = await Blog.create({
     title,
+    slug: await generateUniqueSlug(title),
     description,
     userId,
     authorName,
@@ -89,7 +111,15 @@ export const getAllBlogs = catchAsync(async (req: Request, res: Response) => {
  *******************/
 export const getSingleBlog = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
-  const blog = await Blog.findById(id)
+  let blog = null
+
+  if (Types.ObjectId.isValid(id)) {
+    blog = await Blog.findById(id)
+  }
+
+  if (!blog) {
+    blog = await Blog.findOne({ slug: id })
+  }
 
   if (!blog) {
     throw new AppError(httpStatus.NOT_FOUND, 'Blog not found')
@@ -143,7 +173,10 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
   }
 
   // Update other fields if provided
-  if (title) blog.title = title
+  if (title) {
+    blog.title = title
+    blog.slug = await generateUniqueSlug(title, blog.id)
+  }
   if (description) blog.description = description
   if (authorName) blog.authorName = authorName
 
