@@ -41,7 +41,7 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Password Reset OTP — Elevator Video Pitch</title>
+  <title>Account Creation OTP — Elevator Video Pitch</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
@@ -57,7 +57,7 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
                 <tr>
                   <td style="vertical-align:middle;">
                     <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
-                    <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Password Reset OTP</p>
+                    <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Account Creation OTP</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
@@ -73,11 +73,13 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
           <tr>
             <td style="padding:24px;">
               <p style="margin:0 0 12px;font-size:15px;color:#111;">
-                Hello <strong>${getFirstName(name)}</strong>,
+                Dear <strong>${getFirstName(name)}</strong>,
+              </p>
+              <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+                We received a request to create an account for you.
               </p>
               <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
-                We received a request to reset your password for your
-                <strong>Elevator Video Pitch©</strong> account. Please use the OTP below to proceed.
+                Please use the OTP below to proceed.
               </p>
 
               <div style="margin:20px 0;text-align:center;">
@@ -87,8 +89,11 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
               </div>
 
               <p style="margin:18px 0 8px;font-size:14px;color:#374151;line-height:1.6;">
-                This OTP is valid for the next <strong>10 minutes</strong>. If you didn’t request a password reset,
-                you can safely ignore this email — your account remains secure.
+                This OTP is valid for the next <strong>60 minutes</strong>.
+              </p>
+
+              <p style="margin:8px 0 18px;font-size:14px;color:#374151;line-height:1.6;">
+                If you have not signed up for a new account, you can safely ignore this email.
               </p>
 
               <p style="margin:18px 0 0;font-size:14px;color:#374151;">
@@ -115,5 +120,3 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
   </table>
 </body>
 </html>`;
-
-

@@ -49,10 +49,7 @@ const refreshEmbeddingAfterDirectUpdate = async (jobDoc: any) => {
   try {
     const changed = await applyJobEmbeddingToDoc(jobDoc);
     if (changed) {
-      await Job.updateOne(
-        { _id: jobDoc._id },
-        { embedding: jobDoc.embedding }
-      );
+      await Job.updateOne({ _id: jobDoc._id }, { embedding: jobDoc.embedding });
     }
   } catch (error) {
     logEmbeddingWarning("refresh-after-update", error);
@@ -67,15 +64,14 @@ const PAYG_WINDOW_ERROR =
   "Pay As You Go adverts cannot run beyond 30 days from the original publication date.";
 
 const computePaygExpiryDate = (start?: Date | null) =>
-  start ? new Date(start.getTime() + PAYG_DURATION_DAYS * MILLIS_PER_DAY) : null;
+  start
+    ? new Date(start.getTime() + PAYG_DURATION_DAYS * MILLIS_PER_DAY)
+    : null;
 
 const ensurePaygWindowMetadata = (job: any) => {
   if (job.billingPlanType !== "payg") return;
   if (!job.paygStartedAt) {
-    const baseline =
-      job.publishDate ??
-      job.createdAt ??
-      new Date();
+    const baseline = job.publishDate ?? job.createdAt ?? new Date();
     job.paygStartedAt = baseline;
   }
   if (!job.paygExpiresAt && job.paygStartedAt) {
@@ -88,10 +84,9 @@ const ensurePaygWindowMetadata = (job: any) => {
 };
 
 const sendPaygExpiryNotification = async (job: any) => {
-  const ownerId =
-    (job.userId && job.userId._id
-      ? job.userId._id
-      : job.userId) as mongoose.Types.ObjectId | undefined;
+  const ownerId = (
+    job.userId && job.userId._id ? job.userId._id : job.userId
+  ) as mongoose.Types.ObjectId | undefined;
   if (!ownerId) return;
   try {
     await createNotification({
@@ -111,9 +106,7 @@ const enforcePaygEditRestriction = async (job: any) => {
   const expiry = job.paygExpiresAt
     ? new Date(job.paygExpiresAt)
     : computePaygExpiryDate(
-        job.paygStartedAt ??
-          job.publishDate ??
-          job.createdAt
+        job.paygStartedAt ?? job.publishDate ?? job.createdAt
       );
 
   if (expiry && new Date() > expiry) {
@@ -429,7 +422,11 @@ export const getJobPostingUsage = catchAsync(
     const isAdmin =
       req.user?.role === "admin" || req.user?.role === "super-admin";
 
-    if (providedUserId && requesterId?.toString() !== providedUserId && !isAdmin) {
+    if (
+      providedUserId &&
+      requesterId?.toString() !== providedUserId &&
+      !isAdmin
+    ) {
       throw new AppError(
         httpStatus.FORBIDDEN,
         "Only admins can view job posting usage for other users."
@@ -490,7 +487,8 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
       if (
         job.recruiterId &&
         recruiter._id &&
-        job.recruiterId.toString() === (recruiter._id as mongoose.Types.ObjectId).toString()
+        job.recruiterId.toString() ===
+          (recruiter._id as mongoose.Types.ObjectId).toString()
       )
         canEdit = true;
       // recruiter tied to same company
@@ -606,6 +604,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
+  job.adminApprove = false;
   if (prevStatus !== "deactivate" && job.status === "deactivate") {
     job.deactivatedAt = new Date();
   } else if (
@@ -692,15 +691,15 @@ const EMPLOYMENT_SYNONYMS: Record<string, string[]> = {
 // 🧠 Detect employment types from a free-text query
 function detectEmploymentTypes(q: unknown): string[] {
   if (!q) return [];
-  const text = Array.isArray(q) ? q.join(" ").toLowerCase() : String(q).toLowerCase();
+  const text = Array.isArray(q)
+    ? q.join(" ").toLowerCase()
+    : String(q).toLowerCase();
 
   const matches = new Set<string>();
   for (const [canonical, variants] of Object.entries(EMPLOYMENT_SYNONYMS)) {
     for (const v of variants) {
       // hyphen/space tolerant (e.g., "full-time" ~ "full time" ~ "fulltime")
-      const pattern = v
-        .replace(/\s*-\s*/g, "[-\\s]?")
-        .replace(/\s+/g, "\\s*");
+      const pattern = v.replace(/\s*-\s*/g, "[-\\s]?").replace(/\s+/g, "\\s*");
       const re = new RegExp(`\\b${pattern}\\b`, "i");
       if (re.test(text)) {
         matches.add(canonical);
@@ -795,7 +794,9 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     Job.find(filter, filter.$text ? { score: { $meta: "textScore" } } : {})
       .skip(skip)
       .limit(limit)
-      .sort(filter.$text ? { score: { $meta: "textScore" } } : { createdAt: -1 })
+      .sort(
+        filter.$text ? { score: { $meta: "textScore" } } : { createdAt: -1 }
+      )
       .populate("companyId recruiterId userId")
       .lean(),
   ]);
@@ -1336,9 +1337,7 @@ const findEmbeddingRecommendedJobs = async (
     }
   }
 
-  return scored
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+  return scored.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 };
 
 /*******************************
@@ -1399,8 +1398,6 @@ export const toggleArchiveJob = catchAsync(async (req, res) => {
   });
 });
 
-
-
 export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
@@ -1458,10 +1455,9 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
   );
 
   const postingUsage = includeUsage
-    ? await evaluateJobPostingAllowance(
-        new mongoose.Types.ObjectId(userId),
-        { suppressErrors: true }
-      )
+    ? await evaluateJobPostingAllowance(new mongoose.Types.ObjectId(userId), {
+        suppressErrors: true,
+      })
     : undefined;
 
   sendResponse(res, {
@@ -1571,7 +1567,6 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
   });
 });
 
-
 /*************************************
  * GET ALL PENDING JOB ---> COMPANY *
  *************************************/
@@ -1637,7 +1632,7 @@ export const adminApproveJobs = catchAsync(async (req, res) => {
 
   const jobs = await Job.find({ jobApprove: "approved" })
     .populate("companyId recruiterId")
-    .sort({ createdAt: -1 })
+    .sort({ updatedAt: -1 })
     .skip(skip)
     .limit(limit);
 
