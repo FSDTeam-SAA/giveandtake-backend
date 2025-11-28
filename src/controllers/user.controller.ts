@@ -1163,7 +1163,10 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
 
 // fetch all user without admin
 export const fetchAllUsers = catchAsync(async (req, res) => {
-  const users = await User.find({ role: { $ne: "admin" } }).select(
+  const users = await User.find({
+    role: { $ne: "admin" },
+    deactivate: { $ne: true },
+  }).select(
     "name avatar address phoneNum role slug"
   );
 
