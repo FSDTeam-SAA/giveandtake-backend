@@ -336,7 +336,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     benefits,
     vacancy,
     experience,
-    status,
+    status: status ?? "active",
     jobCategoryId,
     compensation,
     arcrivedJob,
