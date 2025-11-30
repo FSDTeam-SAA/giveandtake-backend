@@ -15,6 +15,7 @@ import {
   purgeExpiredJobApplications,
 } from './jobs/deleteOldDeactivatedUsers'
 import path from 'path'
+import { initNotificationSocket } from './sockets/notification.service'
 
 dotenv.config()
 
@@ -29,6 +30,7 @@ export const io = new Server(httpServer, {
   },
 })
 
+initNotificationSocket(io)
 
 // Runs every day at midnight
 cron.schedule('0 0 * * *', async () => {
