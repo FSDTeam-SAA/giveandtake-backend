@@ -99,6 +99,12 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
     { new: true }
   );
 
+  const recuirter = await RecruiterAccount.findOneAndUpdate(
+    { userId: { $in: employeeIds } },
+    { companyId: companyId }, // avoids duplicates
+    { new: true }
+  );
+
   sendResponse(res, {
     statusCode: 200,
     success: true,
@@ -118,8 +124,8 @@ export const companyEmployeeRemove = catchAsync(async (req, res) => {
     { new: true }
   );
 
-  const employee = await RecruiterAccount.findByIdAndUpdate(
-    employeeId,
+  const employee = await RecruiterAccount.findOneAndUpdate(
+    { userId: new mongoose.Types.ObjectId(employeeId) },
     { companyId: null },
     { new: true }
   );
