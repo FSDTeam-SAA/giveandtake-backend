@@ -125,14 +125,14 @@ class VideoProcessingQueue {
         s3Folder
       )
 
-      let retainedRawKey: string | null = s3Key
-      try {
-        // Delete the original upload once the encrypted HLS package is stored in R2.
-        await deleteFromS3(s3Key)
-        retainedRawKey = null
-      } catch (deleteError) {
-        console.warn(`Failed to delete raw elevator pitch source "${s3Key}":`, deleteError)
-      }
+      // let retainedRawKey: string | null = s3Key
+      // try {
+      //   // Delete the original upload once the encrypted HLS package is stored in R2.
+      //   await deleteFromS3(s3Key)
+      //   retainedRawKey = null
+      // } catch (deleteError) {
+      //   console.warn(`Failed to delete raw elevator pitch source "${s3Key}":`, deleteError)
+      // }
 
       const hlsUrl = uploadedFiles['master.m3u8'] ?? null
       const encryptionKeyUrl = uploadedFiles['encryption.key'] ?? null
@@ -141,7 +141,7 @@ class VideoProcessingQueue {
         ...(pitch.video ?? {}),
         hlsUrl,
         encryptionKeyUrl,
-        rawKey: retainedRawKey,
+        rawKey: s3Key,
         localPaths: {
           original: null,
           hls: null,
