@@ -1,4 +1,6 @@
 import mongoose from 'mongoose'
+import fs from 'fs'
+import path from 'path'
 import { Job } from '../models/job.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { User } from '../models/user.model'
@@ -7,6 +9,8 @@ import { sendEmail } from '../utils/sendEmail'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import { AppliedJob } from '../models/appliedJob.model'
+import { Resume } from '../models/resume.model'
+import { deleteFromS3 } from '../services/s3.service'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -287,6 +291,137 @@ export const removeExpiredElevatorPitches = async () => {
 
   console.log(
     `${expiredPlans.length} expired plans evaluated for elevator pitch cleanup.`
+  );
+};
+
+const getObjectKeyFromUrl = (url: string | undefined | null): string | null => {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url, "http://placeholder.local");
+    let key = parsed.pathname.replace(/^\/+/, "");
+
+    // Strip bucket name if path-style URL was used
+    const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME;
+    if (bucketName && key.startsWith(`${bucketName}/`)) {
+      key = key.slice(bucketName.length + 1);
+    }
+
+    // Remove any custom public base path
+    const publicBase = process.env.R2_PUBLIC_BASE;
+    if (publicBase) {
+      const basePath = new URL(publicBase, "http://placeholder.local").pathname
+        .replace(/^\/+/, "")
+        .replace(/\/+$/, "");
+      if (basePath && key.startsWith(`${basePath}/`)) {
+        key = key.slice(basePath.length + 1);
+      }
+    }
+
+    return key || null;
+  } catch {
+    return null;
+  }
+};
+
+const collectLocalResumePaths = (filename?: string, url?: string): string[] => {
+  const names = new Set<string>();
+  if (filename) names.add(filename);
+
+  if (url) {
+    try {
+      const parsed = new URL(url, "http://placeholder.local");
+      const baseName = path.basename(parsed.pathname);
+      if (baseName) names.add(baseName);
+    } catch {
+      // ignore malformed URLs
+    }
+  }
+
+  const paths: string[] = [];
+  for (const name of names) {
+    paths.push(path.join(process.cwd(), "uploads", name));
+    paths.push(path.join(process.cwd(), "uploads", "resumes", name));
+  }
+
+  return paths;
+};
+
+const deleteResumeAssets = async (file: { filename?: string; url?: string }) => {
+  let deletedCount = 0;
+  const key = getObjectKeyFromUrl(file.url);
+
+  if (key) {
+    try {
+      await deleteFromS3(key);
+      deletedCount += 1;
+    } catch (err) {
+      console.warn(`Failed to delete resume object "${key}":`, err);
+    }
+  }
+
+  for (const candidate of collectLocalResumePaths(file.filename, file.url)) {
+    try {
+      if (fs.existsSync(candidate)) {
+        fs.unlinkSync(candidate);
+        deletedCount += 1;
+      }
+    } catch (err) {
+      console.warn(`Failed to delete local resume file "${candidate}":`, err);
+    }
+  }
+
+  return deletedCount;
+};
+
+export const deleteOldApplicationResumes = async () => {
+  const SIXTY_DAYS = 60 * MILLIS_PER_DAY;
+  const cutoff = new Date(Date.now() - SIXTY_DAYS);
+
+  const oldApplications = await AppliedJob.find({
+    createdAt: { $lte: cutoff },
+    resumeId: { $exists: true, $ne: null },
+  }).select("resumeId createdAt");
+
+  const resumeIds = Array.from(
+    new Set(
+      oldApplications
+        .map((app) => app.resumeId?.toString())
+        .filter(Boolean) as string[]
+    )
+  );
+
+  let resumesRemoved = 0;
+  let filesRemoved = 0;
+
+  for (const resumeId of resumeIds) {
+    // Skip if the same resume was used in a newer (<60 days) application
+    const hasRecentUse = await AppliedJob.exists({
+      resumeId,
+      createdAt: { $gt: cutoff },
+    });
+    if (hasRecentUse) {
+      continue;
+    }
+
+    const resume = await Resume.findById(resumeId);
+    if (!resume) continue;
+
+    for (const file of resume.file || []) {
+      filesRemoved += await deleteResumeAssets(file);
+    }
+
+    await Resume.deleteOne({ _id: resumeId });
+    await AppliedJob.updateMany(
+      { resumeId },
+      { $unset: { resumeId: "" } }
+    );
+
+    resumesRemoved += 1;
+  }
+
+  console.log(
+    `Removed ${filesRemoved} stored resume asset(s) across ${resumesRemoved} application resume record(s) older than 60 days.`
   );
 };
 
