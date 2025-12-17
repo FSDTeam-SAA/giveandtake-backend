@@ -3,6 +3,7 @@ import { Document, Model, Types } from 'mongoose'
 export interface IResumeFile {
   filename: string
   url: string
+  key?: string
   uploadedAt: Date
 }
 

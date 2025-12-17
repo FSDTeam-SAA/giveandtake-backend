@@ -13,6 +13,7 @@ const resumeSchema: Schema<IResume> = new Schema<IResume>(
       {
         filename: { type: String, required: true },
         url: { type: String, required: true },
+        key: { type: String },
         uploadedAt: { type: Date, default: Date.now },
       },
     ],
