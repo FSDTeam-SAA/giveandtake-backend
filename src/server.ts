@@ -13,6 +13,7 @@ import {
   updateExpiredPlans,
   removeExpiredElevatorPitches,
   purgeExpiredJobApplications,
+  deleteOldApplicationResumes,
 } from './jobs/deleteOldDeactivatedUsers'
 import path from 'path'
 import { initNotificationSocket } from './sockets/notification.service'
@@ -45,6 +46,11 @@ cron.schedule('1 0 * * *', async () => {
   console.log('Running elevator pitch & job cleanup tasks...')
   await removeExpiredElevatorPitches();
   await purgeExpiredJobApplications();
+})
+
+cron.schedule('2 0 * * *', async () => {
+  console.log('Running old application resume cleanup...')
+  await deleteOldApplicationResumes();
 })
 
 setupMessageSocket(io)
