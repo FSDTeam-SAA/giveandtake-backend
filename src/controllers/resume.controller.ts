@@ -122,7 +122,9 @@ export const getResumeDownloadUrl = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
     }
 
-    const file = (fileId ? resume.file.id(fileId) : resume.file[0]) as any
+    const file = fileId
+      ? resume.file.find((item) => String(item?._id) === String(fileId))
+      : resume.file[0]
     if (!file) {
       throw new AppError(httpStatus.NOT_FOUND, 'Resume file not found')
     }

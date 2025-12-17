@@ -1,6 +1,7 @@
 import { Document, Model, Types } from 'mongoose'
 
 export interface IResumeFile {
+  _id?: Types.ObjectId
   filename: string
   url: string
   key?: string
