@@ -12,6 +12,7 @@ import {
   notifyJobExpiryToRecruiters,
   updateExpiredPlans,
   removeExpiredElevatorPitches,
+  removeOrphanedElevatorPitchAssets,
   purgeExpiredJobApplications,
   deleteOldApplicationResumes,
 } from './jobs/deleteOldDeactivatedUsers'
@@ -45,6 +46,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('1 0 * * *', async () => {
   console.log('Running elevator pitch & job cleanup tasks...')
   await removeExpiredElevatorPitches();
+  await removeOrphanedElevatorPitchAssets();
   await purgeExpiredJobApplications();
 })
 

@@ -10,7 +10,7 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import { AppliedJob } from '../models/appliedJob.model'
 import { Resume } from '../models/resume.model'
-import { deleteFromS3 } from '../services/s3.service'
+import { deleteFromS3, deleteS3Keys, listS3KeysByPrefix } from '../services/s3.service'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -322,6 +322,69 @@ const getObjectKeyFromUrl = (url: string | undefined | null): string | null => {
   } catch {
     return null;
   }
+};
+
+const isElevatorPitchKeyReferenced = (
+  key: string,
+  keepPrefixes: string[],
+  keepKeys: Set<string>
+) => {
+  if (keepKeys.has(key)) return true;
+  for (const prefix of keepPrefixes) {
+    if (key.startsWith(prefix)) return true;
+  }
+  return false;
+};
+
+export const removeOrphanedElevatorPitchAssets = async () => {
+  const pitches = await ElevatorPitch.find({}, { video: 1 }).lean();
+
+  const keepPrefixes = new Set<string>();
+  const keepKeys = new Set<string>();
+
+  const addPrefixFromUrl = (url?: string | null) => {
+    const key = getObjectKeyFromUrl(url);
+    if (!key) return;
+    const lastSlash = key.lastIndexOf('/');
+    if (lastSlash >= 0) {
+      const prefix = key.slice(0, lastSlash + 1);
+      if (prefix) {
+        keepPrefixes.add(prefix);
+        return;
+      }
+    }
+    keepKeys.add(key);
+  };
+
+  const addKey = (value?: string | null) => {
+    const key = getObjectKeyFromUrl(value);
+    if (key) keepKeys.add(key);
+  };
+
+  for (const pitch of pitches) {
+    addPrefixFromUrl(pitch.video?.hlsUrl);
+    addPrefixFromUrl(pitch.video?.encryptionKeyUrl);
+    addKey(pitch.video?.rawKey);
+    addKey(pitch.video?.url);
+  }
+
+  const allKeys = await listS3KeysByPrefix('elevator_pitches/');
+  const keepPrefixList = Array.from(keepPrefixes);
+  const orphanKeys: string[] = [];
+
+  for (const key of allKeys) {
+    if (!isElevatorPitchKeyReferenced(key, keepPrefixList, keepKeys)) {
+      orphanKeys.push(key);
+    }
+  }
+
+  if (orphanKeys.length) {
+    await deleteS3Keys(orphanKeys);
+  }
+
+  console.log(
+    `Removed ${orphanKeys.length} orphaned elevator pitch object(s).`
+  );
 };
 
 const collectLocalResumePaths = (filename?: string, url?: string): string[] => {
