@@ -10,7 +10,7 @@ import {
 } from '../controllers/company.controller'
 import { upload } from '../middlewares/multer.middleware'
 import { protect } from '../middlewares/auth.middleware'
-import { companyEmployeeAdd, companyEmployeeRemove, employeeReq, UpdateEmployeeReq } from '../controllers/assignCompanyReq.controller'
+import { companyEmployeeAdd, companyEmployeeRemove, employeeReq, UpdateEmployeeReq, recruiterLeaveCompany } from '../controllers/assignCompanyReq.controller'
 
 const router = express.Router()
 
@@ -32,5 +32,6 @@ router.post('/apply-for-company-employee',protect, employeeReq)
 router.patch('/update-company-employee/:id',protect, UpdateEmployeeReq)
 router.patch('/add-employee-to-company',protect, companyEmployeeAdd)
 router.patch('/remove-employee-to-company',protect, companyEmployeeRemove)
+router.patch('/recruiter-leave-company',protect, recruiterLeaveCompany)
 
 export default router

@@ -75,6 +75,8 @@ export const login = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.FORBIDDEN, "Incorrect password");
   }
   if (!(await User.isOTPVerified(user._id.toString()))) {
+    const needsSecurityQuestions =
+      !user.securityQuestions || user.securityQuestions.length < 2;
     const otp = generateOTP();
     const jwtPayloadOTP = {
       otp: otp,
@@ -93,8 +95,13 @@ export const login = catchAsync(async (req, res) => {
     return sendResponse(res, {
       statusCode: httpStatus.FORBIDDEN,
       success: false,
-      message: "OTP not verified. Please verify your OTP",
-      data: { email: user.email },
+      message:
+        "Your email is not verified. We just sent you a new OTP—please verify and complete your security questions to continue.",
+      data: {
+        email: user.email,
+        nextStep: "verify-otp",
+        needsSecurityQuestions,
+      },
     });
   }
 
