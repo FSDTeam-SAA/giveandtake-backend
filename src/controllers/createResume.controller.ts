@@ -6,6 +6,7 @@ import { Experience } from '../models/experience.model'
 import { Education } from '../models/education.model'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
+import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import path from 'path'
@@ -369,6 +370,14 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+
+  const pitch = await ElevatorPitch.findOne({ userId })
+  if (pitch) {
+    await removeElevatorPitchArtifacts({
+      userId: userId.toString(),
+      rawKey: pitch.video?.rawKey ?? pitch.video?.url ?? undefined,
+    })
+  }
 
   await Promise.all([
     CreateResume.deleteOne({ userId }),

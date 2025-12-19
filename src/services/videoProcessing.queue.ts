@@ -125,14 +125,16 @@ class VideoProcessingQueue {
         s3Folder
       )
 
-      // let retainedRawKey: string | null = s3Key
-      // try {
-      //   // Delete the original upload once the encrypted HLS package is stored in R2.
-      //   await deleteFromS3(s3Key)
-      //   retainedRawKey = null
-      // } catch (deleteError) {
-      //   console.warn(`Failed to delete raw elevator pitch source "${s3Key}":`, deleteError)
-      // }
+      let retainedRawKey: string | null = s3Key
+      try {
+        await deleteFromS3(s3Key)
+        retainedRawKey = null
+      } catch (deleteError) {
+        console.warn(
+          `Failed to delete raw elevator pitch source "${s3Key}":`,
+          deleteError
+        )
+      }
 
       const hlsUrl = uploadedFiles['master.m3u8'] ?? null
       const encryptionKeyUrl = uploadedFiles['encryption.key'] ?? null
@@ -141,7 +143,7 @@ class VideoProcessingQueue {
         ...(pitch.video ?? {}),
         hlsUrl,
         encryptionKeyUrl,
-        rawKey: s3Key,
+        rawKey: retainedRawKey,
         localPaths: {
           original: null,
           hls: null,
@@ -190,6 +192,40 @@ export const enqueueElevatorPitchTranscode = (job: TranscodeJob) => {
   queue.enqueue(job)
 }
 
+const normalizeR2Key = (value?: string | null): string | null => {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed = new URL(trimmed, 'http://placeholder.local')
+    let key = parsed.pathname.replace(/^\/+/, '')
+    const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME
+    if (bucketName && key.startsWith(`${bucketName}/`)) {
+      key = key.slice(bucketName.length + 1)
+    }
+
+    const publicBase = process.env.R2_PUBLIC_BASE
+    if (publicBase) {
+      try {
+        const basePath = new URL(publicBase, 'http://placeholder.local')
+          .pathname.replace(/^\/+/, '')
+          .replace(/\/+$/, '')
+        if (basePath && key.startsWith(`${basePath}/`)) {
+          key = key.slice(basePath.length + 1)
+        }
+      } catch {
+        // ignore invalid base config
+      }
+    }
+
+    return key || null
+  } catch {
+    const cleaned = trimmed.replace(/^\/+/, '')
+    return cleaned || null
+  }
+}
+
 export const removeElevatorPitchArtifacts = async ({
   userId,
   rawKey,
@@ -197,9 +233,12 @@ export const removeElevatorPitchArtifacts = async ({
   userId: string
   rawKey?: string | null
 }) => {
-  const basePrefix = `elevator_pitches/${userId}/hls/`
-  await deleteS3Prefix(basePrefix)
-  if (rawKey) {
-    await deleteFromS3(rawKey)
+  const hlsPrefix = `elevator_pitches/${userId}/hls/`
+  const sourcePrefix = `elevator_pitches/${userId}/source/`
+  await deleteS3Prefix(hlsPrefix)
+  await deleteS3Prefix(sourcePrefix)
+  const normalizedRawKey = normalizeR2Key(rawKey)
+  if (normalizedRawKey) {
+    await deleteFromS3(normalizedRawKey)
   }
 }

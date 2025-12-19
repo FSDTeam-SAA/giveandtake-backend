@@ -274,7 +274,7 @@ export const removeExpiredElevatorPitches = async () => {
 
     await removeElevatorPitchArtifacts({
       userId: String(plan.userId),
-      rawKey: pitch.video?.rawKey ?? undefined,
+      rawKey: pitch.video?.rawKey ?? pitch.video?.url ?? undefined,
     });
 
     await ElevatorPitch.deleteOne({ _id: pitch._id });

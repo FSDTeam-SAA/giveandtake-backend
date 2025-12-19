@@ -108,7 +108,7 @@ export const requestElevatorPitchUploadUrl = catchAsync(
     if (existingPitch) {
       await removeElevatorPitchArtifacts({
         userId,
-        rawKey: existingPitch.video?.rawKey ?? undefined,
+        rawKey: existingPitch.video?.rawKey ?? existingPitch.video?.url ?? undefined,
       })
       await ElevatorPitch.deleteMany({ userId })
     }
@@ -329,7 +329,7 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
 
   await removeElevatorPitchArtifacts({
     userId,
-    rawKey: pitch.video?.rawKey ?? undefined,
+    rawKey: pitch.video?.rawKey ?? pitch.video?.url ?? undefined,
   })
 
   await ElevatorPitch.deleteOne({ _id: pitch._id })
