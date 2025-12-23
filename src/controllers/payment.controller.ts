@@ -9,6 +9,7 @@ import { sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
 import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
+import { computeExpiryFromStart } from "../utils/subscription";
 // import { refundOrder } from "../services/paypal.service"; // new service function
 // JSON validation middleware
 const validateJsonBody = (
@@ -131,6 +132,8 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
         : "payg";
 
     const isYearlyPlan = derivedDuration === "yearly";
+    const expiresAt =
+      computeExpiryFromStart(new Date(), derivedDuration) ?? undefined;
 
     const newPayment = await paymentInfo.create({
       userId,
@@ -141,6 +144,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       paymentMethod: "PayPal",
       seasonId,
       duration: derivedDuration,
+      expiresAt,
     });
 
     const emailBody = `<!doctype html>

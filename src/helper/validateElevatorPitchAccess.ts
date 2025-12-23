@@ -3,6 +3,7 @@ import { paymentInfo as PaymentInfo } from '../models/paymentInfo.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
+import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
 
 export const validateElevatorPitchAccess = async (
   userId: string,
@@ -32,20 +33,16 @@ export const validateElevatorPitchAccess = async (
         )
       }
     } else {
-      if (!plan.createdAt) {
-        throw new AppError(
-          httpStatus.INTERNAL_SERVER_ERROR,
-          'Plan missing createdAt'
-        )
+      const expiryDate = resolvePaymentExpiry(plan)
+      const expired = isPaymentExpired(plan, now)
+
+      if (expiryDate && (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime())) {
+        plan.expiresAt = expiryDate
       }
-      // Check if plan is expired
-      const createdAt = new Date(plan.createdAt)
-      const expired =
-        plan.duration === 'monthly'
-          ? now > new Date(createdAt.setMonth(createdAt.getMonth() + 1))
-          : now > new Date(createdAt.setFullYear(createdAt.getFullYear() + 1))
 
       if (expired) {
+        plan.planStatus = 'deactivate'
+        await plan.save()
         await ElevatorPitch.updateOne(
           { userId },
           { $set: { status: 'deactivate' } }
@@ -54,25 +51,24 @@ export const validateElevatorPitchAccess = async (
           httpStatus.FORBIDDEN,
           'Subscription expired. Renew to upload pitch'
         )
+      } else if (plan.isModified('expiresAt')) {
+        await plan.save()
       }
 
       maxDuration = 60
     }
   } else if (['recruiter', 'company'].includes(role)) {
     if (plan) {
-      if (!plan.createdAt) {
-        throw new AppError(
-          httpStatus.INTERNAL_SERVER_ERROR,
-          'Plan missing createdAt'
-        )
+      const expiryDate = resolvePaymentExpiry(plan)
+      const expired = isPaymentExpired(plan, now)
+
+      if (expiryDate && (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime())) {
+        plan.expiresAt = expiryDate
       }
-      const createdAt = new Date(plan.createdAt)
-      const expired =
-        plan.duration === 'monthly'
-          ? now > new Date(createdAt.setMonth(createdAt.getMonth() + 1))
-          : now > new Date(createdAt.setFullYear(createdAt.getFullYear() + 1))
 
       if (expired) {
+        plan.planStatus = 'deactivate'
+        await plan.save()
         await ElevatorPitch.updateOne(
           { userId },
           { $set: { status: 'deactivate' } }
@@ -81,6 +77,8 @@ export const validateElevatorPitchAccess = async (
           httpStatus.FORBIDDEN,
           'Subscription expired. Renew to upload pitch'
         )
+      } else if (plan.isModified('expiresAt')) {
+        await plan.save()
       }
 
       maxDuration = 180

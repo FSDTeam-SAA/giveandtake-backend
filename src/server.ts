@@ -39,12 +39,12 @@ cron.schedule('0 0 * * *', async () => {
   console.log('Running user deletion job...')
   await deleteOldDeactivatedUsers()
   await updateExpiredPlans(); 
-  await notifyExpiredSubscriptions();
   await notifyJobExpiryToRecruiters();
 })
 
 cron.schedule('1 0 * * *', async () => {
   console.log('Running elevator pitch & job cleanup tasks...')
+  await notifyExpiredSubscriptions();
   await removeExpiredElevatorPitches();
   await removeOrphanedElevatorPitchAssets();
   await purgeExpiredJobApplications();

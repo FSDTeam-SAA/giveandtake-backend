@@ -28,6 +28,7 @@ import {
   generateJobEmbeddingVector,
   generateProfileEmbeddingVector,
 } from "../services/embedding.service";
+import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
   console.warn(
@@ -146,6 +147,7 @@ const determineJobBillingContext = async (
     .findOne({
       userId,
       paymentStatus: "complete",
+      planStatus: "active",
     })
     .sort({ updatedAt: -1 })
     .populate("planId", "valid");
@@ -160,6 +162,38 @@ const determineJobBillingContext = async (
   }
 
   const plan: any = latestPayment.planId;
+  const now = new Date();
+  const expiryDate = resolvePaymentExpiry(latestPayment);
+  let shouldSave = false;
+  const expired = isPaymentExpired(latestPayment, now);
+
+  if (
+    expiryDate &&
+    (!latestPayment.expiresAt ||
+      latestPayment.expiresAt.getTime() !== expiryDate.getTime())
+  ) {
+    latestPayment.expiresAt = expiryDate;
+    shouldSave = true;
+  }
+
+  if (expired) {
+    latestPayment.planStatus = "deactivate";
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await latestPayment.save();
+  }
+
+  if (expired) {
+    return {
+      billingPlanType: "free",
+      billingPlanId: undefined,
+      paygStartedAt: undefined,
+      paygExpiresAt: undefined,
+    };
+  }
+
   if (plan?.valid === "PayAsYouGo") {
     const startDate = publishDate ?? new Date();
     return {

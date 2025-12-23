@@ -4,6 +4,7 @@ import AppError from '../errors/AppError'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { Job } from '../models/job.model'
 import { User } from '../models/user.model'
+import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
 
 export type JobPostingUsage = {
   paywallEnabled: boolean
@@ -121,6 +122,7 @@ export const evaluateJobPostingAllowance = async (
     .findOne({
       userId,
       paymentStatus: 'complete',
+      planStatus: 'active',
     })
     .sort({ updatedAt: -1 })
     .populate('planId')
@@ -165,13 +167,48 @@ export const evaluateJobPostingAllowance = async (
     new Date()
 
   const expiresAt =
-    duration === 'monthly'
+    resolvePaymentExpiry(latestPayment) ??
+    (duration === 'monthly'
       ? addMonths(planStart, 1)
       : duration === 'yearly'
       ? addYears(planStart, 1)
-      : null
+      : null)
 
   const now = new Date()
+  let shouldSavePlan = false
+  if (
+    expiresAt &&
+    (!latestPayment.expiresAt ||
+      latestPayment.expiresAt.getTime() !== expiresAt.getTime())
+  ) {
+    latestPayment.expiresAt = expiresAt
+    shouldSavePlan = true
+  }
+
+  if (expiresAt && isPaymentExpired(latestPayment, now)) {
+    allowance.allowed = !allowance.paywallEnabled
+    allowance.message = allowance.paywallEnabled
+      ? 'Your subscription has expired. Please renew to post more jobs.'
+      : undefined
+    if (latestPayment.planStatus !== 'deactivate') {
+      latestPayment.planStatus = 'deactivate'
+      shouldSavePlan = true
+    }
+    if (shouldSavePlan) {
+      await latestPayment.save()
+    }
+    if (!allowance.allowed && !suppressErrors) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        allowance.message ?? 'Your subscription has expired.'
+      )
+    }
+    return allowance
+  }
+
+  if (shouldSavePlan) {
+    await latestPayment.save()
+  }
 
   const monthlyLimit = computeMonthlyLimit(
     plan?.maxJobPostsPerMonth,

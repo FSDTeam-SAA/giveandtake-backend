@@ -11,6 +11,7 @@ import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import { AppliedJob } from '../models/appliedJob.model'
 import { Resume } from '../models/resume.model'
 import { deleteFromS3, deleteS3Keys, listS3KeysByPrefix } from '../services/s3.service'
+import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -43,24 +44,21 @@ export const updateExpiredPlans = async () => {
   let updatedCount = 0;
 
   for (const plan of activePlans) {
-    if (!plan.duration || !plan.updatedAt) continue;
+    const expiryDate = plan.expiresAt ?? resolvePaymentExpiry(plan);
+    if (!expiryDate) continue;
 
-    let expiryDate = new Date(plan.updatedAt);
-
-    if (plan.duration === 'monthly') {
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-    } else if (plan.duration === 'yearly') {
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-    } else if (plan.duration === 'payg') {
-      expiryDate.setDate(expiryDate.getDate() + 30);
-    } else {
-      continue;
+    if (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime()) {
+      plan.expiresAt = expiryDate;
     }
 
-    if (expiryDate <= now) {
+    const expired = isPaymentExpired(plan, now);
+
+    if (expired) {
       plan.planStatus = 'deactivate';
       await plan.save();
       updatedCount++;
+    } else if (plan.isModified('expiresAt')) {
+      await plan.save();
     }
   }
 
@@ -184,33 +182,58 @@ export const notifyJobExpiryToRecruiters = async () => {
 };
 
 export const notifyExpiredSubscriptions = async () => {
-  const today = new Date();
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - MILLIS_PER_DAY);
 
-  const expiredPayments = await paymentInfo
+  const candidates = await paymentInfo
     .find({
-      planStatus: "deactivate",
-      updatedAt: { $lte: today },
+      paymentStatus: "complete",
+      expiryReminderSentAt: { $exists: false },
     })
     .populate("userId", "name email"); // need name + email for the email
 
-  for (const payment of expiredPayments) {
+  let notifiedCount = 0;
+
+  for (const payment of candidates) {
+    const expiryDate = resolvePaymentExpiry(payment);
+    if (!expiryDate) continue;
+
+    if (!payment.expiresAt || payment.expiresAt.getTime() !== expiryDate.getTime()) {
+      payment.expiresAt = expiryDate;
+    }
+
+    const expiryBoundary = new Date(expiryDate);
+    expiryBoundary.setHours(0, 0, 0, 0);
+    const expired = isPaymentExpired(payment, now);
+    const expiredWithinWindow = expired && expiryBoundary > windowStart;
+    const planChanged = payment.planStatus === "active" && expired;
+    if (planChanged) {
+      payment.planStatus = "deactivate";
+    }
+    if (!expiredWithinWindow) {
+      if (payment.isModified('expiresAt') || planChanged) {
+        await payment.save();
+      }
+      continue;
+    }
+
     const user = payment.userId as any;
 
     // Send email if we have an address
     if (user?.email) {
-      const subject = "Your subscription is about to expire";
+      const subject = "Your subscription has expired";
       const body = buildEvpEmail({
         heading: "Subscription Notice",
-        subheading: "Action Required",
+        subheading: "Expired",
         greetingName: getFirstName(user?.name),
         signer: "EVP Admin",
-        titleTag: "EVP — Subscription Notice",
+        titleTag: "EVP - Subscription Notice",
         bodyHtml: `
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            Your upgraded plan is due to expire shortly.
+            Your upgraded plan expired today. Please renew to continue enjoying premium benefits like 60-second elevator pitches.
           </p>
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            Please renew your subscription or upload a new 30-second Elevator Video Pitch.
+            You can still upload a free 30-second Elevator Video Pitch while on the Basic plan.
           </p>
         `,
       });
@@ -225,9 +248,13 @@ export const notifyExpiredSubscriptions = async () => {
       type: "Subscription Expired",
       id: payment._id as mongoose.Types.ObjectId,
     });
+
+    payment.expiryReminderSentAt = now;
+    await payment.save();
+    notifiedCount += 1;
   }
 
-  console.log(`${expiredPayments.length} users notified of expired subscriptions.`);
+  console.log(`${notifiedCount} users notified of expired subscriptions.`);
 };
 
 export const removeExpiredElevatorPitches = async () => {
@@ -247,23 +274,33 @@ export const removeExpiredElevatorPitches = async () => {
       continue;
     }
 
-    const startPoint = plan.updatedAt ?? plan.createdAt;
-    if (!startPoint) continue;
+    const expiryDate = resolvePaymentExpiry(plan);
+    if (!expiryDate) continue;
 
-    const baseExpiry =
-      duration === "yearly"
-        ? new Date(startPoint.getTime() + 365 * MILLIS_PER_DAY)
-        : new Date(startPoint.getTime() + 30 * MILLIS_PER_DAY);
-    const removalTime = new Date(baseExpiry.getTime() + MILLIS_PER_DAY);
+    if (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime()) {
+      plan.expiresAt = expiryDate;
+    }
 
-    if (now < removalTime) continue;
+    const expired = isPaymentExpired(plan, now);
+
+    if (!expired) {
+      if (plan.isModified("expiresAt")) {
+        await plan.save();
+      }
+      continue;
+    }
 
     const hasActivePlan = await paymentInfo.exists({
       userId: plan.userId,
       planStatus: "active",
       paymentStatus: "complete",
     });
-    if (hasActivePlan) continue;
+    if (hasActivePlan) {
+      if (plan.isModified("expiresAt")) {
+        await plan.save();
+      }
+      continue;
+    }
 
     const pitch = await ElevatorPitch.findOne({ userId: plan.userId });
     if (!pitch) {
@@ -506,3 +543,4 @@ export const purgeExpiredJobApplications = async () => {
     `Purged ${totalDeleted} application(s) for ${staleJobs.length} deactivated job(s).`
   );
 };
+

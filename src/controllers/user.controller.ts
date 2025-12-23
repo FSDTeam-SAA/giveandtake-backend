@@ -19,9 +19,87 @@ import { CreateResume } from "../models/createResume.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
 import { paymentInfo } from "../models/paymentInfo.model";
-import moment from "moment";
 import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
+import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
+
+const resolveUserPlanState = async (userId: any) => {
+  const payment = await paymentInfo
+    .findOne({
+      userId,
+      paymentStatus: "complete",
+      planStatus: "active",
+    })
+    .sort({ updatedAt: -1 })
+    .populate("planId");
+
+  const state: {
+    payment: any;
+    plan: any;
+    expiryDate: Date | null;
+    payAsYouGo: boolean | undefined;
+    isValid: boolean;
+  } = {
+    payment,
+    plan: (payment?.planId as any) || null,
+    expiryDate: null,
+    payAsYouGo: false,
+    isValid: false,
+  };
+
+  if (!payment || !state.plan) {
+    return state;
+  }
+
+  const now = new Date();
+  const expiryDate = resolvePaymentExpiry(payment);
+  state.expiryDate = expiryDate ?? null;
+
+  let shouldSave = false;
+  if (
+    expiryDate &&
+    (!payment.expiresAt ||
+      payment.expiresAt.getTime() !== expiryDate.getTime())
+  ) {
+    payment.expiresAt = expiryDate;
+    shouldSave = true;
+  }
+
+  const expired = isPaymentExpired(payment, now);
+  if (expired && payment.planStatus !== "deactivate") {
+    payment.planStatus = "deactivate";
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    await payment.save();
+  }
+
+  if (expired) {
+    state.payment = null;
+    state.plan = null;
+    state.expiryDate = null;
+    state.payAsYouGo = false;
+    state.isValid = false;
+    return state;
+  }
+
+  const planValid = (state.plan?.valid || "").toLowerCase();
+  if (planValid === "payasyougo") {
+    const baseline = payment.updatedAt ?? payment.createdAt ?? now;
+    const jobExists = await Job.exists({
+      userId,
+      createdAt: { $gte: baseline },
+    });
+    state.payAsYouGo = !jobExists;
+    state.isValid = false;
+  } else {
+    state.payAsYouGo = false;
+    state.isValid = !expired && !!expiryDate;
+  }
+
+  return state;
+};
 
 export const register = catchAsync(async (req, res) => {
   const { name, email, password, address, phoneNum, role, dateOfbirth } =
@@ -130,46 +208,9 @@ export const login = catchAsync(async (req, res) => {
 
   let _user = await user.save();
 
-  const checkPayment = await paymentInfo
-    .findOne({ userId: user._id })
-    .sort({ updatedAt: -1 })
-    .populate("planId");
-
-  let expiryDate: Date | null = null;
-  let payAsYouGo: boolean | undefined = undefined;
-  let isValid = false;
-
-  if (checkPayment?.planId === null || !checkPayment) {
-    payAsYouGo = false;
-    isValid = false;
-  } else {
-    const plan = checkPayment?.planId as any;
-    if (plan?.valid != "PayAsYouGo") {
-      if (plan.valid === "monthly") {
-        expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
-      } else if (plan.valid === "yearly") {
-        expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
-      }
-
-      isValid = expiryDate ? new Date() <= expiryDate : false;
-    } else if (plan?.valid === "PayAsYouGo") {
-      const jobExists = await Job.exists({
-        userId: user._id,
-        createdAt: { $gte: checkPayment.updatedAt },
-      });
-
-      if (jobExists) {
-        payAsYouGo = false; // already posted a job after payment
-      } else {
-        payAsYouGo = true; // can still post
-      }
-
-      isValid = false;
-    } else {
-      payAsYouGo = true;
-      isValid = false;
-    }
-  }
+  const { plan: activePlan, payAsYouGo, isValid } = await resolveUserPlanState(
+    user._id
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -187,7 +228,7 @@ export const login = catchAsync(async (req, res) => {
       refreshToken,
       isValid,
       payAsYouGo,
-      plan: checkPayment?.planId,
+      plan: activePlan,
     },
   });
 });
@@ -789,41 +830,9 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
   user1.title = resume?.title || null;
 
   // ---- PLAN / PAYMENT LOGIC (unchanged) ----
-  const checkPayment = await paymentInfo
-    .findOne({ userId: user._id })
-    .sort({ updatedAt: -1 })
-    .populate("planId");
-
-  let expiryDate: Date | null = null;
-  let payAsYouGo: boolean | undefined = undefined;
-  let isValid = false;
-
-  if (checkPayment?.planId === null || !checkPayment) {
-    payAsYouGo = false;
-    isValid = false;
-  } else {
-    const plan = checkPayment?.planId as any;
-    if (plan?.valid != "PayAsYouGo") {
-      if (plan.valid === "monthly") {
-        expiryDate = moment(checkPayment.updatedAt).add(1, "month").toDate();
-      } else if (plan.valid === "yearly") {
-        expiryDate = moment(checkPayment.updatedAt).add(1, "year").toDate();
-      }
-
-      isValid = expiryDate ? new Date() <= expiryDate : false;
-    } else if (plan?.valid === "PayAsYouGo") {
-      const jobExists = await Job.exists({
-        userId: user._id,
-        createdAt: { $gte: checkPayment.updatedAt },
-      });
-
-      payAsYouGo = !jobExists;
-      isValid = false;
-    } else {
-      payAsYouGo = true;
-      isValid = false;
-    }
-  }
+  const { plan: activePlan, payAsYouGo, isValid } = await resolveUserPlanState(
+    user._id
+  );
 
   // ---- FOLLOWING / FOLLOWERS LOGIC ----
   const followingList = await Following.find({ userId: id }).populate(
@@ -846,7 +855,7 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
       ...user1,
       isValid,
       payAsYouGo,
-      plan: checkPayment?.planId,
+      plan: activePlan,
       following,
       followers,
     },

@@ -44,6 +44,8 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
     refundAdminFee: { type: Number, default: 0 },
     refundDeductions: { type: Number, default: 0 },
     refundNotes: { type: String },
+    expiresAt: { type: Date },
+    expiryReminderSentAt: { type: Date },
   },
   { timestamps: true }
 )

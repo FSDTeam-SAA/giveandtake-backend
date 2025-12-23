@@ -22,6 +22,8 @@ export interface IPaymentInfo extends Document {
   refundAdminFee?: number
   refundDeductions?: number
   refundNotes?: string
+  expiresAt?: Date
+  expiryReminderSentAt?: Date
 }
 
 export interface PaymentInfoModel extends Model<IPaymentInfo> {}
