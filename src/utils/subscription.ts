@@ -14,8 +14,11 @@ const addYears = (date: Date, years: number) => {
   return copy;
 };
 
-const normalizeDuration = (value?: string | null) =>
-  (value ?? "").toString().toLowerCase();
+const normalizeDuration = (value?: string | null) => {
+  const normalized = (value ?? "").toString().toLowerCase();
+  if (normalized === "payasyougo") return "payg";
+  return normalized;
+};
 
 export const computeExpiryFromStart = (
   start: Date,
@@ -56,8 +59,6 @@ export const isPaymentExpired = (
 ): boolean => {
   const expiry = resolvePaymentExpiry(payment);
   if (!expiry) return false;
-  const expiryBoundary = new Date(expiry);
-  expiryBoundary.setHours(0, 0, 0, 0);
   const ref = new Date(reference);
-  return expiryBoundary <= ref;
+  return ref > expiry;
 };
