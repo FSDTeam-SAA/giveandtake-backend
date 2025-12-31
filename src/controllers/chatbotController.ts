@@ -20,6 +20,9 @@ const parseHistoryPayload = (
 
     const roleRaw = (entry as { role?: unknown }).role;
     const contentRaw = (entry as { content?: unknown }).content;
+    const thoughtSignatureRaw = (entry as {
+      thoughtSignature?: unknown;
+    }).thoughtSignature;
 
     if (typeof roleRaw !== "string" || typeof contentRaw !== "string") {
       continue;
@@ -38,6 +41,10 @@ const parseHistoryPayload = (
     parsed.push({
       role: normalizedRole as ChatHistoryEntry["role"],
       content: trimmedContent,
+      ...(typeof thoughtSignatureRaw === "string" &&
+      thoughtSignatureRaw.trim()
+        ? { thoughtSignature: thoughtSignatureRaw.trim() }
+        : {}),
     });
   }
 

@@ -4,6 +4,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
+  type GoogleGenerativeAIChatInput,
 } from "@langchain/google-genai";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Collection } from "mongodb";
@@ -26,11 +27,13 @@ export interface ChatAnswer {
       "sourceType" | "sourceId" | "chunkIndex" | "text" | "metadata"
     > & { score: number }
   >;
+  thoughtSignature?: string;
 }
 
 export type ChatHistoryEntry = {
   role: "user" | "assistant";
   content: string;
+  thoughtSignature?: string;
 };
 
 type UpsertSourceOptions = {
@@ -60,7 +63,27 @@ const DEFAULT_VECTOR_INDEX =
 const DEFAULT_EMBED_MODEL =
   process.env.GEMINI_EMBED_MODEL ?? "text-embedding-004";
 const DEFAULT_CHAT_MODEL =
-  process.env.GEMINI_CHAT_MODEL ?? "gemini-2.5-flash-lite";
+  process.env.GEMINI_CHAT_MODEL ?? "gemini-3-flash-preview";
+const MAX_OUTPUT_TOKENS = 2048;
+
+type ThinkingLevel = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
+
+const resolveThinkingLevel = (raw?: string): ThinkingLevel => {
+  const normalized = raw?.trim().toUpperCase();
+  switch (normalized) {
+    case "LOW":
+    case "MEDIUM":
+    case "HIGH":
+    case "MINIMAL":
+      return normalized;
+    default:
+      return "MINIMAL";
+  }
+};
+
+const DEFAULT_THINKING_LEVEL = resolveThinkingLevel(
+  process.env.GEMINI_THINKING_LEVEL
+);
 
 class ChatbotService {
   private readonly embeddings = new GoogleGenerativeAIEmbeddings({
@@ -68,12 +91,7 @@ class ChatbotService {
     model: DEFAULT_EMBED_MODEL,
   });
 
-  private readonly chatModel = new ChatGoogleGenerativeAI({
-    apiKey: this.requireEnv("GEMINI_API_KEY"),
-    model: DEFAULT_CHAT_MODEL,
-    temperature: 0.3,
-    maxOutputTokens: 1024,
-  });
+  private readonly chatModel = this.createChatModel();
 
   private readonly textSplitter = new RecursiveCharacterTextSplitter({
     chunkSize: 800,
@@ -361,10 +379,12 @@ class ChatbotService {
             )
             .join("")
         : (completion.content as string);
+    const thoughtSignature = this.extractThoughtSignature(completion);
 
     return {
       answer,
       sources: relevant,
+      thoughtSignature,
     };
   }
 
@@ -392,6 +412,18 @@ class ChatbotService {
     }
 
     for (const entry of lastSegment) {
+      if (entry.role === "assistant") {
+        const additional_kwargs = entry.thoughtSignature
+          ? { thoughtSignature: entry.thoughtSignature }
+          : undefined;
+        condensed.push(
+          new AIMessage({
+            content: entry.content,
+            ...(additional_kwargs ? { additional_kwargs } : {}),
+          })
+        );
+        continue;
+      }
       condensed.push(
         entry.role === "assistant"
           ? new AIMessage(entry.content)
@@ -413,6 +445,11 @@ class ChatbotService {
       .map((entry, index) => ({
         role: entry.role,
         content: entry.content.trim(),
+        thoughtSignature:
+          typeof entry.thoughtSignature === "string" &&
+          entry.thoughtSignature.trim().length
+            ? entry.thoughtSignature.trim()
+            : undefined,
         index,
       }))
       .filter((entry) => Boolean(entry.content.length));
@@ -588,6 +625,49 @@ class ChatbotService {
     }
 
     return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  private createChatModel(): ChatGoogleGenerativeAI {
+    const thinkingLevel = DEFAULT_THINKING_LEVEL;
+    const model = new ChatGoogleGenerativeAI({
+      apiKey: this.requireEnv("GEMINI_API_KEY"),
+      model: DEFAULT_CHAT_MODEL,
+      temperature: 1.0,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      thinkingLevel,
+    } as GoogleGenerativeAIChatInput & {
+      thinkingLevel?: ThinkingLevel;
+    });
+
+    const client = (model as unknown as {
+      client?: { generationConfig?: Record<string, unknown> };
+    }).client;
+    if (client?.generationConfig) {
+      client.generationConfig.temperature = 1.0;
+      client.generationConfig.maxOutputTokens = MAX_OUTPUT_TOKENS;
+      (client.generationConfig as Record<string, unknown>).thinkingLevel =
+        thinkingLevel;
+    }
+
+    return model;
+  }
+
+  private extractThoughtSignature(message: AIMessage): string | undefined {
+    const fromAdditional =
+      (message.additional_kwargs as Record<string, unknown> | undefined)
+        ?.thoughtSignature;
+    if (typeof fromAdditional === "string" && fromAdditional.trim().length) {
+      return fromAdditional.trim();
+    }
+
+    const fromMetadata =
+      (message.response_metadata as Record<string, unknown> | undefined)
+        ?.thoughtSignature;
+    if (typeof fromMetadata === "string" && fromMetadata.trim().length) {
+      return fromMetadata.trim();
+    }
+
+    return undefined;
   }
 }
 
