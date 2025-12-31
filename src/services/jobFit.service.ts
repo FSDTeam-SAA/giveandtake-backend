@@ -1,4 +1,4 @@
-﻿import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type {
   IApplicationRequirement,
@@ -21,7 +21,7 @@ import {
 import stripHtml from "../utils/stripHtml";
 
 const DEFAULT_CHAT_MODEL =
-  process.env.GEMINI_CHAT_MODEL ?? "gemini-2.5-flash-lite";
+  process.env.GEMINI_CHAT_MODEL ?? "gemini-3-flash-preview";
 
 type MaybeArray<T> = T | T[] | undefined | null;
 
@@ -136,6 +136,13 @@ type EvaluatePayload = {
   education?: Array<Partial<IEducation>>;
 };
 
+type EvaluateOptions = {
+  useAi?: boolean;
+  useEmbeddings?: boolean;
+  jobEmbedding?: number[] | null;
+  profileEmbedding?: number[] | null;
+};
+
 class JobFitService {
   private chatModel?: ChatGoogleGenerativeAI;
   private aiEnabled: boolean;
@@ -159,7 +166,6 @@ class JobFitService {
 
     // Optional generationConfig: some LangChain versions pass this through.
     // Safe to keep; ignored if unsupported.
-    // @ts-ignore
     this.chatModel = new ChatGoogleGenerativeAI({
       apiKey,
       model: DEFAULT_CHAT_MODEL,
@@ -171,7 +177,12 @@ class JobFitService {
     return true;
   }
 
-  async evaluate(payload: EvaluatePayload): Promise<JobFitSummary> {
+  async evaluate(
+    payload: EvaluatePayload,
+    options: EvaluateOptions = {}
+  ): Promise<JobFitSummary> {
+    const allowAi = options.useAi ?? this.aiEnabled;
+    const allowEmbeddings = options.useEmbeddings ?? true;
     const jobText = buildJobText(payload.job);
     const profileText = buildProfileText(
       payload.resume,
@@ -179,7 +190,10 @@ class JobFitService {
       payload.education
     );
 
-    const aiResponse = await this.callGemini(jobText, profileText);
+    const aiResponse =
+      allowAi && this.aiEnabled
+        ? await this.callGemini(jobText, profileText)
+        : null;
 
     const resumeSkillList = (payload.resume.skills ?? [])
       .map((skill) => stripHtml(String(skill ?? "")).trim())
@@ -257,19 +271,26 @@ class JobFitService {
     );
 
     let embeddingScore: number | null = null;
-    if (areEmbeddingsEnabled()) {
-      const [jobEmbedding, profileEmbedding] = await Promise.all([
-        generateJobEmbeddingVector(payload.job),
-        generateProfileEmbeddingVector(
+    let jobEmbedding = options.jobEmbedding ?? null;
+    let profileEmbedding = options.profileEmbedding ?? null;
+
+    if (allowEmbeddings && areEmbeddingsEnabled()) {
+      if (!jobEmbedding) {
+        jobEmbedding = await generateJobEmbeddingVector(payload.job);
+      }
+      if (!profileEmbedding) {
+        profileEmbedding = await generateProfileEmbeddingVector(
           payload.resume,
           payload.experiences,
           payload.education
-        ),
-      ]);
+        );
+      }
 
-      const similarity = cosineSimilarity(jobEmbedding, profileEmbedding);
-      if (similarity > 0) {
-        embeddingScore = this.safeScore(similarity * 100);
+      if (jobEmbedding && profileEmbedding) {
+        const similarity = cosineSimilarity(jobEmbedding, profileEmbedding);
+        if (similarity > 0) {
+          embeddingScore = this.safeScore(similarity * 100);
+        }
       }
     }
 
@@ -279,7 +300,11 @@ class JobFitService {
       weightedScores.push({ value: embeddingScore, weight: 0.3 });
     }
 
-    if (this.aiEnabled && typeof aiResponse?.matchPercentage === "number") {
+    if (
+      allowAi &&
+      this.aiEnabled &&
+      typeof aiResponse?.matchPercentage === "number"
+    ) {
       weightedScores.push({
         value: aiResponse.matchPercentage,
         weight: 0.5,
@@ -322,7 +347,11 @@ class JobFitService {
         matchedSkillCount: matchedSkills.length,
       },
       model:
-        this.aiEnabled && this.chatModel ? DEFAULT_CHAT_MODEL : "heuristic+GeminiEmb",
+        allowAi && this.chatModel
+          ? DEFAULT_CHAT_MODEL
+          : allowEmbeddings && embeddingScore !== null
+          ? "heuristic+GeminiEmb"
+          : "heuristic",
     };
   }
 
@@ -338,20 +367,22 @@ class JobFitService {
     try {
       const systemPrompt = new SystemMessage(
         [
-          "You are a cross-industry job↔profile skill matcher (tech and non-tech).",
+          "You are a cross-industry job-profile skill matcher (tech and non-tech).",
           'Return STRICT JSON ONLY with keys (in this order): {"jobSkills":[],"profileSkills":[],"matchedSkills":[],"missingSkills":[],"matchPercentage":0,"summary":""}',
-          "Extract atomic skills (1–3 words): tools, methods, certifications, licenses, platforms, soft skills (e.g., Communication). No verbs/responsibilities/sentences.",
+          "Extract atomic skills (1-3 words): tools, methods, certifications, licenses, platforms, soft skills (e.g., Communication). No verbs/responsibilities/sentences.",
           "Canonicalize families unless materially different:",
-          "  HTML5→HTML; CSS3→CSS; ES6/ES2015→JavaScript; Node/NodeJS→Node.js; ReactJS→React; TS→TypeScript;",
-          "  GitHub/GitLab/Bitbucket→Git; AdWords/Google AdWords→Google Ads; Facebook Ads/Meta Ads→Meta Ads;",
-          "  MS Excel→Excel; MS Word→Word; Office Suite→Microsoft Office; EMR/EHR→EHR;",
-          "  GMP/Good Manufacturing Practice→GMP; HACCP stays HACCP; ISO 9001 stays ISO 9001; FAA Part 107 stays FAA Part 107.",
+          "  HTML5 -> HTML; CSS3 -> CSS; ES6/ES2015 -> JavaScript; Node/NodeJS -> Node.js; ReactJS -> React; TS -> TypeScript;",
+          "  GitHub/GitLab/Bitbucket -> Git; AdWords/Google AdWords -> Google Ads; Facebook Ads/Meta Ads -> Meta Ads;",
+          "  MS Excel -> Excel; MS Word -> Word; Office Suite -> Microsoft Office; EMR/EHR -> EHR;",
+          "  GMP/Good Manufacturing Practice -> GMP; HACCP stays HACCP; ISO 9001 stays ISO 9001; FAA Part 107 stays FAA Part 107.",
           "Keep distinct MAJOR differences (Python 2 vs 3; AngularJS vs Angular; CPR vs BLS vs ACLS).",
-          "Cleanup: split on 'and', '/', '&', '+', ',', '•', '|', ';'. Never output these as skills. No trailing punctuation. Deduplicate case-insensitively after canonicalization.",
-          "Format: Title Case words; use UPPERCASE for ≤4-char acronyms (SQL, AWS, EHR, GMP, ISO, CPR, BLS, ACLS).",
+          "Cleanup: split on 'and', '/', '&', '+', ',', bullets, '|', ';'. Never output these as skills. No trailing punctuation. Deduplicate case-insensitively after canonicalization.",
+          "Format: Title Case words; use UPPERCASE for 4+ letter acronyms (SQL, AWS, EHR, GMP, ISO, CPR, BLS, ACLS).",
           "Matching is computed AFTER canonicalization (treat HTML==HTML5, CSS==CSS3, Git==GitHub/GitLab/Bitbucket, etc.).",
-          "Limit jobSkills and profileSkills to ≤12 each (most relevant). matchPercentage = 0–100 (number). summary ≤40 words, neutral.",
-          "No markdown, no comments, no extra keys."
+          "Limit jobSkills and profileSkills to the 12 most relevant. matchPercentage = 0-100 (number). summary <= 40 words, neutral.",
+          "Only surface jobSkills that are explicit or strongly implied requirements in the JOB text; avoid generic fillers or invented items.",
+          "missingSkills must be a subset of those jobSkills that the PROFILE clearly lacks; drop anything uncertain, generic, or unrelated to the role.",
+          "If the JOB is vague, return fewer skills instead of guessing. No markdown, no comments, no extra keys."
         ].join("\n")
       );
 
@@ -374,7 +405,7 @@ class JobFitService {
   private sanitizeAiLists(resp: FitAiResponse | null): FitAiResponse | null {
     if (!resp) return resp;
 
-    const SEP = /(?:\s+and\s+|\/|&|,|·|•|\||;|\+)+/i;
+    const SEP = /(?:\s+and\s+|\/|&|,|\u00fa|\u0007|\||;|\+)+/i;
     const BAD = new Set(["and", "or", "with", "the"]);
 
     const normalizeFamily = (p: string): string => {
@@ -505,7 +536,7 @@ class JobFitService {
       if (!chunk) continue;
       const normalizedChunk = chunk.replace(/\. (?=[A-Z])/g, "\n");
       const tokens = normalizedChunk
-        .split(/[\n\r,;•\u2022|/+&]+/g)
+        .split(/[\n\r,;Ã¢â‚¬Â¢\u2022|/+&]+/g)
         .map((token) =>
           token
             .replace(/^\d+(\.|-)?\s*/, "")

@@ -28,6 +28,7 @@ import {
   generateJobEmbeddingVector,
   generateProfileEmbeddingVector,
 } from "../services/embedding.service";
+import { jobFitService } from "../services/jobFit.service";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
@@ -1151,6 +1152,8 @@ export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
 /************************
  * JOB RECOMMEND SYSTEM *
  ************************/
+const MIN_SUGGESTED_MATCH_PERCENT = 50;
+
 export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?._id;
 
@@ -1228,6 +1231,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const profileEmbedding = embeddingsEnabled
     ? await generateProfileEmbeddingVector(resume, undefined, undefined)
     : null;
+  const useEmbeddings = Boolean(profileEmbedding && embeddingsEnabled);
   const seenJobIds = new Set<string>();
 
   for (const job of jobs) {
@@ -1254,12 +1258,16 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
     if (matchedSkillsInResponsibilities.length > 0) score += 1;
     if (matchedSkillsInDescription.length > 0) score += 1;
 
-    if (profileEmbedding) {
-      const jobEmbedding = await generateJobEmbeddingVector(job);
-      const similarity = embeddingCosineSimilarity(
-        jobEmbedding,
-        profileEmbedding
-      );
+    const jobEmbedding = useEmbeddings
+      ? await generateJobEmbeddingVector(job)
+      : null;
+
+    const similarity =
+      useEmbeddings && jobEmbedding && profileEmbedding
+        ? embeddingCosineSimilarity(jobEmbedding, profileEmbedding)
+        : 0;
+
+    if (useEmbeddings) {
       if (similarity >= 0.65) {
         score += 2;
       } else if (similarity >= 0.45) {
@@ -1267,14 +1275,31 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       }
     }
 
-    if (score >= 5) exactMatches.push({ job, score });
-    else partialMatches.push({ job, score });
+    const fitInsight = await jobFitService.evaluate(
+      { job, resume },
+      {
+        useAi: false,
+        useEmbeddings,
+        jobEmbedding: jobEmbedding ?? undefined,
+        profileEmbedding: profileEmbedding ?? undefined,
+      }
+    );
+    const matchPercentage = fitInsight.score;
+
+    if (matchPercentage < MIN_SUGGESTED_MATCH_PERCENT) continue;
+
+    const adjustedScore = score + matchPercentage / 25;
+
+    if (adjustedScore >= 5)
+      exactMatches.push({ job, score: adjustedScore, matchPercentage });
+    else partialMatches.push({ job, score: adjustedScore, matchPercentage });
   }
 
   exactMatches.sort((a, b) => b.score - a.score);
   partialMatches.sort((a, b) => b.score - a.score);
 
   if (
+    useEmbeddings &&
     profileEmbedding &&
     exactMatches.length === 0 &&
     partialMatches.length === 0
@@ -1287,13 +1312,24 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       deadlineFilter
     );
 
-    if (embeddingMatches.length) {
-      partialMatches.push(
-        ...embeddingMatches.map(({ job, similarity }) => ({
-          job,
-          score: Math.min(4.5, Math.max(1, similarity * 10)),
-        }))
+    for (const { job, similarity } of embeddingMatches) {
+      const jobEmbedding = await generateJobEmbeddingVector(job);
+      const fitInsight = await jobFitService.evaluate(
+        { job, resume },
+        {
+          useAi: false,
+          useEmbeddings: useEmbeddings,
+          jobEmbedding,
+          profileEmbedding,
+        }
       );
+      const matchPercentage = fitInsight.score;
+      if (matchPercentage < MIN_SUGGESTED_MATCH_PERCENT) continue;
+
+      const adjustedScore =
+        Math.min(4.5, Math.max(1, similarity * 10)) + matchPercentage / 25;
+
+      partialMatches.push({ job, score: adjustedScore, matchPercentage });
     }
   }
 

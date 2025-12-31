@@ -424,11 +424,7 @@ class ChatbotService {
         );
         continue;
       }
-      condensed.push(
-        entry.role === "assistant"
-          ? new AIMessage(entry.content)
-          : new HumanMessage(entry.content)
-      );
+      condensed.push(new HumanMessage(entry.content));
     }
 
     return condensed;
