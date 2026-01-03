@@ -74,6 +74,17 @@ function getFirstName(fullName?: string): string {
   return trimmed.split(/\s+/)[0];
 }
 
+function getUserIdValue(
+  payment: any
+): mongoose.Types.ObjectId | string | undefined {
+  const user = payment?.userId as any;
+  if (!user) return undefined;
+  if (user instanceof mongoose.Types.ObjectId) return user;
+  if (typeof user === "string") return user;
+  if (user._id) return user._id as mongoose.Types.ObjectId | string;
+  return undefined;
+}
+
 function buildEvpEmail(opts: {
   heading: string;              // e.g., "Job Expiry Notice"
   subheading?: string;          // e.g., "Expires in 24 hours"
@@ -184,6 +195,7 @@ export const notifyJobExpiryToRecruiters = async () => {
 export const notifyExpiredSubscriptions = async () => {
   const now = new Date();
   const windowStart = new Date(now.getTime() - MILLIS_PER_DAY);
+  const notifiedUsers = new Set<string>();
 
   const candidates = await paymentInfo
     .find({
@@ -211,7 +223,49 @@ export const notifyExpiredSubscriptions = async () => {
       payment.planStatus = "deactivate";
     }
     if (!expiredWithinWindow) {
-      if (payment.isModified('expiresAt') || planChanged) {
+      if (
+        payment.isModified('expiresAt') ||
+        payment.isModified("planStatus") ||
+        payment.isModified("expiryReminderSentAt")
+      ) {
+        await payment.save();
+      }
+      continue;
+    }
+
+    const userIdValue = getUserIdValue(payment);
+    const userIdStr = userIdValue ? String(userIdValue) : undefined;
+
+    if (userIdValue) {
+      const activePlan = await paymentInfo
+        .findOne({
+          userId: userIdValue,
+          paymentStatus: "complete",
+          planStatus: "active",
+          _id: { $ne: payment._id },
+        })
+        .sort({ updatedAt: -1 });
+
+      if (activePlan && !isPaymentExpired(activePlan, now)) {
+        payment.expiryReminderSentAt = now;
+        if (
+          payment.isModified("expiresAt") ||
+          payment.isModified("planStatus") ||
+          payment.isModified("expiryReminderSentAt")
+        ) {
+          await payment.save();
+        }
+        continue;
+      }
+    }
+
+    if (userIdStr && notifiedUsers.has(userIdStr)) {
+      payment.expiryReminderSentAt = now;
+      if (
+        payment.isModified("expiresAt") ||
+        payment.isModified("planStatus") ||
+        payment.isModified("expiryReminderSentAt")
+      ) {
         await payment.save();
       }
       continue;
@@ -223,17 +277,17 @@ export const notifyExpiredSubscriptions = async () => {
     if (user?.email) {
       const subject = "Your subscription has expired";
       const body = buildEvpEmail({
-        heading: "Subscription Notice",
-        subheading: "Expired",
+        heading: "Your subscription has expired",
+        subheading: "Action required",
         greetingName: getFirstName(user?.name),
         signer: "EVP Admin",
         titleTag: "EVP - Subscription Notice",
         bodyHtml: `
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            Your upgraded plan expired today. Please renew to continue enjoying premium benefits like 60-second elevator pitches.
+            Your subscription has expired. Please renew to continue enjoying premium benefits like 60-second elevator pitches.
           </p>
           <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            You can still upload a free 30-second Elevator Video Pitch while on the Basic plan.
+            If you have already renewed or upgraded to a new plan, this notice can be ignored and your latest subscription will remain active.
           </p>
         `,
       });
@@ -250,7 +304,17 @@ export const notifyExpiredSubscriptions = async () => {
     });
 
     payment.expiryReminderSentAt = now;
-    await payment.save();
+    if (
+      payment.isModified("expiresAt") ||
+      payment.isModified("planStatus") ||
+      payment.isModified("expiryReminderSentAt")
+    ) {
+      await payment.save();
+    }
+
+    if (userIdStr) {
+      notifiedUsers.add(userIdStr);
+    }
     notifiedCount += 1;
   }
 
