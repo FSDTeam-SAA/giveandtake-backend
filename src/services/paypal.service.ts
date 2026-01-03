@@ -34,14 +34,16 @@ export const refundOrder = async (
 ) => {
   const request = new paypal.payments.CapturesRefundRequest(captureId);
 
-  request.requestBody({
+  // Only send the fields PayPal needs; omit invoice_id / note_to_payer to avoid INVALID_STRING_LENGTH.
+  const body: Record<string, unknown> = {
     amount: {
       value: amount.toFixed(2),
       currency_code: 'USD',
     },
-    invoice_id: '',
-    note_to_payer: '',
-  });
+  };
+
+  // SDK typings expect invoice_id/note_to_payer, but they are optional in practice.
+  request.requestBody(body as any);
 
   const refund = await paypalClient.execute(request);
   return refund.result;
