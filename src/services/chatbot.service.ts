@@ -4,7 +4,6 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import {
   ChatGoogleGenerativeAI,
   GoogleGenerativeAIEmbeddings,
-  type GoogleGenerativeAIChatInput,
 } from "@langchain/google-genai";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Collection } from "mongodb";
@@ -624,28 +623,21 @@ class ChatbotService {
   }
 
   private createChatModel(): ChatGoogleGenerativeAI {
-    const thinkingLevel = DEFAULT_THINKING_LEVEL;
-    const model = new ChatGoogleGenerativeAI({
+    // The API expects lowercase values inside a nested thinking_config object.
+    const thinkingLevel = DEFAULT_THINKING_LEVEL.toLowerCase();
+
+    return new ChatGoogleGenerativeAI({
       apiKey: this.requireEnv("GEMINI_API_KEY"),
       model: DEFAULT_CHAT_MODEL,
       temperature: 1.0,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
-      thinkingLevel,
-    } as GoogleGenerativeAIChatInput & {
-      thinkingLevel?: ThinkingLevel;
+      // Forward Gemini thinking config through the constructor; cast keeps TS happy
+      ...( {
+        thinkingConfig: {
+          thinkingLevel,
+        },
+      } as any),
     });
-
-    const client = (model as unknown as {
-      client?: { generationConfig?: Record<string, unknown> };
-    }).client;
-    if (client?.generationConfig) {
-      client.generationConfig.temperature = 1.0;
-      client.generationConfig.maxOutputTokens = MAX_OUTPUT_TOKENS;
-      (client.generationConfig as Record<string, unknown>).thinkingLevel =
-        thinkingLevel;
-    }
-
-    return model;
   }
 
   private extractThoughtSignature(message: AIMessage): string | undefined {
