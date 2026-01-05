@@ -46,7 +46,7 @@ cron.schedule('1 0 * * *', async () => {
   console.log('Running elevator pitch & job cleanup tasks...')
   await notifyExpiredSubscriptions();
   await removeExpiredElevatorPitches();
-  await removeOrphanedElevatorPitchAssets();
+  // await removeOrphanedElevatorPitchAssets();
   await purgeExpiredJobApplications();
 })
 
