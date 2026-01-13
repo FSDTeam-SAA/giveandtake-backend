@@ -110,17 +110,6 @@ export const register = catchAsync(async (req, res) => {
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
-  const otp = generateOTP();
-  const jwtPayloadOTP = {
-    otp: otp,
-  };
-
-  const otptoken = createToken(
-    jwtPayloadOTP,
-    process.env.OTP_SECRET as string,
-    process.env.OTP_EXPIRE
-  );
-
   const user = await User.create({
     name,
     email,
@@ -128,21 +117,14 @@ export const register = catchAsync(async (req, res) => {
     phoneNum,
     address,
     role,
-    verificationInfo: { token: otptoken },
+    verificationInfo: { verified: true, token: "", resetToken: "" },
     dateOfbirth,
   });
-  // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-  await sendEmail(
-    user.email,
-    "OTP - Elevator Video Pitch©",
-    resetOtpTemplate(user.name, otp),
-    { from: DEFAULT_NO_REPLY_EMAIL }
-  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Registration successful. Please verify your OTP",
+    message: "Registration successful. Proceed to security questions.",
     data: user,
   });
 });
@@ -1397,13 +1379,6 @@ export const emailChange = catchAsync(async (req, res) => {
     Company.updateMany({ userId: id, cemail: oldEmail }, { cemail: email }),
     RecruiterAccount.updateMany({ userId: id, emailAddress: oldEmail }, { emailAddress: email }),
   ]);
-
-  await sendEmail(
-    user.email,
-    "OTP - Elevator Video PitchAc",
-    resetOtpTemplate(user.name, otp),
-    { from: DEFAULT_NO_REPLY_EMAIL }
-  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
