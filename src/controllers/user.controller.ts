@@ -23,6 +23,9 @@ import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 
+const DEFAULT_NO_REPLY_EMAIL =
+  process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
+
 const resolveUserPlanState = async (userId: any) => {
   const payment = await paymentInfo
     .findOne({
@@ -129,7 +132,12 @@ export const register = catchAsync(async (req, res) => {
     dateOfbirth,
   });
   // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-  await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
+  await sendEmail(
+    user.email,
+    "OTP - Elevator Video Pitch©",
+    resetOtpTemplate(user.name, otp),
+    { from: DEFAULT_NO_REPLY_EMAIL }
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -168,7 +176,12 @@ export const login = catchAsync(async (req, res) => {
     user.verificationInfo.token = otptoken;
     await user.save();
     // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-    await sendEmail(user.email, "OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
+    await sendEmail(
+      user.email,
+      "OTP - Elevator Video Pitch©",
+      resetOtpTemplate(user.name, otp),
+      { from: DEFAULT_NO_REPLY_EMAIL }
+    );
 
     return sendResponse(res, {
       statusCode: httpStatus.FORBIDDEN,
@@ -311,7 +324,12 @@ export const forgetPassword = catchAsync(async (req, res) => {
 
   /////// TODO: SENT EMAIL MUST BE DONE
   // sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
-  sendEmail(user.email, "Reset Password OTP - Elevator Video Pitch©", resetOtpTemplate(user.name, otp));
+  sendEmail(
+    user.email,
+    "Reset Password OTP - Elevator Video Pitch©",
+    resetOtpTemplate(user.name, otp),
+    { from: DEFAULT_NO_REPLY_EMAIL }
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -1380,7 +1398,12 @@ export const emailChange = catchAsync(async (req, res) => {
     RecruiterAccount.updateMany({ userId: id, emailAddress: oldEmail }, { emailAddress: email }),
   ]);
 
-  await sendEmail(user.email, "OTP - Elevator Video PitchAc", resetOtpTemplate(user.name, otp));
+  await sendEmail(
+    user.email,
+    "OTP - Elevator Video PitchAc",
+    resetOtpTemplate(user.name, otp),
+    { from: DEFAULT_NO_REPLY_EMAIL }
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

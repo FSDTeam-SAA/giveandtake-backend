@@ -4,7 +4,6 @@ import httpStatus from 'http-status'
 import { Newsletter } from '../models/newsletter.model'
 import sendResponse from '../utils/sendResponse'
 import AppError from '../errors/AppError'
-import { sendEmail } from '../utils/sendEmail'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 
 /**********************************
@@ -104,7 +103,7 @@ export const sendNewsletterToSubscribers = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'No subscribers found')
     }
 
-    await sendEmail(subscriberEmails, subject, htmlContent)
+    // Email delivery to subscribers is temporarily disabled.
 
     sendResponse(res, {
       statusCode: httpStatus.OK,

@@ -4,9 +4,16 @@ import AppError from "../errors/AppError";
 export const sendEmail = async (
   to: string | string[],
   subject: string,
-  html: string
+  html: string,
+  options?: { from?: string }
 ): Promise<void> => {
   try {
+    const defaultFrom =
+      process.env.NO_REPLY_EMAIL ||
+      process.env.EMAIL_FROM ||
+      "no-reply@evpitch.com";
+    const from = options?.from || defaultFrom;
+
     const transporter = nodemailer.createTransport({
       host: "smtp.hostinger.com",
       port: 465,
@@ -18,7 +25,7 @@ export const sendEmail = async (
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
+      from,
       to,
       subject: subject || "No subject",
       html,

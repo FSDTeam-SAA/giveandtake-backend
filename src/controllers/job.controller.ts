@@ -13,7 +13,6 @@ import {
 import { User } from "../models/user.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
-import { sendEmail } from "../utils/sendEmail";
 import { io } from "../server";
 import { createNotification } from "../sockets/notification.service";
 import mongoose from "mongoose";
@@ -891,97 +890,6 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
  * // UPDATE A JOB *
  *******************/
 
-// Helper: safely get first name
-function getFirstName(fullName?: string): string {
-  if (!fullName) return "Candidate";
-  const trimmed = fullName.trim();
-  if (!trimmed) return "Candidate";
-  return trimmed.split(/\s+/)[0];
-}
-
-// Helper: shared EVP email template
-function buildEvpEmail(opts: {
-  heading: string; // e.g., "Application Update"
-  subheading?: string; // e.g., "Status: Shortlisted"
-  greetingName: string; // e.g., "Fahim"
-  bodyHtml: string; // inner HTML paragraphs
-  signer: string; // e.g., recruiter name
-  titleTag?: string; // <title> content
-}) {
-  const {
-    heading,
-    subheading,
-    greetingName,
-    bodyHtml,
-    signer,
-    titleTag = "Elevator Video Pitch — Notification",
-  } = opts;
-
-  return `<!doctype html>
-  <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${titleTag}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
-      <tr>
-        <td align="center" style="padding:20px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-            
-            <!-- Header -->
-            <tr>
-              <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td style="vertical-align:middle;">
-                      <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
-                      <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${heading}${
-    subheading ? ` — ${subheading}` : ""
-  }</p>
-                    </td>
-                    <td style="text-align:right;vertical-align:middle;">
-                      <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
-                        <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
-                      </div>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-
-            <!-- Body -->
-            <tr>
-              <td style="padding:24px;">
-                <p style="margin:0 0 12px;font-size:15px;color:#111;">Dear <strong>${greetingName}</strong>,</p>
-                ${bodyHtml}
-                <p style="margin:16px 0 0;font-size:14px;color:#374151;">
-                  Best regards,<br>
-                  <strong>${signer}</strong><br>
-                  Elevator Video Pitch©
-                </p>
-              </td>
-            </tr>
-
-            <!-- Footer -->
-            <tr>
-              <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
-                <div style="max-width:520px;margin:0 auto;">
-                  <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
-                  <p style="margin:0;">If you have any questions, contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
-                </div>
-              </td>
-            </tr>
-
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>`;
-}
-
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -990,30 +898,8 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(400, "job not found");
   }
 
-  const user = job.userId as any;
-  const greetingName = getFirstName(user?.name);
-
   if (req.body.adminApprove) {
-    // ✅ Admin Approved Email
-    const emailSubject = "Job Post Updated By Admin";
-    const emailBody = buildEvpEmail({
-      heading: "Job Post Status",
-      subheading: "Approved",
-      greetingName,
-      signer: "EVP Admin",
-      titleTag: "EVP — Job Post Approved",
-      bodyHtml: `
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          Your job post has been <strong>approved</strong> by the admin team and will go live at your scheduled time.
-        </p>
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          Thank you for using <strong>Elevator Video Pitch©</strong> to find great candidates.
-        </p>
-      `,
-    });
-
-    await sendEmail(user?.email, emailSubject, emailBody);
-
+    // Email notifications for job approvals are temporarily disabled.
     const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: "Job Post Updated By Admin",
@@ -1031,27 +917,7 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       count,
     });
   } else {
-    // ❌ Admin Denied Email
-    const emailSubject = "Job Post Updated By Admin";
-    const emailBody = buildEvpEmail({
-      heading: "Job Post Status",
-      subheading: "Denied",
-      greetingName,
-      signer: "EVP Admin",
-      titleTag: "EVP — Job Post Denied",
-      bodyHtml: `
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          Unfortunately, your job post did not meet our publishing criteria and has been <strong>denied</strong> at this time.
-        </p>
-        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-          If you need assistance or clarification, please reach out to us at
-          <a href="mailto:info@evpitch.com" style="color:#2B7FD0;text-decoration:none;">info@evpitch.com</a>.
-        </p>
-      `,
-    });
-
-    await sendEmail(user?.email, emailSubject, emailBody);
-
+    // Email notifications for job denials are temporarily disabled.
     const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: "Job Post Denied By Admin",
@@ -1110,7 +976,6 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     data: updated,
   });
 });
-
 /*******************
  * // DELETE A JOB *
  *******************/
@@ -1717,3 +1582,6 @@ export const adminApproveJobs = catchAsync(async (req, res) => {
     data: { jobs, meta },
   });
 });
+
+
+

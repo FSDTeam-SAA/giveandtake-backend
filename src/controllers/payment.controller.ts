@@ -80,6 +80,18 @@ const addDays = (date: Date, days: number) =>
 const normalizePlanValid = (valid?: string | null) =>
   (valid || "").trim().toLowerCase();
 
+const NO_REPLY_EMAIL = process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
+const AUDIENCE_FROM_EMAIL: Record<string, string> = {
+  candidate:
+    process.env.CANDIDATE_EMAIL_FROM || "noreplycandidate@evpitch.com",
+  recruiter:
+    process.env.RECRUITER_EMAIL_FROM || "noreplyrecruiter@evpitch.com",
+  company: process.env.COMPANY_EMAIL_FROM || "noreplycompany@evpitch.com",
+};
+
+const resolveSenderForAudience = (audience?: string | null) =>
+  AUDIENCE_FROM_EMAIL[(audience || "").toLowerCase()] || NO_REPLY_EMAIL;
+
 /***********************
  * REFUND CALC HELPERS *
  ***********************/
@@ -123,6 +135,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       throw new AppError(400, "Unable to determine payment amount");
     }
 
+    const audience = (plan.for || user.role || "").toLowerCase();
     const planValidity = (plan.valid || "").toLowerCase();
     const derivedDuration =
       planValidity === "monthly"
@@ -262,8 +275,11 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     console.log(captureDetails);
 
     if (captureDetails.status === "COMPLETED") {
+      const sender = resolveSenderForAudience(audience);
       console.log("ami hoisi");
-      await sendEmail(user.email, "Payment Complete", emailBody);
+      await sendEmail(user.email, "Payment Complete", emailBody, {
+        from: sender,
+      });
       console.log("email sent");
     }
 
@@ -479,37 +495,38 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
   payment.refundNotes = notes.join(" | ");
   await payment.save();
 
-  const emailBody = `
-  <html>
-    <body style="font-family: Arial, sans-serif;">
-      <h2>Refund Processed Successfully</h2>
-      <p>Dear ${user.name},</p>
-      <p>Your refund for payment <strong>${payment.transactionId}</strong> has been processed according to our policy.</p>
-      <table style="border: 1px solid #ddd; border-collapse: collapse; margin-top: 10px;">
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Original Amount</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">$${payment.amount.toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">PAYG Deductions</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">$${deductions.toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Admin Fee (10%)</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">$${adminFee.toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">Refunded Amount</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">$${refundAmount.toFixed(2)}</td>
-        </tr>
-      </table>
-      <p>If you have any questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
-      <p>Thank you,<br>Elevator Video PitchAc</p>
-    </body>
-  </html>
-  `;
+  // Email notifications for refunds are temporarily disabled.
+  // const emailBody = `
+  // <html>
+  //   <body style="font-family: Arial, sans-serif;">
+  //     <h2>Refund Processed Successfully</h2>
+  //     <p>Dear ${user.name},</p>
+  //     <p>Your refund for payment <strong>${payment.transactionId}</strong> has been processed according to our policy.</p>
+  //     <table style="border: 1px solid #ddd; border-collapse: collapse; margin-top: 10px;">
+  //       <tr>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">Original Amount</td>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">$${payment.amount.toFixed(2)}</td>
+  //       </tr>
+  //       <tr>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">PAYG Deductions</td>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">$${deductions.toFixed(2)}</td>
+  //       </tr>
+  //       <tr>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">Admin Fee (10%)</td>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">$${adminFee.toFixed(2)}</td>
+  //       </tr>
+  //       <tr>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">Refunded Amount</td>
+  //         <td style="border: 1px solid #ddd; padding: 8px;">$${refundAmount.toFixed(2)}</td>
+  //       </tr>
+  //     </table>
+  //     <p>If you have any questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
+  //     <p>Thank you,<br>Elevator Video PitchAc</p>
+  //   </body>
+  // </html>
+  // `;
 
-  await sendEmail(user.email, "Refund Processed", emailBody);
+  // await sendEmail(user.email, "Refund Processed", emailBody);
 
   res.status(200).json({
     success: true,

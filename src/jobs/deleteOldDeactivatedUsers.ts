@@ -5,7 +5,6 @@ import { Job } from '../models/job.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { User } from '../models/user.model'
 import { createNotification } from '../sockets/notification.service'
-import { sendEmail } from '../utils/sendEmail'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import { AppliedJob } from '../models/appliedJob.model'
@@ -273,27 +272,7 @@ export const notifyExpiredSubscriptions = async () => {
 
     const user = payment.userId as any;
 
-    // Send email if we have an address
-    if (user?.email) {
-      const subject = "Your subscription has expired";
-      const body = buildEvpEmail({
-        heading: "Your subscription has expired",
-        subheading: "Action required",
-        greetingName: getFirstName(user?.name),
-        signer: "EVP Admin",
-        titleTag: "EVP - Subscription Notice",
-        bodyHtml: `
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            Your subscription has expired. Please renew to continue enjoying premium benefits like 60-second elevator pitches.
-          </p>
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
-            If you have already renewed or upgraded to a new plan, this notice can be ignored and your latest subscription will remain active.
-          </p>
-        `,
-      });
-
-      await sendEmail(user.email, subject, body);
-    }
+    // Email reminders for expired subscriptions are temporarily disabled.
 
     // Existing in-app notification
     await createNotification({
