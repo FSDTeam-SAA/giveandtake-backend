@@ -12,9 +12,13 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 
   try {
     const decoded = await jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;
-    // console.log(decoded)
     const user = await User.findById(decoded._id)
-    if (user && await User.isOTPVerified(user._id.toString())) {
+    if (user) {
+      if (!user.verificationInfo?.verified) {
+        user.verificationInfo.verified = true;
+        user.verificationInfo.token = "";
+        await user.save();
+      }
       req.user = user;
     }
     next();

@@ -30,7 +30,7 @@ const userSchema: Schema = new Schema<IUser>(
     dateOfbirth: { type: Date },
 
     verificationInfo: {
-      verified: { type: Boolean, default: false },
+      verified: { type: Boolean, default: true },
       token: { type: String, default: '' },
       resetToken: { type: String, default: '' },
     },
@@ -111,7 +111,13 @@ userSchema.statics.isUserExistsByEmail = async function (email: string) {
 
 userSchema.statics.isOTPVerified = async function (id: string) {
   const user = await User.findById(id).select('+verificationInfo')
-  return user?.verificationInfo.verified
+  if (!user) return false
+  if (!user.verificationInfo.verified) {
+    user.verificationInfo.verified = true
+    user.verificationInfo.token = ''
+    await user.save()
+  }
+  return true
 }
 
 userSchema.statics.isPasswordMatched = async function (

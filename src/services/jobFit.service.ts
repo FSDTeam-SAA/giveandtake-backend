@@ -76,8 +76,15 @@ const BANNED_WORDS_ANYWHERE = new Set([
   "objectives",
   "experience",
   "role",
+  "roles",
   "duties",
   "requirements",
+  "you",
+  "will",
+  "other",
+  "others",
+  "area",
+  "areas",
 ]);
 
 const SCORE_LABELS = [
@@ -406,7 +413,18 @@ class JobFitService {
     if (!resp) return resp;
 
     const SEP = /(?:\s+and\s+|\/|&|,|\u00fa|\u0007|\||;|\+)+/i;
-    const BAD = new Set(["and", "or", "with", "the"]);
+    const BAD = new Set([
+      "and",
+      "or",
+      "with",
+      "the",
+      "you",
+      "will",
+      "other",
+      "others",
+      "area",
+      "areas",
+    ]);
 
     const normalizeFamily = (p: string): string => {
       const lower = p.toLowerCase();
@@ -528,6 +546,13 @@ class JobFitService {
       "preferred",
       "responsibilities",
       "requirements",
+      "you",
+      "will",
+      "other",
+      "others",
+      "area",
+      "areas",
+      "similar",
     ]);
 
     const skills: string[] = [];
@@ -567,6 +592,14 @@ class JobFitService {
         if (VERB_PREFIXES.has(words[0])) continue;
         if (words.some((word) => BANNED_WORDS_ANYWHERE.has(word))) continue;
         if (words.every((word) => stopWords.has(word))) continue;
+        const normalizedPhrase = words.join(" ");
+        if (
+          normalizedPhrase.startsWith("you will") ||
+          normalizedPhrase.startsWith("will") ||
+          normalizedPhrase.includes("other area")
+        ) {
+          continue;
+        }
 
         token = token
           .replace(/^\d+(\.|-)?\s*/, "")

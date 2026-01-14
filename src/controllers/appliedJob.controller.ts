@@ -223,7 +223,7 @@ export const getApplicationsByUser = catchAsync(
  ***************/
 export const updateApplicationStatus = catchAsync(
   async (req: Request, res: Response) => {
-    const { id } = req.params; // candidate user id
+    const { id } = req.params; // application id (AppliedJob doc id)
     const { status } = req.body;
 
     if (!["shortlisted", "rejected", "pending"].includes(status)) {
@@ -243,15 +243,29 @@ export const updateApplicationStatus = catchAsync(
     }
 
     const jobTitle = (updated.jobId as any)?.title || "the job";
+    const roleText = jobTitle; // role = job title here
+
+    // Copy the email contents into notification messages
+    let notificationMessage = `"${roleText}" application status updated.`;
+
+    if (status === "shortlisted") {
+      notificationMessage = `Your application for ${roleText} has been forwarded to the hiring manager. You may be contacted outside of EVP’s platform.`;
+    } else if (status === "rejected") {
+      notificationMessage = `Unfortunately, your application for ${roleText} has been unsuccessful on this occasion.`;
+    } else if (status === "pending") {
+      // No provided email template for pending, so keep it neutral.
+      notificationMessage = `Your application for ${roleText} is currently pending.`;
+    }
 
     // Email notifications for application status changes are temporarily disabled.
 
     const notification = await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
-      message: `"${jobTitle}" application status updated.`,
+      message: notificationMessage,
       type: "job_application_status",
       id: updated._id,
     });
+
     const count = await Notification.countDocuments({
       to: updated.userId,
       isViewed: false,
@@ -270,6 +284,7 @@ export const updateApplicationStatus = catchAsync(
     });
   }
 );
+
 /***************
  * DELETE Application
  ***************/
