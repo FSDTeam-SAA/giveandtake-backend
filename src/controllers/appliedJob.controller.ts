@@ -225,14 +225,15 @@ export const updateApplicationStatus = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params; // application id (AppliedJob doc id)
     const { status } = req.body;
+    const normalizedStatus = String(status ?? "").toLowerCase();
 
-    if (!["shortlisted", "rejected", "pending"].includes(status)) {
+    if (!["shortlisted", "rejected", "pending"].includes(normalizedStatus)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
     }
 
     const updated = await AppliedJob.findByIdAndUpdate(
       id,
-      { status },
+      { status: normalizedStatus },
       { new: true }
     )
       .populate("jobId", "title")
@@ -248,11 +249,11 @@ export const updateApplicationStatus = catchAsync(
     // Copy the email contents into notification messages
     let notificationMessage = `"${roleText}" application status updated.`;
 
-    if (status === "shortlisted") {
-      notificationMessage = `Your application for ${roleText} has been forwarded to the hiring manager. You may be contacted outside of EVP’s platform.`;
-    } else if (status === "rejected") {
+    if (normalizedStatus === "shortlisted") {
+      notificationMessage = `Your application for ${roleText} has been forwarded to the hiring manager. You may be contacted outside of EVP's platform.`;
+    } else if (normalizedStatus === "rejected") {
       notificationMessage = `Unfortunately, your application for ${roleText} has been unsuccessful on this occasion.`;
-    } else if (status === "pending") {
+    } else if (normalizedStatus === "pending") {
       // No provided email template for pending, so keep it neutral.
       notificationMessage = `Your application for ${roleText} is currently pending.`;
     }
