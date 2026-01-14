@@ -142,40 +142,10 @@ export const login = catchAsync(async (req, res) => {
   ) {
     throw new AppError(httpStatus.FORBIDDEN, "Incorrect password");
   }
-  if (!(await User.isOTPVerified(user._id.toString()))) {
-    const needsSecurityQuestions =
-      !user.securityQuestions || user.securityQuestions.length < 2;
-    const otp = generateOTP();
-    const jwtPayloadOTP = {
-      otp: otp,
-    };
-
-    const otptoken = createToken(
-      jwtPayloadOTP,
-      process.env.OTP_SECRET as string,
-      process.env.OTP_EXPIRE
-    );
-    user.verificationInfo.token = otptoken;
+  if (!user.verificationInfo?.verified) {
+    user.verificationInfo.verified = true;
+    user.verificationInfo.token = "";
     await user.save();
-    // await sendEmail(user.email, "Registerd Account", `Your OTP is ${otp}`);
-    await sendEmail(
-      user.email,
-      "OTP - Elevator Video Pitch©",
-      resetOtpTemplate(user.name, otp),
-      { from: DEFAULT_NO_REPLY_EMAIL }
-    );
-
-    return sendResponse(res, {
-      statusCode: httpStatus.FORBIDDEN,
-      success: false,
-      message:
-        "Your email is not verified. We just sent you a new OTP—please verify and complete your security questions to continue.",
-      data: {
-        email: user.email,
-        nextStep: "verify-otp",
-        needsSecurityQuestions,
-      },
-    });
   }
 
   // REACTIVATE ACCOUNT IF ACCOUNT IS DEACTIVATE
@@ -1347,6 +1317,9 @@ export const deleteUser = catchAsync(async (req, res) => {
 export const emailChange = catchAsync(async (req, res) => {
   const id = req.user?._id;
   const { email } = req.body;
+  if (!email) {
+    throw new AppError(httpStatus.BAD_REQUEST, "New email is required");
+  }
   const user = await User.findById(id)
   if (!user) {
     throw new AppError(404, "User not found")
@@ -1359,19 +1332,9 @@ export const emailChange = catchAsync(async (req, res) => {
   if (existingUser) {
     throw new AppError(404, "This email is already associated with another account")
   }
-  const otp = generateOTP();
-  const jwtPayloadOTP = {
-    otp: otp,
-  };
-
-  const otptoken = createToken(
-    jwtPayloadOTP,
-    process.env.OTP_SECRET as string,
-    process.env.OTP_EXPIRE
-  );
   user.email = email;
-  user.verificationInfo.token = otptoken;
-  user.verificationInfo.verified = false
+  user.verificationInfo.token = "";
+  user.verificationInfo.verified = true;
   await user.save();
 
   await Promise.all([
@@ -1383,7 +1346,7 @@ export const emailChange = catchAsync(async (req, res) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Email changed successfully. Please verify your OTP",
+    message: "Email changed successfully.",
     data: { email: user.email },
   });
 })

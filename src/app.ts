@@ -51,6 +51,19 @@ app.use(express.json());
 const uploadsDir = path.resolve(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsDir));
 
+app.get("/", (_req, res) => {
+  res.status(200).json({ service: "evpitch-api", status: "running" });
+});
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    service: "evpitch-api",
+    status: "running",
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+  });
+});
+
 app.use("/api/v1", userRoutes);
 
 app.use("/api/v1", jobRoutes);
