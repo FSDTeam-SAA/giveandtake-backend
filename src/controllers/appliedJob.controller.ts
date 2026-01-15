@@ -246,17 +246,23 @@ export const updateApplicationStatus = catchAsync(
     const jobTitle = (updated.jobId as any)?.title || "the job";
     const roleText = jobTitle; // role = job title here
 
-    // Copy the email contents into notification messages
-    let notificationMessage = `"${roleText}" application status updated.`;
+   // Copy the email contents into notification messages
+let notificationMessage = `"${roleText}" application status updated.`;
 
-    if (normalizedStatus === "shortlisted") {
-      notificationMessage = `Your application for ${roleText} has been forwarded to the hiring manager. You may be contacted outside of EVP's platform.`;
-    } else if (normalizedStatus === "rejected") {
-      notificationMessage = `Unfortunately, your application for ${roleText} has been unsuccessful on this occasion.`;
-    } else if (normalizedStatus === "pending") {
-      // No provided email template for pending, so keep it neutral.
-      notificationMessage = `Your application for ${roleText} is currently pending.`;
-    }
+if (normalizedStatus === "shortlisted") {
+  notificationMessage =
+    `Your application for ${roleText} has been forwarded to the hiring manager. ` +
+    `You may be contacted outside of EVP’s platform if the hire manager wants to proceed with a formal interview. ` +
+    `Good luck!`;
+} else if (normalizedStatus === "rejected") {
+  notificationMessage =
+    `Unfortunately, your application for the ${roleText} has been unsuccessful on this occasion. ` +
+    `Please continue to apply and we wish you good fortune in your job search!`;
+} else if (normalizedStatus === "pending") {
+  // No provided email template for pending, so keep it neutral.
+  notificationMessage = `Your application for ${roleText} is currently pending.`;
+}
+
 
     // Email notifications for application status changes are temporarily disabled.
 
