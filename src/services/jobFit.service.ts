@@ -177,7 +177,7 @@ class JobFitService {
       apiKey,
       model: DEFAULT_CHAT_MODEL,
       temperature: 0.2,
-      maxOutputTokens: 512,
+      // maxOutputTokens: 2048,
       // generationConfig: { responseMimeType: "application/json" },
     });
 
@@ -374,34 +374,78 @@ class JobFitService {
     try {
       const systemPrompt = new SystemMessage(
         [
-          "You are a cross-industry job-profile skill matcher (tech and non-tech).",
-          'Return STRICT JSON ONLY with keys (in this order): {"jobSkills":[],"profileSkills":[],"matchedSkills":[],"missingSkills":[],"matchPercentage":0,"summary":""}',
-          "Extract atomic skills (1-3 words): tools, methods, certifications, licenses, platforms, soft skills (e.g., Communication). No verbs/responsibilities/sentences.",
-          "Canonicalize families unless materially different:",
-          "  HTML5 -> HTML; CSS3 -> CSS; ES6/ES2015 -> JavaScript; Node/NodeJS -> Node.js; ReactJS -> React; TS -> TypeScript;",
+          "You are a job-to-profile SKILL extractor and matcher.",
+          "A SKILL is a concrete, reusable competency that could appear on a resume skill section:",
+          "- technologies (React, Vue, Next.js),",
+          "- APIs/standards (REST APIs),",
+          "- tooling (Git),",
+          "- methods/practices (Responsive Design, Web Performance),",
+          "- certifications/licenses (ISO 9001, FAA Part 107),",
+          "- soft skills (Communication).",
+          "",
+          "NOT skills:",
+          "- section headers or meta text (Job Overview, Qualifications, Responsibilities, Nice-to-have, About the role),",
+          "- people/roles/teams (Backend Developers),",
+          "- outcomes/goals/claims (High-performance Web Applications, Scalable solutions),",
+          "- sentence fragments, verb phrases, or anything starting with conjunctions (And Performance),",
+          "- long phrases > 3 words unless it is a known skill phrase (e.g., 'REST APIs', 'Responsive Design', 'Web Performance', 'UI/UX Design', 'Project Management').",
+          "",
+          "Output STRICT JSON ONLY with keys (in this order):",
+          '{"jobSkills":[],"profileSkills":[],"matchedSkills":[],"missingSkills":[],"matchPercentage":0,"summary":""}',
+          "",
+          "Extraction rules:",
+          "- Extract atomic skills (1-3 words). No sentences. No verbs/responsibilities.",
+          "- If text describes UX/UI handoff or translating designs into code, normalize to 'UI/UX Design'.",
+          "- Canonicalize common families:",
+          "  HTML5 -> HTML; CSS3 -> CSS; ES6/ES2015 -> JavaScript; ReactJS -> React; Node/NodeJS -> Node.js; TS -> TypeScript;",
           "  GitHub/GitLab/Bitbucket -> Git; AdWords/Google AdWords -> Google Ads; Facebook Ads/Meta Ads -> Meta Ads;",
-          "  MS Excel -> Excel; MS Word -> Word; Office Suite -> Microsoft Office; EMR/EHR -> EHR;",
-          "  GMP/Good Manufacturing Practice -> GMP; HACCP stays HACCP; ISO 9001 stays ISO 9001; FAA Part 107 stays FAA Part 107.",
-          "Keep distinct MAJOR differences (Python 2 vs 3; AngularJS vs Angular; CPR vs BLS vs ACLS).",
-          "Cleanup: split on 'and', '/', '&', '+', ',', bullets, '|', ';'. Never output these as skills. No trailing punctuation. Deduplicate case-insensitively after canonicalization.",
-          "Format: Title Case words; use UPPERCASE for 4+ letter acronyms (SQL, AWS, EHR, GMP, ISO, CPR, BLS, ACLS).",
-          "Matching is computed AFTER canonicalization (treat HTML==HTML5, CSS==CSS3, Git==GitHub/GitLab/Bitbucket, etc.).",
-          "Limit jobSkills and profileSkills to the 12 most relevant. matchPercentage = 0-100 (number). summary <= 40 words, neutral.",
-          "Only surface jobSkills that are explicit or strongly implied requirements in the JOB text; avoid generic fillers or invented items.",
-          "missingSkills must be a subset of those jobSkills that the PROFILE clearly lacks; drop anything uncertain, generic, or unrelated to the role.",
-          "If the JOB is vague, return fewer skills instead of guessing. No markdown, no comments, no extra keys."
+          "  MS Excel -> Excel; Office Suite -> Microsoft Office; EMR/EHR -> EHR; Good Manufacturing Practice -> GMP.",
+          "- Keep major differences distinct (AngularJS vs Angular; CPR vs BLS vs ACLS; Python 2 vs Python 3).",
+          "",
+          "Filtering rules (IMPORTANT):",
+          "- If a candidate is uncertain or looks like a clause/fragment, DROP it.",
+          "- Do NOT include generic fillers like 'Scalability', 'Reusable Code', 'Performance' unless explicitly stated as a practice like 'Web Performance'.",
+          "- Never include 'and', '/', '&', '+', ',' as skills.",
+          "",
+          "Final output rules:",
+          "- jobSkills: ONLY explicit or strongly implied requirements from JOB.",
+          "- profileSkills: ONLY skills evidenced in PROFILE.",
+          "- matchedSkills/missingSkills MUST be computed from the final canonicalized lists only.",
+          "- missingSkills must be a subset of jobSkills.",
+          "- Limit jobSkills and profileSkills to at most 12 items each.",
+          "- matchPercentage is 0-100 number.",
+          "- summary <= 40 words, neutral tone.",
+          "- No markdown, no comments, no extra keys."
         ].join("\n")
       );
 
       const instruction = new HumanMessage(
-        ["JOB:", jobText, "", "PROFILE:", profileText].join("\n")
+        [
+          "TASK: Extract skills from JOB and PROFILE, then filter to VALID SKILLS only, then match.",
+          "",
+          "JOB_TEXT:",
+          jobText,
+          "",
+          "PROFILE_TEXT:",
+          profileText,
+        ].join("\n")
       );
+
+      console.log("[job-fit][gemini] request", {
+        model: DEFAULT_CHAT_MODEL,
+        jobText,
+        profileText,
+        systemPrompt: systemPrompt.content,
+        instruction: instruction.content,
+      });
 
       const completion = await this.chatModel.invoke([systemPrompt, instruction]);
       const raw = this.extractText(completion.content);
+      console.log("[job-fit][gemini] raw response", { raw });
       if (!raw) return null;
 
       const parsed = this.parseAiJson(raw);
+      console.log("[job-fit][gemini] parsed response", { parsed });
       return this.sanitizeAiLists(parsed);
     } catch (error) {
       console.warn("[job-fit] Gemini comparison failed:", (error as Error).message);
@@ -425,9 +469,57 @@ class JobFitService {
       "area",
       "areas",
     ]);
+    const BAD_PATTERNS = [
+      /\b(job\s+overview|overview|qualifications?|responsibilit(y|ies)|requirements?)\b/i,
+      /\b(nice[-\s]?to[-\s]?have|preferred)\b/i,
+      /\b(developers?|engineers?|designers?|backend|front\s*end|team)\b/i,
+      /\b(high[-\s]?performance|scalab(le|ility)|reusable\s+code)\b/i,
+      /^(and|or)\b/i,
+    ];
+    const ALLOW_PHRASES = new Set([
+      "rest apis",
+      "responsive design",
+      "web performance",
+      "ui/ux design",
+      "unit testing",
+      "api design",
+      "project management",
+    ]);
+
+    const looksSentenceLike = (s: string) => {
+      if (/[()]/.test(s)) return true;
+      if (/\binto\b|\bto\b|\bfor\b|\bwith\b/i.test(s)) return true;
+      return false;
+    };
+
+    const isValidSkill = (raw: string) => {
+      const s = raw.trim();
+      if (!s) return false;
+
+      const lower = s.toLowerCase();
+      if (BAD_PATTERNS.some((p) => p.test(lower))) return false;
+
+      const words = lower.replace(/[-/]/g, " ").split(/\s+/).filter(Boolean);
+      if (words.length === 0) return false;
+      if (ALLOW_PHRASES.has(lower)) return true;
+      if (words.length > 3) return false;
+      if (looksSentenceLike(s)) return false;
+      if (words.length === 1 && ["performance", "scalability", "applications"].includes(words[0])) {
+        return false;
+      }
+
+      return true;
+    };
 
     const normalizeFamily = (p: string): string => {
       const lower = p.toLowerCase();
+      if (
+        lower.includes("ui/ux") ||
+        lower.includes("ui ux") ||
+        lower.includes("ux design")
+      ) {
+        return "UI/UX Design";
+      }
       if (lower === "html5") return "HTML";
       if (lower === "css3") return "CSS";
       if (["github", "gitlab", "bitbucket"].includes(lower)) return "Git";
@@ -460,6 +552,16 @@ class JobFitService {
           .filter((s) => s && !BAD.has(s.toLowerCase()));
 
         for (let p of pieces) {
+          const lower = p.toLowerCase();
+          const words = lower.replace(/[-/]/g, " ").split(/\s+/).filter(Boolean);
+          if (!words.length || BAD.has(words[0]) || words.length > 3) {
+            continue;
+          }
+
+          if (!isValidSkill(p)) {
+            continue;
+          }
+
           p = normalizeFamily(p);
           const key = this.normalizeSkill(p);
           if (key && !seen.has(key)) {
@@ -473,8 +575,8 @@ class JobFitService {
 
     resp.jobSkills = cleanList(resp.jobSkills);
     resp.profileSkills = cleanList(resp.profileSkills);
-    resp.matchedSkills = cleanList(resp.matchedSkills);
-    resp.missingSkills = cleanList(resp.missingSkills);
+    const cleanedMatched = cleanList(resp.matchedSkills);
+    const cleanedMissing = cleanList(resp.missingSkills);
 
     if (typeof resp.matchPercentage !== "number" || isNaN(resp.matchPercentage)) {
       resp.matchPercentage = 0;
@@ -483,6 +585,34 @@ class JobFitService {
     }
 
     if (typeof resp.summary !== "string") resp.summary = "";
+
+    // Recompute matched/missing to enforce subset logic.
+    const profileSet = new Set(resp.profileSkills.map((s) => this.normalizeSkill(s)));
+    const jobSet = new Set(resp.jobSkills.map((s) => this.normalizeSkill(s)));
+    resp.matchedSkills = resp.jobSkills.filter((skill) =>
+      profileSet.has(this.normalizeSkill(skill))
+    );
+    resp.missingSkills = resp.jobSkills.filter(
+      (skill) => !profileSet.has(this.normalizeSkill(skill))
+    );
+
+    // Preserve any valid AI-provided items that fit subsets without duplicating.
+    for (const m of cleanedMatched) {
+      if (!this.normalizeSkill(m)) continue;
+      if (jobSet.has(this.normalizeSkill(m)) && profileSet.has(this.normalizeSkill(m))) {
+        if (!resp.matchedSkills.find((x) => this.normalizeSkill(x) === this.normalizeSkill(m))) {
+          resp.matchedSkills.push(m);
+        }
+      }
+    }
+    for (const m of cleanedMissing) {
+      if (!this.normalizeSkill(m)) continue;
+      if (jobSet.has(this.normalizeSkill(m)) && !profileSet.has(this.normalizeSkill(m))) {
+        if (!resp.missingSkills.find((x) => this.normalizeSkill(x) === this.normalizeSkill(m))) {
+          resp.missingSkills.push(m);
+        }
+      }
+    }
 
     return resp;
   }

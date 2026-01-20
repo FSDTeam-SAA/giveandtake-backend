@@ -17,7 +17,7 @@ import { io } from "../server";
 import { Notification } from "../models/notification.model";
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
-  const { jobId, userId, status, resumeId, answer } = req.body;
+  const { jobId, userId, status, resumeId, answer, hasValidVisa } = req.body;
 
   const exists = await AppliedJob.findOne({ jobId, userId });
   if (exists) {
@@ -41,6 +41,23 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     (req: any) => req.requirement === "noticePeriod"
   );
 
+  const visaRequirement = job.applicationRequirement.find(
+    (req: any) =>
+      String(req?.requirement || "").trim().toLowerCase() ===
+      "have you got a valid visa for this location?"
+  );
+
+  if (
+    visaRequirement &&
+    String(visaRequirement.status || "").toLowerCase() === "required" &&
+    typeof hasValidVisa !== "boolean"
+  ) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Please confirm if you have a valid visa for this location."
+    );
+  }
+
   if (noticePeriodReq) {
     const resumeAvailable = resume?.immediatelyAvailable;
     const check = noticePeriodReq.status === "Immediate" ? true : false;
@@ -59,6 +76,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     status,
     resumeId,
     answer,
+    hasValidVisa:
+      typeof hasValidVisa === "boolean" ? Boolean(hasValidVisa) : null,
   });
 
   await Job.findByIdAndUpdate(jobId, { $inc: { counter: 1 } });

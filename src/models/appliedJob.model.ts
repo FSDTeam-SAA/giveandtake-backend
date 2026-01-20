@@ -18,6 +18,10 @@ const appliedJobSchema: Schema<IAppliedJob> = new Schema(
       enum: ['pending', 'rejected', 'shortlisted'],
       default: 'pending',
     },
+    hasValidVisa: {
+      type: Boolean,
+      default: null,
+    },
     answer: [{
       question: {type: String},
       ans: {type: String}
