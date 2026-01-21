@@ -456,6 +456,11 @@ class JobFitService {
   private sanitizeAiLists(resp: FitAiResponse | null): FitAiResponse | null {
     if (!resp) return resp;
 
+    const stripEdgePunctuation = (value: string) =>
+      value
+        .replace(/^[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+/, "")
+        .replace(/[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+$/, "");
+
     const SEP = /(?:\s+and\s+|\/|&|,|\u00fa|\u0007|\||;|\+)+/i;
     const BAD = new Set([
       "and",
@@ -468,12 +473,15 @@ class JobFitService {
       "others",
       "area",
       "areas",
+      "is",
+      "are",
     ]);
     const BAD_PATTERNS = [
       /\b(job\s+overview|overview|qualifications?|responsibilit(y|ies)|requirements?)\b/i,
       /\b(nice[-\s]?to[-\s]?have|preferred)\b/i,
       /\b(developers?|engineers?|designers?|backend|front\s*end|team)\b/i,
       /\b(high[-\s]?performance|scalab(le|ility)|reusable\s+code)\b/i,
+      /\b(functional(ly)?\s+correct(ness)?|factual\s+correctness|code\s+functionality)\b/i,
       /^(and|or)\b/i,
     ];
     const ALLOW_PHRASES = new Set([
@@ -484,6 +492,23 @@ class JobFitService {
       "unit testing",
       "api design",
       "project management",
+    ]);
+
+    const EDGE_STOPWORDS = new Set([
+      "and",
+      "or",
+      "with",
+      "the",
+      "to",
+      "for",
+      "in",
+      "of",
+      "a",
+      "an",
+      "your",
+      "our",
+      "is",
+      "are",
     ]);
 
     const looksSentenceLike = (s: string) => {
@@ -505,6 +530,9 @@ class JobFitService {
       if (words.length > 3) return false;
       if (looksSentenceLike(s)) return false;
       if (words.length === 1 && ["performance", "scalability", "applications"].includes(words[0])) {
+        return false;
+      }
+      if (EDGE_STOPWORDS.has(words[0]) || EDGE_STOPWORDS.has(words[words.length - 1])) {
         return false;
       }
 
@@ -543,18 +571,27 @@ class JobFitService {
         const pieces = String(item)
           .split(SEP)
           .map((s) =>
-            this.formatSkill(
-              s
-                .replace(/[.?!,:]+$/g, "")
-                .trim()
+            stripEdgePunctuation(
+              this.formatSkill(
+                s
+                  .replace(/[.?!,:]+$/g, "")
+                  .trim()
+              )
             )
           )
           .filter((s) => s && !BAD.has(s.toLowerCase()));
 
         for (let p of pieces) {
           const lower = p.toLowerCase();
-          const words = lower.replace(/[-/]/g, " ").split(/\s+/).filter(Boolean);
+          const words = lower
+            .replace(/[-/]/g, " ")
+            .replace(/['’]/g, "")
+            .split(/\s+/)
+            .filter(Boolean);
           if (!words.length || BAD.has(words[0]) || words.length > 3) {
+            continue;
+          }
+          if (EDGE_STOPWORDS.has(words[0]) || EDGE_STOPWORDS.has(words[words.length - 1])) {
             continue;
           }
 
@@ -641,6 +678,14 @@ class JobFitService {
   ): string[] {
     const accumulator: string[] = [];
 
+    const stripEdge = (value: string) =>
+      value
+        .replace(/^\d+(\.|-)?\s*/, "")
+        .replace(/^[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+/, "")
+        .replace(/[.?!,:]+$/g, "")
+        .replace(/[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+$/, "")
+        .trim();
+
     const flatten = (
       value: MaybeArray<string | string[] | undefined | null>
     ) => {
@@ -668,6 +713,16 @@ class JobFitService {
       "in",
       "a",
       "an",
+      "is",
+      "are",
+      "be",
+      "being",
+      "been",
+      "at",
+      "on",
+      "by",
+      "per",
+      "via",
       "our",
       "your",
       "skills",
@@ -685,23 +740,40 @@ class JobFitService {
       "similar",
     ]);
 
+    const edgeStopWords = new Set([
+      "and",
+      "or",
+      "with",
+      "the",
+      "to",
+      "for",
+      "in",
+      "of",
+      "a",
+      "an",
+      "is",
+      "are",
+      "our",
+      "your",
+    ]);
+
+    const bannedPhrases = [
+      /\b(functional(ly)?\s+correct(ness)?|factual\s+correctness|code\s+functionality)\b/i,
+      /\b(functionality|functionally|correctness)\b/i,
+    ];
+
     const skills: string[] = [];
 
     for (const chunk of accumulator) {
       if (!chunk) continue;
       const normalizedChunk = chunk.replace(/\. (?=[A-Z])/g, "\n");
       const tokens = normalizedChunk
-        .split(/[\n\r,;Ã¢â‚¬Â¢\u2022|/+&]+/g)
-        .map((token) =>
-          token
-            .replace(/^\d+(\.|-)?\s*/, "")
-            .replace(/[.?!,:]+$/g, "")
-            .trim()
-        )
+        .split(/[\n\r,;|\/+&\u2022]+/g)
+        .map(stripEdge)
         .filter((token) => token.length > 1 && token.length <= 45);
 
       for (const rawToken of tokens) {
-        let token = rawToken;
+        const token = rawToken;
         if (!token) continue;
 
         // Keep alphanumerics (to allow ISO 9001, FAA Part 107, A320, etc.)
@@ -712,6 +784,7 @@ class JobFitService {
           .trim();
 
         if (!normalized) continue;
+        if (bannedPhrases.some((pattern) => pattern.test(normalized))) continue;
 
         // Skip items that are purely numeric or punctuation-like
         if (/^[0-9\s\-/.]+$/.test(normalized)) continue;
@@ -720,8 +793,10 @@ class JobFitService {
         if (!words.length) continue;
         if (words.length > 4) continue;
         if (VERB_PREFIXES.has(words[0])) continue;
+        if (edgeStopWords.has(words[0]) || edgeStopWords.has(words[words.length - 1])) continue;
         if (words.some((word) => BANNED_WORDS_ANYWHERE.has(word))) continue;
         if (words.every((word) => stopWords.has(word))) continue;
+
         const normalizedPhrase = words.join(" ");
         if (
           normalizedPhrase.startsWith("you will") ||
@@ -731,10 +806,15 @@ class JobFitService {
           continue;
         }
 
-        token = token
-          .replace(/^\d+(\.|-)?\s*/, "")
-          .replace(/[.?!,:]+$/g, "")
-          .trim();
+        if (
+          words.length === 1 &&
+          ["functionality", "functionally", "correctness", "correct", "factual"].includes(
+            words[0]
+          )
+        ) {
+          continue;
+        }
+
         if (!/[a-z]/i.test(token) && !/[0-9]/.test(token)) continue;
 
         skills.push(token);
@@ -836,3 +916,5 @@ class JobFitService {
 }
 
 export const jobFitService = new JobFitService();
+
+

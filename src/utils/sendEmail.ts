@@ -5,7 +5,7 @@ export const sendEmail = async (
   to: string | string[],
   subject: string,
   html: string,
-  options?: { from?: string }
+  options?: { from?: string; includeLegalFooter?: boolean }
 ): Promise<void> => {
   try {
     const defaultFrom =
@@ -40,19 +40,22 @@ export const sendEmail = async (
         <p style="margin:0 0 8px;">
           We will reimburse payments authorised by our clients, subject to the terms and conditions in our Refund Policy in our Terms and Conditions.
         </p>
-        <p style="margin:0;">
+        <p style="margin:0 0 8px;">
           You can request a cancellation of all authorised payments by visiting your Account Payment History Section in your profile
           or by contacting us at <a href="mailto:clientsupport@evpitch.com" style="color:#2563eb;text-decoration:none;">clientsupport@evpitch.com</a>,
           or at Elevator Video Pitch© Ltd. 124 City Road, London EC1V 2NX  +44 0203 954 2530.
         </p>
+        <p style="margin:0;">Please add the email address no-reply@evpitch.com to your safe senders list to prevent future emails from going to your junk email folder.</p>
       </div>
     `;
+
+    const finalHtml = options?.includeLegalFooter ? `${html}${legalFooter}` : html;
 
     await transporter.sendMail({
       from,
       to,
       subject: subject || "No subject",
-      html: `${html}${legalFooter}`,
+      html: finalHtml,
     });
   } catch (error) {
     console.error("Error sending email:", error);
@@ -124,7 +127,10 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
               </p>
 
               <p style="margin:8px 0 18px;font-size:14px;color:#374151;line-height:1.6;">
-                If you have not signed up for a new account, you can safely ignore this email.
+                If you have not signed up for a new account, please contact us at clientsupport@evpitch.com. 
+              </p>
+              <p style="margin:8px 0 18px;font-size:14px;color:#374151;line-height:1.6;">
+                Please add the email address no-reply@evpitch.com to your safe senders list to prevent future emails from going to your junk email folder.
               </p>
 
               <p style="margin:18px 0 0;font-size:14px;color:#374151;">

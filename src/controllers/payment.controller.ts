@@ -279,6 +279,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       console.log("ami hoisi");
       await sendEmail(user.email, "Payment Complete", emailBody, {
         from: sender,
+        includeLegalFooter: true,
       });
       console.log("email sent");
     }
