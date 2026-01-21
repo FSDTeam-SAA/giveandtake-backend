@@ -15,20 +15,44 @@ export const sendEmail = async (
     const from = options?.from || defaultFrom;
 
     const transporter = nodemailer.createTransport({
-      host: "smtp.hostinger.com",
-      port: 465,
-      secure: true,
+      host:
+        process.env.SMTP_HOST || "email-smtp.eu-west-2.amazonaws.com",
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: false, // STARTTLS
+      requireTLS: true,
       auth: {
         user: process.env.APP_USER,
         pass: process.env.APP_PASSWORD,
       },
     });
 
+    const legalFooter = `
+      <hr style="margin:24px 0;border:0;border-top:1px solid #e5e7eb;" />
+      <div style="font-size:12px;line-height:1.5;color:#4b5563;">
+        <p style="margin:0 0 8px;">
+          Elevator Video Pitch© Ltd. is registered in England in the United Kingdom at Companies House. Company Number 15978879.
+          EVPitch© and all related marks are copyrights of Elevator Video Pitch© Ltd.
+        </p>
+        <p style="margin:0 0 8px;">
+          If you are not expecting this receipt or have not authorised or made this payment to us, please immediately contact us at
+          <a href="mailto:clientsupport@evpitch.com" style="color:#2563eb;text-decoration:none;">clientsupport@evpitch.com</a>.
+        </p>
+        <p style="margin:0 0 8px;">
+          We will reimburse payments authorised by our clients, subject to the terms and conditions in our Refund Policy in our Terms and Conditions.
+        </p>
+        <p style="margin:0;">
+          You can request a cancellation of all authorised payments by visiting your Account Payment History Section in your profile
+          or by contacting us at <a href="mailto:clientsupport@evpitch.com" style="color:#2563eb;text-decoration:none;">clientsupport@evpitch.com</a>,
+          or at Elevator Video Pitch© Ltd. 124 City Road, London EC1V 2NX  +44 0203 954 2530.
+        </p>
+      </div>
+    `;
+
     await transporter.sendMail({
       from,
       to,
       subject: subject || "No subject",
-      html,
+      html: `${html}${legalFooter}`,
     });
   } catch (error) {
     console.error("Error sending email:", error);

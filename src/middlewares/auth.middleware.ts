@@ -13,14 +13,14 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
   try {
     const decoded = await jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;
     const user = await User.findById(decoded._id)
-    if (user) {
-      if (!user.verificationInfo?.verified) {
-        user.verificationInfo.verified = true;
-        user.verificationInfo.token = "";
-        await user.save();
-      }
-      req.user = user;
+    if (!user) {
+      throw new AppError(401, "Invalid token");
     }
+    const verified = await User.isOTPVerified(user._id.toString());
+    if (!verified) {
+      throw new AppError(httpStatus.FORBIDDEN, "Email not verified");
+    }
+    req.user = user;
     next();
   } catch (err) {
     throw new AppError(401, "Invalid token");

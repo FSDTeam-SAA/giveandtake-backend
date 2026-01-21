@@ -110,6 +110,13 @@ export const register = catchAsync(async (req, res) => {
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
+  const otp = generateOTP();
+  const jwtPayloadOTP = { otp };
+  const otptoken = createToken(
+    jwtPayloadOTP,
+    process.env.OTP_SECRET as string,
+    process.env.OTP_EXPIRE
+  );
   const user = await User.create({
     name,
     email,
@@ -117,15 +124,29 @@ export const register = catchAsync(async (req, res) => {
     phoneNum,
     address,
     role,
-    verificationInfo: { verified: true, token: "", resetToken: "" },
+    verificationInfo: { verified: false, token: otptoken, resetToken: "" },
     dateOfbirth,
   });
+
+  try {
+    await sendEmail(
+      user.email,
+      "OTP - Elevator Video PitchAc",
+      resetOtpTemplate(user.name, otp),
+      { from: DEFAULT_NO_REPLY_EMAIL }
+    );
+  } catch (err) {
+    // Roll back user creation if email failed
+    await User.findByIdAndDelete(user._id);
+    throw err;
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Registration successful. Proceed to security questions.",
-    data: user,
+    message:
+      "Registration successful. Please verify the OTP sent to your email before continuing.",
+    data: { email: user.email },
   });
 });
 
@@ -143,9 +164,38 @@ export const login = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.FORBIDDEN, "Incorrect password");
   }
   if (!user.verificationInfo?.verified) {
-    user.verificationInfo.verified = true;
-    user.verificationInfo.token = "";
+    const needsSecurityQuestions =
+      !user.securityQuestions || user.securityQuestions.length < 2;
+    const otp = generateOTP();
+    const jwtPayloadOTP = {
+      otp: otp,
+    };
+
+    const otptoken = createToken(
+      jwtPayloadOTP,
+      process.env.OTP_SECRET as string,
+      process.env.OTP_EXPIRE
+    );
+    user.verificationInfo.token = otptoken;
     await user.save();
+    await sendEmail(
+      user.email,
+      "OTP - Elevator Video PitchAc",
+      resetOtpTemplate(user.name, otp),
+      { from: DEFAULT_NO_REPLY_EMAIL }
+    );
+
+    return sendResponse(res, {
+      statusCode: httpStatus.FORBIDDEN,
+      success: false,
+      message:
+        "Your email is not verified. We sent you a new OTP—please verify and complete your security questions to continue.",
+      data: {
+        email: user.email,
+        nextStep: "verify-otp",
+        needsSecurityQuestions,
+      },
+    });
   }
 
   // REACTIVATE ACCOUNT IF ACCOUNT IS DEACTIVATE
