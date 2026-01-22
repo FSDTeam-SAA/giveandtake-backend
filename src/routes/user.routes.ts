@@ -6,6 +6,7 @@ import {
   forgetPassword,
   resetPassword,
   changePassword,
+  resendVerificationOtp,
   getDefaultSecurityQuestions,
   submitSecurityAnswers,
   securityResetPassword,
@@ -36,6 +37,7 @@ const router = express.Router();
 router.post("/user/register", register);
 router.post("/user/login", login);
 router.post("/user/verify", verifyEmail);
+router.post("/user/resend-otp", resendVerificationOtp);
 router.post("/user/verify-reset-otp", otpVerifyResetPassword);
 router.post("/user/forget", forgetPassword),
 router.post("/user/reset-password", resetPassword);

@@ -6,7 +6,11 @@ import AppError from "../errors/AppError";
 import httpStatus from "http-status";
 import { generateOTP } from "../utils/generateOTP";
 import { createToken, verifyToken } from "../utils/authToken";
-import { resetOtpTemplate, sendEmail } from "../utils/sendEmail";
+import {
+  accountCreationOtpTemplate,
+  resetOtpTemplate,
+  sendEmail,
+} from "../utils/sendEmail";
 import { User } from "../models/user.model";
 import sendResponse from "../utils/sendResponse";
 import { defaultSecurityQuestions } from "../constants/defaultSecurityQuestions";
@@ -25,6 +29,7 @@ import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 
 const DEFAULT_NO_REPLY_EMAIL =
   process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
+const OTP_EXPIRES_IN = "10m";
 
 const resolveUserPlanState = async (userId: any) => {
   const payment = await paymentInfo
@@ -115,7 +120,7 @@ export const register = catchAsync(async (req, res) => {
   const otptoken = createToken(
     jwtPayloadOTP,
     process.env.OTP_SECRET as string,
-    process.env.OTP_EXPIRE
+    OTP_EXPIRES_IN
   );
   const user = await User.create({
     name,
@@ -132,7 +137,7 @@ export const register = catchAsync(async (req, res) => {
     await sendEmail(
       user.email,
       "OTP - Elevator Video PitchAc",
-      resetOtpTemplate(user.name, otp),
+      accountCreationOtpTemplate(user.name, otp),
       { from: DEFAULT_NO_REPLY_EMAIL }
     );
   } catch (err) {
@@ -146,6 +151,52 @@ export const register = catchAsync(async (req, res) => {
     success: true,
     message:
       "Registration successful. Please verify the OTP sent to your email before continuing.",
+    data: { email: user.email },
+  });
+});
+
+export const resendVerificationOtp = catchAsync(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Email is required");
+  }
+
+  const user = await User.isUserExistsByEmail(email);
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  }
+
+  if (user.verificationInfo?.verified) {
+    throw new AppError(httpStatus.BAD_REQUEST, "User is already verified");
+  }
+
+  const otp = generateOTP();
+  const jwtPayloadOTP = { otp };
+  const otptoken = createToken(
+    jwtPayloadOTP,
+    process.env.OTP_SECRET as string,
+    OTP_EXPIRES_IN
+  );
+
+  user.verificationInfo = user.verificationInfo || {
+    verified: false,
+    token: "",
+    resetToken: "",
+  };
+  user.verificationInfo.token = otptoken;
+  await user.save();
+
+  await sendEmail(
+    user.email,
+    "OTP - Elevator Video Pitch©",
+    accountCreationOtpTemplate(user.name, otp),
+    { from: DEFAULT_NO_REPLY_EMAIL }
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "OTP resent successfully",
     data: { email: user.email },
   });
 });
@@ -174,14 +225,14 @@ export const login = catchAsync(async (req, res) => {
     const otptoken = createToken(
       jwtPayloadOTP,
       process.env.OTP_SECRET as string,
-      process.env.OTP_EXPIRE
+      OTP_EXPIRES_IN
     );
     user.verificationInfo.token = otptoken;
     await user.save();
     await sendEmail(
       user.email,
       "OTP - Elevator Video PitchAc",
-      resetOtpTemplate(user.name, otp),
+      accountCreationOtpTemplate(user.name, otp),
       { from: DEFAULT_NO_REPLY_EMAIL }
     );
 
@@ -319,7 +370,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
   const otptoken = createToken(
     jwtPayloadOTP,
     process.env.OTP_SECRET as string,
-    process.env.OTP_EXPIRE as string
+    OTP_EXPIRES_IN
   );
   user.password_reset_token = otptoken;
   await user.save();

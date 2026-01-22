@@ -5,7 +5,7 @@ import { SubscriptionPlan } from "../models/subscriptionPlan.model";
 import { User } from "../models/user.model";
 import { createOrder, captureOrder, refundOrder } from "../services/paypal.service";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
-import { sendEmail } from "../utils/sendEmail";
+import { refundProcessedTemplate, sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
 import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
@@ -496,38 +496,11 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
   payment.refundNotes = notes.join(" | ");
   await payment.save();
 
-  // Email notifications for refunds are temporarily disabled.
-  // const emailBody = `
-  // <html>
-  //   <body style="font-family: Arial, sans-serif;">
-  //     <h2>Refund Processed Successfully</h2>
-  //     <p>Dear ${user.name},</p>
-  //     <p>Your refund for payment <strong>${payment.transactionId}</strong> has been processed according to our policy.</p>
-  //     <table style="border: 1px solid #ddd; border-collapse: collapse; margin-top: 10px;">
-  //       <tr>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">Original Amount</td>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">$${payment.amount.toFixed(2)}</td>
-  //       </tr>
-  //       <tr>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">PAYG Deductions</td>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">$${deductions.toFixed(2)}</td>
-  //       </tr>
-  //       <tr>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">Admin Fee (10%)</td>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">$${adminFee.toFixed(2)}</td>
-  //       </tr>
-  //       <tr>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">Refunded Amount</td>
-  //         <td style="border: 1px solid #ddd; padding: 8px;">$${refundAmount.toFixed(2)}</td>
-  //       </tr>
-  //     </table>
-  //     <p>If you have any questions, contact <a href="mailto:Admin@evpitch.com">Admin@evpitch.com</a>.</p>
-  //     <p>Thank you,<br>Elevator Video PitchAc</p>
-  //   </body>
-  // </html>
-  // `;
-
-  // await sendEmail(user.email, "Refund Processed", emailBody);
+  await sendEmail(
+    user.email,
+    "Refund Processed - Elevator Video Pitch©",
+    refundProcessedTemplate(user.name)
+  );
 
   res.status(200).json({
     success: true,
