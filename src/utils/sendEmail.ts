@@ -94,8 +94,13 @@ export const accountCreationOtpTemplate = (name: string, otp: string) => `<!doct
                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Account Creation OTP</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
-                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" 
+                           alt="EVP Logo" 
+                           class="logo-img"
+                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;" 
+                           width="120" 
+                           height="48" />
                     </div>
                   </td>
                 </tr>
@@ -123,7 +128,7 @@ export const accountCreationOtpTemplate = (name: string, otp: string) => `<!doct
               </div>
 
               <p style="margin:18px 0 8px;font-size:14px;color:#374151;line-height:1.6;">
-                This OTP is valid for the next <strong>60 minutes</strong>.
+                This OTP is valid for the next <strong>10 minutes</strong>.
               </p>
 
               <p style="margin:8px 0 18px;font-size:14px;color:#374151;line-height:1.6;">
@@ -146,7 +151,7 @@ export const accountCreationOtpTemplate = (name: string, otp: string) => `<!doct
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
                 <p style="margin:0 0 8px;">&copy; ${new Date().getFullYear()} Elevator Video Pitch©. All rights reserved.</p>
-                <p style="margin:0;">Need help? Contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                <p style="margin:0;">Need help? Contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
               </div>
             </td>
           </tr>
@@ -181,8 +186,13 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Password Reset OTP</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
-                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" 
+                           alt="EVP Logo" 
+                           class="logo-img"
+                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;" 
+                           width="120" 
+                           height="48" />
                     </div>
                   </td>
                 </tr>
@@ -197,7 +207,7 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
                 Dear <strong>${getFirstName(name)}</strong>,
               </p>
               <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
-                We received a request because you requested a password reset.
+                We received <strong>your password reset request</strong>.
               </p>
               <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
                 Please use the OTP below to reset your password.
@@ -210,7 +220,7 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
               </div>
 
               <p style="margin:18px 0 8px;font-size:14px;color:#374151;line-height:1.6;">
-                This OTP is valid for the next <strong>60 minutes</strong>.
+                This OTP is valid for the next <strong>10 minutes</strong>.
               </p>
 
               <p style="margin:8px 0 18px;font-size:14px;color:#374151;line-height:1.6;">
@@ -233,7 +243,7 @@ export const resetOtpTemplate = (name: string, otp: string) => `<!doctype html>
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
                 <p style="margin:0 0 8px;">&copy; ${new Date().getFullYear()} Elevator Video Pitch©. All rights reserved.</p>
-                <p style="margin:0;">Need help? Contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                <p style="margin:0;">Need help? Contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
               </div>
             </td>
           </tr>
@@ -268,8 +278,13 @@ export const refundProcessedTemplate = (name: string) => `<!doctype html>
                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Refund Processed</p>
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
-                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
-                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" 
+                           alt="EVP Logo" 
+                           class="logo-img"
+                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;" 
+                           width="120" 
+                           height="48" />
                     </div>
                   </td>
                 </tr>
@@ -312,7 +327,7 @@ export const refundProcessedTemplate = (name: string) => `<!doctype html>
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
                 <p style="margin:0 0 8px;">&copy; ${new Date().getFullYear()} Elevator Video Pitch©. All rights reserved.</p>
-                <p style="margin:0;">Need help? Contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                <p style="margin:0;">Need help? Contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
               </div>
             </td>
           </tr>

@@ -31,6 +31,17 @@ const DEFAULT_NO_REPLY_EMAIL =
   process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
 const OTP_EXPIRES_IN = "10m";
 
+const decodeOtpToken = (token: string) => {
+  try {
+    return verifyToken(token, process.env.OTP_SECRET || "") as JwtPayload;
+  } catch (error: any) {
+    if (error?.name === "TokenExpiredError") {
+      throw new AppError(httpStatus.UNAUTHORIZED, "OTP expired");
+    }
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP token");
+  }
+};
+
 const resolveUserPlanState = async (userId: any) => {
   const payment = await paymentInfo
     .findOne({
@@ -309,10 +320,7 @@ export const verifyEmail = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.BAD_REQUEST, "User already verified");
   }
   if (otp) {
-    const savedOTP = verifyToken(
-      user.verificationInfo.token,
-      process.env.OTP_SECRET || ""
-    ) as JwtPayload;
+    const savedOTP = decodeOtpToken(user.verificationInfo.token);
     console.log(savedOTP);
     if (otp === savedOTP.otp) {
       user.verificationInfo.verified = true;
@@ -404,10 +412,7 @@ export const otpVerifyResetPassword = catchAsync(async (req, res) => {
       "Password reset token is invalid"
     );
   }
-  const verify = (await verifyToken(
-    user.password_reset_token,
-    process.env.OTP_SECRET!
-  )) as JwtPayload;
+  const verify = decodeOtpToken(user.password_reset_token);
   if (verify.otp !== otp) {
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
   }
@@ -431,10 +436,7 @@ export const resetPassword = catchAsync(async (req, res) => {
       "Password reset token is invalid"
     );
   }
-  const verify = (await verifyToken(
-    user.password_reset_token,
-    process.env.OTP_SECRET!
-  )) as JwtPayload;
+  const verify = decodeOtpToken(user.password_reset_token);
   if (verify.otp !== otp) {
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
   }

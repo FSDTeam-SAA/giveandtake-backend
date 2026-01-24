@@ -185,8 +185,13 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
                   </td>
                   <td style="text-align:right;vertical-align:middle;">
                     <!-- Company Logo -->
-                    <div style="width:120px;height:48px;overflow:hidden;border-radius:6px;display:inline-block;">
-                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" alt="EVP Logo" style="width:100%;height:100%;object-fit:contain;object-position:center;display:block;" />
+                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" 
+                           alt="EVP Logo" 
+                           class="logo-img"
+                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;" 
+                           width="120" 
+                           height="48" />
                     </div>
                   </td>
                 </tr>
@@ -242,7 +247,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 
               <!-- Support -->
               <p style="margin:18px 0 6px;font-size:14px;color:#374151;">
-                Please reach out to <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a> if you have any queries.
+                Please reach out to <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a> if you have any queries.
               </p>
 
               <p style="margin:8px 0 0;font-size:14px;color:#374151;">
@@ -258,7 +263,7 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
             <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
               <div style="max-width:520px;margin:0 auto;">
                 <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
-                <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact <a href="mailto:Admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a></p>
+                <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
               </div>
             </td>
           </tr>

@@ -60,6 +60,8 @@ const VERB_PREFIXES = new Set([
   "coordinate",
   "assist",
   "support",
+  "partner",
+  "work",
 ]);
 
 const BANNED_WORDS_ANYWHERE = new Set([
@@ -85,6 +87,9 @@ const BANNED_WORDS_ANYWHERE = new Set([
   "others",
   "area",
   "areas",
+  "what",
+  "etc",
+  "similar",
 ]);
 
 const SCORE_LABELS = [
@@ -171,14 +176,10 @@ class JobFitService {
       return false;
     }
 
-    // Optional generationConfig: some LangChain versions pass this through.
-    // Safe to keep; ignored if unsupported.
     this.chatModel = new ChatGoogleGenerativeAI({
       apiKey,
       model: DEFAULT_CHAT_MODEL,
-      temperature: 0.2,
-      // maxOutputTokens: 2048,
-      // generationConfig: { responseMimeType: "application/json" },
+      temperature: 0.1,
     });
 
     return true;
@@ -197,7 +198,7 @@ class JobFitService {
       payload.education
     );
 
-    const aiResponse =
+    const aiResponse: FitAiResponse | null =
       allowAi && this.aiEnabled
         ? await this.callGemini(jobText, profileText)
         : null;
@@ -247,16 +248,21 @@ class JobFitService {
       },
     ]);
 
+    const useAiSkillLists = !!aiResponse;
+    const aiJobSkills: string[] = aiResponse?.jobSkills ?? [];
+    const aiProfileSkills: string[] = aiResponse?.profileSkills ?? [];
+
+    const jobSkillPool: string[] = useAiSkillLists
+      ? aiJobSkills
+      : [...aiJobSkills, ...heuristicJobSkills];
+
+    const profileSkillPool: string[] = useAiSkillLists
+      ? [...resumeSkillList, ...aiProfileSkills]
+      : [...resumeSkillList, ...aiProfileSkills, ...heuristicProfileSkills];
+
     const [parsedJobSkills, parsedProfileSkills] = await Promise.all([
-      this.dedupeSkills([
-        ...(aiResponse?.jobSkills ?? []),
-        ...heuristicJobSkills,
-      ]),
-      this.dedupeSkills([
-        ...resumeSkillList,
-        ...(aiResponse?.profileSkills ?? []),
-        ...heuristicProfileSkills,
-      ]),
+      this.dedupeSkills(jobSkillPool),
+      this.dedupeSkills(profileSkillPool),
     ]);
 
     const matchedSkills = parsedJobSkills.list.filter((skill) =>
@@ -362,7 +368,7 @@ class JobFitService {
     };
   }
 
-  // ---------- NEW: compact, cross-industry prompt + sanitizer ----------
+  // ==================== IMPROVED GEMINI PROMPT ====================
 
   private async callGemini(
     jobText: string,
@@ -373,74 +379,53 @@ class JobFitService {
 
     try {
       const systemPrompt = new SystemMessage(
-        [
-          "You are a job-to-profile SKILL extractor and matcher.",
-          "A SKILL is a concrete, reusable competency that could appear on a resume skill section:",
-          "- technologies (React, Vue, Next.js),",
-          "- APIs/standards (REST APIs),",
-          "- tooling (Git),",
-          "- methods/practices (Responsive Design, Web Performance),",
-          "- certifications/licenses (ISO 9001, FAA Part 107),",
-          "- soft skills (Communication).",
-          "",
-          "NOT skills:",
-          "- section headers or meta text (Job Overview, Qualifications, Responsibilities, Nice-to-have, About the role),",
-          "- people/roles/teams (Backend Developers),",
-          "- outcomes/goals/claims (High-performance Web Applications, Scalable solutions),",
-          "- sentence fragments, verb phrases, or anything starting with conjunctions (And Performance),",
-          "- long phrases > 3 words unless it is a known skill phrase (e.g., 'REST APIs', 'Responsive Design', 'Web Performance', 'UI/UX Design', 'Project Management').",
-          "",
-          "Output STRICT JSON ONLY with keys (in this order):",
-          '{"jobSkills":[],"profileSkills":[],"matchedSkills":[],"missingSkills":[],"matchPercentage":0,"summary":""}',
-          "",
-          "Extraction rules:",
-          "- Extract atomic skills (1-3 words). No sentences. No verbs/responsibilities.",
-          "- If text describes UX/UI handoff or translating designs into code, normalize to 'UI/UX Design'.",
-          "- Canonicalize common families:",
-          "  HTML5 -> HTML; CSS3 -> CSS; ES6/ES2015 -> JavaScript; ReactJS -> React; Node/NodeJS -> Node.js; TS -> TypeScript;",
-          "  GitHub/GitLab/Bitbucket -> Git; AdWords/Google AdWords -> Google Ads; Facebook Ads/Meta Ads -> Meta Ads;",
-          "  MS Excel -> Excel; Office Suite -> Microsoft Office; EMR/EHR -> EHR; Good Manufacturing Practice -> GMP.",
-          "- Keep major differences distinct (AngularJS vs Angular; CPR vs BLS vs ACLS; Python 2 vs Python 3).",
-          "",
-          "Filtering rules (IMPORTANT):",
-          "- If a candidate is uncertain or looks like a clause/fragment, DROP it.",
-          "- Remove stopwords (e.g., and, or, of, off, the, to, for, in). Do NOT output stopwords as skills.",
-          "- Do NOT include generic fillers like 'Scalability', 'Reusable Code', 'Performance' unless explicitly stated as a practice like 'Web Performance'.",
-          "- Never include 'and', '/', '&', '+', ',' as skills.",
-          "",
-          "Final output rules:",
-          "- jobSkills: ONLY explicit or strongly implied requirements from JOB.",
-          "- profileSkills: ONLY skills evidenced in PROFILE.",
-          "- matchedSkills/missingSkills MUST be computed from the final canonicalized lists only.",
-          "- missingSkills must be a subset of jobSkills.",
-          "- Limit jobSkills and profileSkills to at most 12 items each.",
-          "- matchPercentage is 0-100 number.",
-          "- summary <= 40 words, neutral tone.",
-          "- No markdown, no comments, no extra keys."
-        ].join("\n")
+        `You extract ONLY concrete technical skills. A skill is a specific technology, tool, or practice.
+
+EXAMPLES OF VALID SKILLS:
+React, Python, SQL, Git, AWS, Tableau, REST API, Agile, UI/UX Design, HTML, CSS, JavaScript, Vue, Angular, Node.js, TypeScript, Docker, Kubernetes, MongoDB
+
+EXAMPLES OF INVALID (NEVER OUTPUT THESE):
+- "Job Overview" (section header)
+- "Qualifications" (section header)
+- "Nice-to-have Skills" (meta text)
+- "Strong Proficiency In HTML" (descriptive phrase - output "HTML" only)
+- "Libraries Such As React" (sentence fragment - output "React" only)
+- "High-performance Web Applications" (outcome, not a skill)
+- "Backend Developers" (job role, not a skill)
+- "Reusable Code" (quality descriptor, not a skill)
+- "Scalability" (concept, not a skill)
+- "UX Designs Into High-quality" (sentence fragment)
+- "Bootstrap)" (has trailing punctuation)
+
+STRICT RULES:
+1. Extract ONLY the technology name: "Strong proficiency in HTML" → "HTML"
+2. From "Libraries such as React, Vue" → output: "React", "Vue" (separately)
+3. NO section headers (Overview, Qualifications, Requirements, Nice-to-have)
+4. NO descriptive phrases (High-performance, Reusable, Strong proficiency)
+5. NO role names (Developers, Engineers, Designers)
+6. NO trailing punctuation: "Bootstrap)" → "Bootstrap"
+7. Skills must be 1-3 words max
+8. Limit to 10 most important skills per list
+
+JSON format:
+{"jobSkills":["React","Vue","HTML"],"profileSkills":["React","Node.js"],"matchedSkills":["React"],"missingSkills":["Vue","HTML"],"matchPercentage":33,"summary":"Brief fit summary"}`
       );
 
       const instruction = new HumanMessage(
-        [
-          "TASK: Extract skills from JOB and PROFILE, then filter to VALID SKILLS only, then match.",
-          "",
-          "JOB_TEXT:",
-          jobText,
-          "",
-          "PROFILE_TEXT:",
-          profileText,
-        ].join("\n")
+        `JOB:\n${jobText}\n\nPROFILE:\n${profileText}\n\nExtract ONLY concrete skills. NO section headers, NO phrases, NO descriptions.`
       );
 
       console.log("[job-fit][gemini] request", {
         model: DEFAULT_CHAT_MODEL,
-        jobText,
-        profileText,
-        systemPrompt: systemPrompt.content,
-        instruction: instruction.content,
+        systemPromptLength: systemPrompt.content.toString().length,
+        jobTextLength: jobText.length,
+        profileTextLength: profileText.length,
       });
 
-      const completion = await this.chatModel.invoke([systemPrompt, instruction]);
+      const completion = await this.chatModel.invoke([
+        systemPrompt,
+        instruction,
+      ]);
       const raw = this.extractText(completion.content);
       console.log("[job-fit][gemini] raw response", { raw });
       if (!raw) return null;
@@ -449,216 +434,263 @@ class JobFitService {
       console.log("[job-fit][gemini] parsed response", { parsed });
       return this.sanitizeAiLists(parsed);
     } catch (error) {
-      console.warn("[job-fit] Gemini comparison failed:", (error as Error).message);
+      console.warn(
+        "[job-fit] Gemini comparison failed:",
+        (error as Error).message
+      );
       return null;
     }
   }
 
+  // ==================== ENHANCED SANITIZATION ====================
+
   private sanitizeAiLists(resp: FitAiResponse | null): FitAiResponse | null {
     if (!resp) return resp;
 
-    const stripEdgePunctuation = (value: string) =>
-      value
+    // NUCLEAR-LEVEL SANITIZATION
+    const cleanSkill = (raw: string): string | null => {
+      if (!raw) return null;
+      
+      let s = raw.trim()
         .replace(/^[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+/, "")
-        .replace(/[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+$/, "");
-
-    const SEP = /(?:\s+and\s+|\/|&|,|\u00fa|\u0007|\||;|\+)+/i;
-    const BAD = new Set([
-      "and",
-      "or",
-      "of",
-      "off",
-      "with",
-      "the",
-      "you",
-      "will",
-      "other",
-      "others",
-      "area",
-      "areas",
-      "is",
-      "are",
-    ]);
-    const BAD_PATTERNS = [
-      /\b(job\s+overview|overview|qualifications?|responsibilit(y|ies)|requirements?)\b/i,
-      /\b(nice[-\s]?to[-\s]?have|preferred)\b/i,
-      /\b(developers?|engineers?|designers?|backend|front\s*end|team)\b/i,
-      /\b(high[-\s]?performance|scalab(le|ility)|reusable\s+code)\b/i,
-      /\b(functional(ly)?\s+correct(ness)?|factual\s+correctness|code\s+functionality)\b/i,
-      /^(and|or)\b/i,
-    ];
-    const ALLOW_PHRASES = new Set([
-      "rest apis",
-      "responsive design",
-      "web performance",
-      "ui/ux design",
-      "unit testing",
-      "api design",
-      "project management",
-    ]);
-
-    const EDGE_STOPWORDS = new Set([
-      "and",
-      "or",
-      "with",
-      "the",
-      "to",
-      "for",
-      "in",
-      "of",
-      "off",
-      "a",
-      "an",
-      "your",
-      "our",
-      "is",
-      "are",
-    ]);
-
-    const looksSentenceLike = (s: string) => {
-      if (/[()]/.test(s)) return true;
-      if (/\binto\b|\bto\b|\bfor\b|\bwith\b/i.test(s)) return true;
-      return false;
-    };
-
-    const isValidSkill = (raw: string) => {
-      const s = raw.trim();
-      if (!s) return false;
+        .replace(/[`'"\u201c\u201d\u2018\u2019\u00b7\u2022-]+$/, "")
+        .replace(/[()}\]]+/g, "") // Remove ALL parentheses/brackets
+        .replace(/[.?!,:;]+$/g, ""); // Remove trailing punctuation
 
       const lower = s.toLowerCase();
-      if (BAD_PATTERNS.some((p) => p.test(lower))) return false;
 
-      const words = lower.replace(/[-/]/g, " ").split(/\s+/).filter(Boolean);
-      if (words.length === 0) return false;
-      if (ALLOW_PHRASES.has(lower)) return true;
-      if (words.length > 3) return false;
-      if (looksSentenceLike(s)) return false;
-      if (words.length === 1 && ["performance", "scalability", "applications"].includes(words[0])) {
-        return false;
-      }
-      if (EDGE_STOPWORDS.has(words[0]) || EDGE_STOPWORDS.has(words[words.length - 1])) {
-        return false;
+      // INSTANT REJECTION - These exact strings are NEVER skills
+      const EXACT_BANS = new Set([
+        "job overview", "overview", "qualifications", "responsibilities",
+        "requirements", "nice-to-have", "nice to have", "nice-to-have skills",
+        "preferred", "optional", "high-performance", "high performance",
+        "scalability", "scalable", "reusable code", "reusable",
+        "maintainable", "clean code", "backend developers", "frontend developers",
+        "developers", "engineers", "designers", "team", "backend", "frontend",
+        "ux designs into high-quality", "ux designs into", "designs into",
+        "high-performance web applications", "web applications",
+        "strong proficiency in html", "strong proficiency", "proficiency",
+        "libraries such as react", "libraries such as", "such as",
+        "experience with", "familiarity with", "knowledge of",
+        "what you'll do", "you'll do", "you will", "we are looking",
+      ]);
+
+      if (EXACT_BANS.has(lower)) return null;
+
+      // Extract skill from descriptive phrases
+      // "Strong Proficiency In HTML" → "HTML"
+      const proficiencyMatch = lower.match(/(?:strong|solid|good|excellent)\s+(?:proficiency|knowledge|experience)\s+(?:in|with)\s+(.+)/);
+      if (proficiencyMatch) {
+        s = proficiencyMatch[1].trim();
       }
 
-      return true;
+      // "Libraries such as React" → "React"
+      const suchAsMatch = lower.match(/(?:libraries|tools|frameworks?)\s+(?:such\s+as|like|including)\s+(.+)/);
+      if (suchAsMatch) {
+        s = suchAsMatch[1].trim();
+      }
+
+      // "UX designs into high-quality" → "UX Design"
+      if (lower.includes("ux") && (lower.includes("designs") || lower.includes("design"))) {
+        if (lower.includes("into") || lower.includes("high-quality")) {
+          return "UI/UX Design";
+        }
+      }
+
+      // Pattern-based rejection
+      const BAD_PATTERNS = [
+        /^(job|overview|qualifications?|responsibilit(y|ies)|requirements?)/i,
+        /^(nice[-\s]?to[-\s]?have|preferred|optional)/i,
+        /\b(high[-\s]?performance|scalab(le|ility))\b/i,
+        /\b(developers?|engineers?|designers?|backend|frontend)\b/i,
+        /\b(reusable|maintainable|clean)\s+(code|applications?)\b/i,
+        /^(strong|solid|good)\s/i, // Still starts with descriptors
+        /\b(you'?ll|you\s+will|we'?re|we\s+are)\b/i,
+        /\binto\s+(high|quality)/i,
+        /\b(such\s+as|including|like)\b/i, // Still contains meta phrases
+      ];
+
+      if (BAD_PATTERNS.some(p => p.test(s))) return null;
+
+      const words = s.toLowerCase().split(/\s+/).filter(Boolean);
+      
+      // Length validation
+      if (words.length === 0 || words.length > 3) return null;
+
+      // Stopword validation
+      const stopwords = new Set([
+        "and", "or", "of", "off", "with", "the", "to", "for", "in", "a", "an",
+        "you", "will", "such", "as", "like", "into", "high", "quality",
+      ]);
+
+      if (stopwords.has(words[0]) || stopwords.has(words[words.length - 1])) {
+        return null;
+      }
+
+      // Generic non-skill terms
+      if (words.length === 1) {
+        const genericTerms = new Set([
+          "scalability", "performance", "reusable", "maintainable", "applications",
+          "proficiency", "qualifications", "overview", "responsibilities",
+          "requirements", "developers", "engineers", "code", "quality",
+        ]);
+        if (genericTerms.has(words[0])) return null;
+      }
+
+      // Must have alphanumeric
+      if (!/[a-z0-9]/i.test(s)) return null;
+
+      return s;
     };
 
-    const normalizeFamily = (p: string): string => {
-      const lower = p.toLowerCase();
-      if (
-        lower.includes("ui/ux") ||
-        lower.includes("ui ux") ||
-        lower.includes("ux design")
-      ) {
-        return "UI/UX Design";
-      }
-      if (lower === "html5") return "HTML";
-      if (lower === "css3") return "CSS";
-      if (["github", "gitlab", "bitbucket"].includes(lower)) return "Git";
-      if (["adwords", "google adwords"].includes(lower)) return "Google Ads";
-      if (["facebook ads", "meta ads"].includes(lower)) return "Meta Ads";
-      if (lower === "ms excel") return "Excel";
-      if (lower === "ms word") return "Word";
-      if (["office suite", "microsoft office"].includes(lower))
-        return "Microsoft Office";
-      if (["emr", "ehr"].includes(lower)) return "EHR";
-      if (["good manufacturing practice"].includes(lower)) return "GMP";
-      return p;
+    const normalizeSkill = (s: string): string => {
+      const lower = s.toLowerCase().trim();
+      
+      // Common normalizations
+      const MAP: Record<string, string> = {
+        "html5": "HTML",
+        "css3": "CSS",
+        "javascript": "JavaScript",
+        "js": "JavaScript",
+        "es6": "JavaScript",
+        "es2015": "JavaScript",
+        "reactjs": "React",
+        "react.js": "React",
+        "vuejs": "Vue",
+        "vue.js": "Vue",
+        "angularjs": "AngularJS", // Keep distinct from Angular
+        "nodejs": "Node.js",
+        "node": "Node.js",
+        "typescript": "TypeScript",
+        "ts": "TypeScript",
+        "nextjs": "Next.js",
+        "next": "Next.js",
+        "nuxtjs": "Nuxt.js",
+        "nuxt": "Nuxt.js",
+        "github": "Git",
+        "gitlab": "Git",
+        "bitbucket": "Git",
+        "bootstrap": "Bootstrap",
+        "bootstrap 5": "Bootstrap",
+        "scss": "SASS",
+        "sass": "SASS",
+        "tailwindcss": "Tailwind",
+        "tailwind css": "Tailwind",
+        "rest api": "REST API",
+        "rest apis": "REST API",
+        "restful api": "REST API",
+        "graphql api": "GraphQL",
+        "ux design": "UI/UX Design",
+        "ui/ux": "UI/UX Design",
+        "ui ux": "UI/UX Design",
+        "row-level security": "Row-Level Security",
+        "power query": "Power Query",
+        "powerquery": "Power Query",
+        "power bi": "Power BI",
+        "powerbi": "Power BI",
+        "dax": "DAX",
+        "ms excel": "Excel",
+        "microsoft excel": "Excel",
+        "wcag": "WCAG",
+        "wcag 2.1": "WCAG",
+      };
+
+      return MAP[lower] || s;
     };
 
-    const cleanList = (arr?: string[]) => {
-      if (!arr) return [];
-      const out: string[] = [];
+    const formatSkill = (skill: string): string => {
+      const trimmed = skill.trim();
+      if (!trimmed) return "";
+      if (trimmed.length <= 4) return trimmed.toUpperCase();
+      return trimmed
+        .split(" ")
+        .map((word) =>
+          word.length ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ""
+        )
+        .join(" ")
+        .trim();
+    };
+
+    const processSkillList = (arr?: string[]): string[] => {
+      if (!arr || !Array.isArray(arr)) return [];
+      
+      const result: string[] = [];
       const seen = new Set<string>();
+
       for (const item of arr) {
-        if (!item) continue;
-        const pieces = String(item)
-          .split(SEP)
-          .map((s) =>
-            stripEdgePunctuation(
-              this.formatSkill(
-                s
-                  .replace(/[.?!,:]+$/g, "")
-                  .trim()
-              )
-            )
-          )
-          .filter((s) => s && !BAD.has(s.toLowerCase()));
+        if (!item || typeof item !== 'string') continue;
 
-        for (let p of pieces) {
-          const lower = p.toLowerCase();
-          const words = lower
-            .replace(/[-/]/g, " ")
-            .replace(/['’]/g, "")
-            .split(/\s+/)
-            .filter(Boolean);
-          if (!words.length || BAD.has(words[0]) || words.length > 3) {
-            continue;
-          }
-          if (EDGE_STOPWORDS.has(words[0]) || EDGE_STOPWORDS.has(words[words.length - 1])) {
-            continue;
-          }
+        // Split by common separators
+        const pieces = item
+          .split(/[,;|&+]|\s+and\s+|\s+or\s+/i)
+          .map(p => p.trim())
+          .filter(Boolean);
 
-          if (!isValidSkill(p)) {
-            continue;
-          }
+        for (const piece of pieces) {
+          const cleaned = cleanSkill(piece);
+          if (!cleaned) continue;
 
-          p = normalizeFamily(p);
-          const key = this.normalizeSkill(p);
-          if (key && !seen.has(key)) {
+          const normalized = normalizeSkill(cleaned);
+          const formatted = formatSkill(normalized);
+          const key = formatted.toLowerCase();
+
+          if (key && !seen.has(key) && result.length < 10) {
             seen.add(key);
-            out.push(p);
+            result.push(formatted);
           }
         }
       }
-      return out.slice(0, 12);
+
+      return result;
     };
 
-    resp.jobSkills = cleanList(resp.jobSkills);
-    resp.profileSkills = cleanList(resp.profileSkills);
-    const cleanedMatched = cleanList(resp.matchedSkills);
-    const cleanedMissing = cleanList(resp.missingSkills);
+    // Process all skill arrays
+    resp.jobSkills = processSkillList(resp.jobSkills);
+    resp.profileSkills = processSkillList(resp.profileSkills);
 
-    if (typeof resp.matchPercentage !== "number" || isNaN(resp.matchPercentage)) {
-      resp.matchPercentage = 0;
-    } else {
-      resp.matchPercentage = this.safeScore(resp.matchPercentage);
-    }
-
-    if (typeof resp.summary !== "string") resp.summary = "";
-
-    // Recompute matched/missing to enforce subset logic.
-    const profileSet = new Set(resp.profileSkills.map((s) => this.normalizeSkill(s)));
-    const jobSet = new Set(resp.jobSkills.map((s) => this.normalizeSkill(s)));
-    resp.matchedSkills = resp.jobSkills.filter((skill) =>
-      profileSet.has(this.normalizeSkill(skill))
+    // Recompute matched/missing based on cleaned lists
+    const profileNormalized = new Set(
+      resp.profileSkills.map(s => s.toLowerCase())
     );
+    const jobNormalized = new Set(
+      resp.jobSkills.map(s => s.toLowerCase())
+    );
+
+    resp.matchedSkills = resp.jobSkills.filter(skill =>
+      profileNormalized.has(skill.toLowerCase())
+    );
+
     resp.missingSkills = resp.jobSkills.filter(
-      (skill) => !profileSet.has(this.normalizeSkill(skill))
+      skill => !profileNormalized.has(skill.toLowerCase())
     );
 
-    // Preserve any valid AI-provided items that fit subsets without duplicating.
-    for (const m of cleanedMatched) {
-      if (!this.normalizeSkill(m)) continue;
-      if (jobSet.has(this.normalizeSkill(m)) && profileSet.has(this.normalizeSkill(m))) {
-        if (!resp.matchedSkills.find((x) => this.normalizeSkill(x) === this.normalizeSkill(m))) {
-          resp.matchedSkills.push(m);
-        }
-      }
+    // Recalculate percentage
+    if (typeof resp.matchPercentage !== "number" || isNaN(resp.matchPercentage)) {
+      resp.matchPercentage = resp.jobSkills.length > 0
+        ? (resp.matchedSkills.length / resp.jobSkills.length) * 100
+        : 0;
     }
-    for (const m of cleanedMissing) {
-      if (!this.normalizeSkill(m)) continue;
-      if (jobSet.has(this.normalizeSkill(m)) && !profileSet.has(this.normalizeSkill(m))) {
-        if (!resp.missingSkills.find((x) => this.normalizeSkill(x) === this.normalizeSkill(m))) {
-          resp.missingSkills.push(m);
-        }
-      }
+    resp.matchPercentage = this.safeScore(resp.matchPercentage);
+
+    // Validate summary
+    if (typeof resp.summary !== "string" || !resp.summary.trim()) {
+      resp.summary = this.buildDefaultSummary(
+        resp.matchedSkills.length,
+        resp.jobSkills.length
+      );
     }
+
+    console.log("[job-fit][sanitized]", {
+      jobSkills: resp.jobSkills,
+      profileSkills: resp.profileSkills,
+      matchedSkills: resp.matchedSkills,
+      missingSkills: resp.missingSkills,
+    });
 
     return resp;
   }
 
-  // ---------------- heuristic helpers ----------------
+  // ---------------- heuristic helpers (unchanged) ----------------
 
   private extractHeuristicSkills(sources: WeightedSkillSource[]): string[] {
     const scores = new Map<string, number>();
@@ -707,66 +739,17 @@ class JobFitService {
     flatten(rawInput as MaybeArray<string | string[] | undefined | null>);
 
     const stopWords = new Set([
-      "and",
-      "or",
-      "of",
-      "off",
-      "with",
-      "the",
-      "to",
-      "for",
-      "in",
-      "a",
-      "an",
-      "is",
-      "are",
-      "be",
-      "being",
-      "been",
-      "at",
-      "on",
-      "by",
-      "per",
-      "via",
-      "our",
-      "your",
-      "skills",
-      "ability",
-      "work",
-      "preferred",
-      "responsibilities",
-      "requirements",
-      "you",
-      "will",
-      "other",
-      "others",
-      "area",
-      "areas",
-      "similar",
+      "and", "or", "of", "off", "with", "the", "to", "for", "in", "a", "an",
+      "is", "are", "be", "being", "been", "at", "on", "by", "per", "via",
+      "our", "your", "skills", "ability", "work", "preferred",
+      "responsibilities", "requirements", "you", "will", "other", "others",
+      "area", "areas", "similar", "etc", "what"
     ]);
 
     const edgeStopWords = new Set([
-      "and",
-      "or",
-      "with",
-      "the",
-      "to",
-      "for",
-      "in",
-      "of",
-      "off",
-      "a",
-      "an",
-      "is",
-      "are",
-      "our",
-      "your",
+      "and", "or", "with", "the", "to", "for", "in", "of", "off", "a", "an",
+      "is", "are", "our", "your", "you", "will"
     ]);
-
-    const bannedPhrases = [
-      /\b(functional(ly)?\s+correct(ness)?|factual\s+correctness|code\s+functionality)\b/i,
-      /\b(functionality|functionally|correctness)\b/i,
-    ];
 
     const skills: string[] = [];
 
@@ -782,7 +765,6 @@ class JobFitService {
         const token = rawToken;
         if (!token) continue;
 
-        // Keep alphanumerics (to allow ISO 9001, FAA Part 107, A320, etc.)
         const normalized = token
           .toLowerCase()
           .replace(/[^a-z0-9+#\/.&\s-]/g, "")
@@ -790,36 +772,19 @@ class JobFitService {
           .trim();
 
         if (!normalized) continue;
-        if (bannedPhrases.some((pattern) => pattern.test(normalized))) continue;
-
-        // Skip items that are purely numeric or punctuation-like
         if (/^[0-9\s\-/.]+$/.test(normalized)) continue;
 
         const words = normalized.split(/\s+/).filter(Boolean);
         if (!words.length) continue;
         if (words.length > 4) continue;
         if (VERB_PREFIXES.has(words[0])) continue;
-        if (edgeStopWords.has(words[0]) || edgeStopWords.has(words[words.length - 1])) continue;
+        if (
+          edgeStopWords.has(words[0]) ||
+          edgeStopWords.has(words[words.length - 1])
+        )
+          continue;
         if (words.some((word) => BANNED_WORDS_ANYWHERE.has(word))) continue;
         if (words.every((word) => stopWords.has(word))) continue;
-
-        const normalizedPhrase = words.join(" ");
-        if (
-          normalizedPhrase.startsWith("you will") ||
-          normalizedPhrase.startsWith("will") ||
-          normalizedPhrase.includes("other area")
-        ) {
-          continue;
-        }
-
-        if (
-          words.length === 1 &&
-          ["functionality", "functionally", "correctness", "correct", "factual"].includes(
-            words[0]
-          )
-        ) {
-          continue;
-        }
 
         if (!/[a-z]/i.test(token) && !/[0-9]/.test(token)) continue;
 
@@ -872,9 +837,7 @@ class JobFitService {
     return trimmed
       .split(" ")
       .map((word) =>
-        word.length
-          ? word[0].toUpperCase() + word.slice(1).toLowerCase()
-          : ""
+        word.length ? word[0].toUpperCase() + word.slice(1).toLowerCase() : ""
       )
       .join(" ")
       .trim();
@@ -916,11 +879,10 @@ class JobFitService {
   }
 
   private buildDefaultSummary(matched: number, totalRequired: number): string {
-    if (!totalRequired) return "Not enough job data to calculate a skill match.";
+    if (!totalRequired)
+      return "Not enough job data to calculate a skill match.";
     return `Matched ${matched} of ${totalRequired} highlighted requirements.`;
   }
 }
 
 export const jobFitService = new JobFitService();
-
-
