@@ -270,16 +270,16 @@ let notificationMessage = `"${roleText}" application status updated.`;
 
 if (normalizedStatus === "shortlisted") {
   notificationMessage =
-    `Your application for ${roleText} has been forwarded to the hiring manager. ` +
+    `Your application for the ${roleText} role has been forwarded to the hiring manager. ` +
     `You may be contacted outside of EVP’s platform if the hire manager wants to proceed with a formal interview. ` +
     `Good luck!`;
 } else if (normalizedStatus === "rejected") {
   notificationMessage =
-    `Unfortunately, your application for the ${roleText} has been unsuccessful on this occasion. ` +
+    `Unfortunately, your application for the ${roleText} role has been unsuccessful on this occasion. ` +
     `Please continue to apply and we wish you good fortune in your job search!`;
 } else if (normalizedStatus === "pending") {
   // No provided email template for pending, so keep it neutral.
-  notificationMessage = `Your application for ${roleText} is currently pending.`;
+  notificationMessage = `Your application for the ${roleText} role is currently pending.`;
 }
 
 
