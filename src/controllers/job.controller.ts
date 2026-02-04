@@ -825,7 +825,8 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
 
   let [totalJobs, jobs] = await Promise.all([
     Job.countDocuments(filter),
-    Job.find(filter, filter.$text ? { score: { $meta: "textScore" } } : {})
+    Job.find(filter)
+      .select("-embedding")
       .skip(skip)
       .limit(limit)
       .sort(
@@ -854,6 +855,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     [totalJobs, jobs] = await Promise.all([
       Job.countDocuments(regexFilter),
       Job.find(regexFilter)
+        .select("-embedding")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 })
@@ -868,6 +870,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     [totalJobs, jobs] = await Promise.all([
       Job.countDocuments(baseFilter),
       Job.find(baseFilter)
+        .select("-embedding")
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 })
@@ -1407,10 +1410,30 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;
+  const now = new Date();
+  const publishDateFilter = {
+    $or: [
+      { publishDate: { $exists: false } },
+      { publishDate: null },
+      { publishDate: { $lte: now } },
+    ],
+  };
+  const deadlineFilter = {
+    $or: [
+      { deadline: { $exists: false } },
+      { deadline: null },
+      { deadline: { $gte: now } },
+    ],
+  };
   const Jobs = await Job.find({
     companyId: userId,
     jobApprove: "approved",
+    adminApprove: true,
+    arcrivedJob: false,
+    ...publishDateFilter,
+    $and: [deadlineFilter],
   })
+    .select("-embedding")
     .sort({
       createdAt: -1,
     })
