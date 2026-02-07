@@ -18,7 +18,7 @@ const JOB_EXPIRY_NOTICE =
 const SUBSCRIPTION_EXPIRY_NOTICE =
   'Your subscription has expired, please renew or upload a free 30-second elevator pitch video today.';
 const PITCH_REMOVAL_NOTICE =
-  'Your upgraded Elevator Video Pitch© has been removed because your subscription expired. Renew your plan to upload a new video.';
+  'Renew your plan to upload a new 60-seconds video or upload a free 30-seconds video.';
 
 export const deleteOldDeactivatedUsers = async () => {
   const THIRTY_DAYS = 30 * MILLIS_PER_DAY
