@@ -1252,6 +1252,12 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
 
 // fetch all user without admin
 export const fetchAllUsers = catchAsync(async (req, res) => {
+  const rawQ = Array.isArray(req.query.q)
+    ? req.query.q[0]
+    : req.query.q;
+  const q = typeof rawQ === "string" ? rawQ.trim().toLowerCase() : "";
+  const hasQuery = q.length > 0;
+
   const users = await User.find({
     role: { $ne: "admin" },
     deactivate: { $ne: true },
@@ -1265,10 +1271,11 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
       let photoUrl: string | null = null;
       let name1 = null;
       let immediatelyAvailable: boolean | null = null;
+      let locationParts: string[] = [];
 
       if (user.role === "candidate") {
         const resume = await CreateResume.findOne({ userId: user._id }).select(
-          "photo immediatelyAvailable"
+          "photo immediatelyAvailable location city country"
         );
         if (!resume) return null;
         photoUrl = resume?.photo || null;
@@ -1276,23 +1283,34 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
           typeof resume.immediatelyAvailable === "boolean"
             ? resume.immediatelyAvailable
             : null;
+        locationParts = [resume.location, resume.city, resume.country].filter(
+          Boolean
+        ) as string[];
       } else if (user.role === "recruiter") {
         const recruiter = await RecruiterAccount.findOne({
           userId: user._id,
-        }).select("photo");
+        }).select("photo location city country");
         if (!recruiter) return null;
         photoUrl = recruiter?.photo || null;
+        locationParts = [
+          recruiter.location,
+          recruiter.city,
+          recruiter.country,
+        ].filter(Boolean) as string[];
       } else if (user.role === "company") {
         const company = await Company.findOne({ userId: user._id }).select(
-          "clogo cname"
+          "clogo cname city country"
         );
         if (!company) return null;
         photoUrl = company?.clogo || null;
         name1 = company?.cname;
+        locationParts = [company.city, company.country].filter(
+          Boolean
+        ) as string[];
       }
 
       // safely assign to avatar.url and include immediatelyAvailable (only meaningful for candidates)
-      return {
+      const enriched = {
         ...user.toObject(),
         name: name1 ? name1 : user.name,
         avatar: {
@@ -1301,14 +1319,42 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
         },
         immediatelyAvailable,
       };
+
+      return { user: enriched, locationParts };
     })
   );
+
+  let data = enrichedUsers.filter(Boolean) as Array<{
+    user: any;
+    locationParts: string[];
+  }>;
+
+  if (hasQuery) {
+    data = data.filter(({ user, locationParts }) => {
+      const availabilityText =
+        user?.immediatelyAvailable === true
+          ? "immediately available immediate available"
+          : "";
+      const searchBlob = [
+        user?.name,
+        user?.role,
+        user?.address,
+        ...locationParts,
+        availabilityText,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchBlob.includes(q);
+    });
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "All users fetched successfully",
-    data: enrichedUsers,
+    data: data.map((item) => item.user),
   });
 });
 
