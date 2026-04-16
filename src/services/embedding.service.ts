@@ -7,7 +7,7 @@ import type { IEducation } from "../interface/education.interface";
 import { buildJobText, buildProfileText } from "../utils/jobFitText";
 
 const DEFAULT_EMBED_MODEL =
-  process.env.GEMINI_EMBED_MODEL ?? "text-embedding-004";
+  process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-001";
 
 const embeddingsFlag =
   (process.env.JOB_EMBEDDINGS ?? "on").toLowerCase() !== "off";

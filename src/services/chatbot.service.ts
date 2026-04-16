@@ -60,7 +60,7 @@ type KnowledgeInsert = {
 const DEFAULT_VECTOR_INDEX =
   process.env.MONGODB_VECTOR_INDEX ?? "chatbot_vector_index";
 const DEFAULT_EMBED_MODEL =
-  process.env.GEMINI_EMBED_MODEL ?? "text-embedding-004";
+  process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-001";
 const DEFAULT_CHAT_MODEL =
   process.env.GEMINI_CHAT_MODEL ?? "gemini-3-flash-preview";
 const MAX_OUTPUT_TOKENS = 2048;
