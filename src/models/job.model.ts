@@ -32,6 +32,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     name: { type: String },
     role: { type: String },
     compensation: { type: String },
+    currencyType: { type: String },
     arcrivedJob: { type: Boolean, default: false },
     applicationRequirement: [
       {
