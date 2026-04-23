@@ -36,6 +36,7 @@ export interface IJob extends Document {
   arcrivedJob: boolean;
   jobCategoryId: Types.ObjectId;
   compensation: string;
+  currencyType?: string;
   applicationRequirement: IApplicationRequirement[];
   customQuestion: ICustomQuestion[];
   jobApprove: string;
