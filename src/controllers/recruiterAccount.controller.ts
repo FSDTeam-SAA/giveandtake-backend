@@ -9,13 +9,55 @@ import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
 import mongoose, { Schema } from 'mongoose'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
+import { isPrivilegedRole } from '../utils/authz'
+
+/**
+ * Fields the client is allowed to set on a recruiter account.
+ * Excludes identity/ownership fields (userId, slug, companyId) which are
+ * derived server-side and must never be mass-assigned from the request body.
+ */
+const RECRUITER_ACCOUNT_FIELDS = [
+  'bio',
+  'aboutUs',
+  'banner',
+  'photo',
+  'title',
+  'firstName',
+  'lastName',
+  'sureName',
+  'country',
+  'city',
+  'zipCode',
+  'location',
+  'emailAddress',
+  'phoneNumber',
+  'roleAtCompany',
+  'awardTitle',
+  'programName',
+  'programDate',
+  'awardDescription',
+  'sLink',
+] as const
+
+const pickRecruiterAccountFields = (
+  body: Record<string, unknown>
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {}
+  for (const key of RECRUITER_ACCOUNT_FIELDS) {
+    if (body[key] !== undefined) out[key] = body[key]
+  }
+  return out
+}
 
 /****************************
  * CREATE RECRUITER ACCOUNT *
  ****************************/
 export const createRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, ...rest } = req.body
+    // Owner is always the authenticated user — never trust body userId.
+    const userId = String(req.user!._id)
+    const { companyId } = req.body
+    const saferest = pickRecruiterAccountFields(req.body)
 
     const user = await User.findById(userId);
     if (!user) {
@@ -63,7 +105,6 @@ export const createRecruiterAccount = catchAsync(
         banner = certRes.secure_url;
       }
     }
-    const { companyId, ...saferest } = rest;
     if (companyId) {
       const reqCom = await ReqCompany.findOneAndUpdate(
         { userId, company: companyId }, // match condition
@@ -76,12 +117,12 @@ export const createRecruiterAccount = catchAsync(
     }
     await user.save();
     const recruiterAccount = await RecruiterAccount.create({
+      ...saferest,
       slug: user.slug,
       userId,
       videoFile: videoUrl,
       photo: photoUrl,
       banner,
-      ...saferest,
     })
 
     sendResponse(res, {
@@ -166,8 +207,14 @@ export const getRecruiterAccountByUserSlug = catchAsync(async (req: Request, res
  ****************************/
 export const updateRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId } = req.params
-    const updates = { ...req.body }
+    // The owner of a recruiter account is always the authenticated user;
+    // admins/super-admins may target another user's account via the param.
+    const userId = isPrivilegedRole(req.user!.role)
+      ? req.params.userId || String(req.user!._id)
+      : String(req.user!._id)
+
+    // Whitelist updatable fields; never let the client set userId/slug/companyId.
+    const updates: Record<string, unknown> = pickRecruiterAccountFields(req.body)
 
     const user = await User.findById(userId);
     if (!user) {
@@ -209,8 +256,8 @@ export const updateRecruiterAccount = catchAsync(
         user.avatar.url = uploadedPhoto.secure_url || "";
       }
     }
-      if(updates.name){
-    user.name = updates.name
+      if (typeof req.body.name === 'string' && req.body.name) {
+    user.name = req.body.name
   }
   await user?.save()
 
@@ -234,7 +281,10 @@ export const updateRecruiterAccount = catchAsync(
  *******************************/
 export const deleteRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId } = req.params
+    // Owner-only delete; admins/super-admins may target another user's account.
+    const userId = isPrivilegedRole(req.user!.role)
+      ? req.params.userId || String(req.user!._id)
+      : String(req.user!._id)
 
     const deleted = await RecruiterAccount.findOneAndDelete({ userId })
 

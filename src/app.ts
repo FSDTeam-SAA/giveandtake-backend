@@ -1,4 +1,5 @@
 import express from "express";
+import helmet from "helmet";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler";
 import { notFound } from "./middlewares/notFound";
 import cors from "cors";
@@ -38,15 +39,45 @@ import countryRoutes from "./routes/country.routes";
 
 const app = express();
 
+// Behind a reverse proxy (one hop). Required so express-rate-limit and any
+// IP-based logic see the real client IP from X-Forwarded-For rather than the
+// proxy's address. Safe when not proxied (no XFF header -> direct IP is used).
+app.set("trust proxy", 1);
+
+// Security headers (M2). CSP belongs on the HTML-serving frontends; the API
+// also serves /uploads cross-origin to those apps, so disable CSP and allow
+// cross-origin resource loads to avoid breaking asset delivery.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// CORS (L1): env-driven allowlist via CORS_ORIGINS (comma-separated). When
+// unset, the previous permissive behaviour is preserved (reflect the request
+// origin) so nothing breaks — set CORS_ORIGINS in production to lock down.
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: "*", //  frontend origin
+    origin: (origin, callback) => {
+      if (allowedOrigins.length === 0) return callback(null, true);
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 const uploadsDir = path.resolve(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsDir));

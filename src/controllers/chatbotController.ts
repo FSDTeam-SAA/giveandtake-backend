@@ -4,6 +4,10 @@ import chatbotService, {
   ChatHistoryEntry,
 } from "../services/chatbot.service";
 
+// Bounds to cap LLM/embedding spend and DoS on the public /chat endpoint.
+const MAX_QUESTION_LENGTH = 2000;
+const MAX_HISTORY_ENTRIES = 20;
+
 const parseHistoryPayload = (
   rawHistory: unknown
 ): ChatHistoryEntry[] | undefined => {
@@ -62,6 +66,22 @@ export const chatWithBot = async (req: Request, res: Response): Promise<void> =>
     res.status(400).json({
       status: "error",
       message: "A question is required.",
+    });
+    return;
+  }
+
+  if (question.trim().length > MAX_QUESTION_LENGTH) {
+    res.status(400).json({
+      status: "error",
+      message: `Question is too long. Limit it to ${MAX_QUESTION_LENGTH} characters.`,
+    });
+    return;
+  }
+
+  if (Array.isArray(history) && history.length > MAX_HISTORY_ENTRIES) {
+    res.status(400).json({
+      status: "error",
+      message: `Conversation history is too long. Limit it to ${MAX_HISTORY_ENTRIES} entries.`,
     });
     return;
   }

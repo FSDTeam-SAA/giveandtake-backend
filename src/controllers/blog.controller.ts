@@ -10,6 +10,44 @@ import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 import chatbotService from '../services/chatbot.service'
 import slugify from 'slugify'
 import { Types } from 'mongoose'
+import { assertOwner } from '../utils/authz'
+
+/**
+ * Minimal server-side HTML sanitizer for rich-text blog content. Removes the
+ * dangerous constructs that enable stored XSS while preserving formatting:
+ *  - <script>/<style>/<iframe>/<object>/<embed>/<link>/<meta>/<base> elements,
+ *  - inline event-handler attributes (onclick, onerror, ...),
+ *  - javascript:/vbscript:/data: URIs in href/src/etc.
+ * (No HTML-sanitizer package is installed in this repo and we must not add one,
+ * so this is a conservative allow-the-rest, strip-the-dangerous pass.)
+ */
+const sanitizeBlogHtml = (input: unknown): string => {
+  if (typeof input !== 'string') return ''
+  let html = input
+
+  // Strip dangerous elements (including their content) entirely.
+  html = html.replace(
+    /<\s*(script|style|iframe|object|embed|noscript|template)\b[\s\S]*?<\s*\/\s*\1\s*>/gi,
+    ''
+  )
+  // Strip standalone/void dangerous tags that may not have a closing tag.
+  html = html.replace(
+    /<\s*\/?\s*(script|style|iframe|object|embed|noscript|template|link|meta|base)\b[^>]*>/gi,
+    ''
+  )
+  // Remove inline event-handler attributes: on*="..." / on*='...' / on*=value
+  html = html.replace(
+    /\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,
+    ''
+  )
+  // Neutralise dangerous URI schemes in any attribute value.
+  html = html.replace(
+    /((?:href|src|xlink:href|formaction|action|data|poster)\s*=\s*)("|')?\s*(?:javascript|vbscript|data)\s*:[^"'>\s]*("|')?/gi,
+    '$1$2#$3'
+  )
+
+  return html.trim()
+}
 
 const generateUniqueSlug = async (title: string, excludeId?: string) => {
   const baseSlug =
@@ -34,11 +72,16 @@ const generateUniqueSlug = async (title: string, excludeId?: string) => {
  * CREATE BLOG *
  ***************/
 export const createBlog = catchAsync(async (req: Request, res: Response) => {
-  const { title, description, userId, authorName } = req.body
+  const { title, description, authorName } = req.body
 
-  if (!title || !description || !userId || !authorName) {
+  // Author is always the authenticated user — never trust a client-supplied id.
+  const userId = String(req.user?._id)
+
+  if (!title || !description || !authorName) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Missing required fields')
   }
+
+  const sanitizedDescription = sanitizeBlogHtml(description)
 
   let imageUrl: string | null = null
   let imagePublicId: string | null = null
@@ -66,7 +109,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
   const blog = await Blog.create({
     title,
     slug: await generateUniqueSlug(title),
-    description,
+    description: sanitizedDescription,
     userId,
     authorName,
     image: imageUrl,
@@ -145,6 +188,9 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'Blog not found')
   }
 
+  // Only the author (or an admin/super-admin) may modify a blog.
+  assertOwner(req, blog.userId, 'You are not allowed to modify this blog.')
+
   // Handle new image upload
   if (req.file) {
     const localPath = req.file.path
@@ -177,7 +223,7 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
     blog.title = title
     blog.slug = await generateUniqueSlug(title, blog.id)
   }
-  if (description) blog.description = description
+  if (description) blog.description = sanitizeBlogHtml(description)
   if (authorName) blog.authorName = authorName
 
   await blog.save()
@@ -197,6 +243,15 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
  ***************/
 export const deleteBlog = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
+
+  const blog = await Blog.findById(id)
+  if (!blog) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Blog not found')
+  }
+
+  // Only the author (or an admin/super-admin) may delete a blog.
+  assertOwner(req, blog.userId, 'You are not allowed to delete this blog.')
+
   const deleted = await Blog.findByIdAndDelete(id)
 
   if (!deleted) {

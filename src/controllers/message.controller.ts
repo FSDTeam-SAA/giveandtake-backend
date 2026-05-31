@@ -7,6 +7,23 @@ import mongoose from 'mongoose'
 import { io } from '../server'
 import { uploadToCloudinary } from '../utils/cloudinary' // Adjust path
 import { MessageRoom } from '../models/messageRoom.model'
+import { idToString, isPrivilegedRole } from '../utils/authz'
+import stripHtml from '../utils/stripHtml'
+
+/**
+ * Returns true if the authenticated user is a participant of the room
+ * (candidate / recruiter / company) or a privileged role.
+ */
+const isRoomParticipant = (req: Request, room: any): boolean => {
+  if (isPrivilegedRole(req.user?.role)) return true
+  const requesterId = idToString(req.user?._id)
+  if (!requesterId) return false
+  return (
+    requesterId === idToString(room?.userId) ||
+    requesterId === idToString(room?.recruiterId) ||
+    requesterId === idToString(room?.companyId)
+  )
+}
 
 /***************
  * CREATE MESSAGE
@@ -74,14 +91,37 @@ export const getUnreadRoomCount = async (userId : any) => {
 };
 
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
-  const { message, roomId, userId } = req.body
+  const { message, roomId } = req.body
   const files = req.files as Express.Multer.File[]
 
-  const room = await MessageRoom.findById(roomId);
-
-  if (!mongoose.Types.ObjectId.isValid(roomId)) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
+  // Validate the room id is a real 24-hex ObjectId BEFORE touching the DB so a
+  // malformed id yields a clean 400 instead of a downstream Mongoose cast error.
+  if (typeof roomId !== 'string' || !mongoose.Types.ObjectId.isValid(roomId)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room id')
   }
+
+  const room = await MessageRoom.findById(roomId)
+
+  // A well-formed id that doesn't resolve to a room is a clean 404.
+  if (!room) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Message room not found')
+  }
+
+  // The sender is always the authenticated user, never trusted from the body.
+  const userId = idToString(req.user?._id)
+
+  // Only participants of the room may post messages to it.
+  if (!isRoomParticipant(req, room)) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You are not a participant of this conversation.'
+    )
+  }
+
+  // Sanitize message text/body server-side so stored messages can't carry
+  // script/HTML payloads. Keep plain text intact.
+  const sanitizedMessage =
+    typeof message === 'string' ? stripHtml(message) : ''
 
   // Upload all files to Cloudinary
   const fileData = await Promise.all(
@@ -98,9 +138,9 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     })
   )
 
-  // Create message
+  // Create message (whitelisted fields only; sender taken from the token)
   const newMessage = await Message.create({
-    message,
+    message: sanitizedMessage,
     roomId,
     userId,
     file: fileData.filter(Boolean), // remove nulls
@@ -110,7 +150,7 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   await MessageRoom.findByIdAndUpdate(
     roomId,
     {
-      lastMessage: message || (fileData.length ? '📎 Attachment' : ''),
+      lastMessage: sanitizedMessage || (fileData.length ? '📎 Attachment' : ''),
       lastMessageSender: userId,
     },
     { new: true }
@@ -151,6 +191,20 @@ export const getMessagesByRoom = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
     }
 
+    const room = await MessageRoom.findById(roomId)
+
+    if (!room) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Message room not found')
+    }
+
+    // Only participants of the room (or admins) may read its messages.
+    if (!isRoomParticipant(req, room)) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You are not a participant of this conversation.'
+      )
+    }
+
     const messages = await Message.find({ roomId })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -180,20 +234,45 @@ export const updateMessage = catchAsync(async (req: Request, res: Response) => {
   const { messageId } = req.params
   const { message } = req.body
 
-  const updated = await Message.findByIdAndUpdate(
-    messageId,
-    { message },
-    { new: true }
-  )
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid message ID')
+  }
 
-  if (!updated) {
+  const existing = await Message.findById(messageId)
+
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Message not found')
   }
+
+  const room = await MessageRoom.findById(existing.roomId)
+
+  // Caller must be a participant of the room ...
+  if (!isRoomParticipant(req, room)) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You are not a participant of this conversation.'
+    )
+  }
+
+  // ... and may only edit their own messages (admins exempt).
+  if (
+    !isPrivilegedRole(req.user?.role) &&
+    idToString(existing.userId) !== idToString(req.user?._id)
+  ) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You can only edit your own messages.'
+    )
+  }
+
+  // Sanitize edited text server-side.
+  existing.message = typeof message === 'string' ? stripHtml(message) : ''
+  await existing.save()
 
   res.status(httpStatus.OK).json({
     success: true,
     message: 'Message updated',
-    data: updated,
+    data: existing,
   })
 })
 
@@ -203,11 +282,38 @@ export const updateMessage = catchAsync(async (req: Request, res: Response) => {
 export const deleteMessage = catchAsync(async (req: Request, res: Response) => {
   const { messageId } = req.params
 
-  const deleted = await Message.findByIdAndDelete(messageId)
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid message ID')
+  }
 
-  if (!deleted) {
+  const existing = await Message.findById(messageId)
+
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Message not found')
   }
+
+  const room = await MessageRoom.findById(existing.roomId)
+
+  // Caller must be a participant of the room ...
+  if (!isRoomParticipant(req, room)) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You are not a participant of this conversation.'
+    )
+  }
+
+  // ... and may only delete their own messages (admins exempt).
+  if (
+    !isPrivilegedRole(req.user?.role) &&
+    idToString(existing.userId) !== idToString(req.user?._id)
+  ) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You can only delete your own messages.'
+    )
+  }
+
+  const deleted = await Message.findByIdAndDelete(messageId)
 
   res.status(httpStatus.OK).json({
     success: true,

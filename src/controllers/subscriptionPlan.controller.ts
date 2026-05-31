@@ -120,8 +120,22 @@ export const updateSubscriptionPlan = catchAsync(
     const nextAnnualLimit = normalizeNumericField(req.body?.maxJobPostsPerYear)
     const nextMonthlyLimit = normalizeNumericField(req.body?.maxJobPostsPerMonth)
 
-    const partialUpdate: Record<string, any> = {
-      ...req.body,
+    // Whitelist updatable plan fields so price/limits cannot be mass-assigned.
+    const allowedFields = [
+      'title',
+      'titleColor',
+      'description',
+      'price',
+      'features',
+      'for',
+      'valid',
+    ] as const
+
+    const partialUpdate: Record<string, any> = {}
+    for (const field of allowedFields) {
+      if (req.body?.[field] !== undefined) {
+        partialUpdate[field] = req.body[field]
+      }
     }
 
     if (nextAnnualLimit !== undefined) {

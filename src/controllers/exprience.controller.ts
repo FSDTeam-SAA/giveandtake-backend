@@ -121,8 +121,15 @@ export const updateExperience = catchAsync(async (req, res) => {
   }
 
   const {
+    employer,
+    jobTitle,
+    firstName,
     startDate,
     endDate,
+    country,
+    city,
+    zip,
+    jobDescription,
     careerField,
     careerSubfield,
   } = req.body;
@@ -142,7 +149,22 @@ export const updateExperience = catchAsync(async (req, res) => {
     }
   }
 
-  const updated = await Experience.findByIdAndUpdate(id, req.body, {
+  // Whitelist editable fields; strip userId/_id so they cannot be reassigned.
+  const updates = {
+    employer,
+    jobTitle,
+    firstName,
+    startDate,
+    endDate,
+    country,
+    city,
+    zip,
+    jobDescription,
+    careerField,
+    careerSubfield,
+  };
+
+  const updated = await Experience.findByIdAndUpdate(id, updates, {
     new: true,
     runValidators: true,
   });

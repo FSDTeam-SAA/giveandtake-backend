@@ -22,7 +22,7 @@ import { protect } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
-router.route("/jobs").post(createJob).get(getAllJobs);
+router.route("/jobs").post(protect, createJob).get(getAllJobs);
 router.get("/jobs/posting/usage", protect, getJobPostingUsage);
 router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
 
@@ -30,7 +30,11 @@ router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
  * JOB RECOMMEND SYSTEM *
  ************************/
 router.route("/jobs/recommend").get(protect, recommendJobs);
-router.route("/jobs/:id").get(getSingleJob).patch(updateJob).delete(deleteJob);
+router
+  .route("/jobs/:id")
+  .get(getSingleJob)
+  .patch(protect, updateJob)
+  .delete(protect, deleteJob);
 
 router.route("/jobs/update/:id").patch(protect, editJob);
 

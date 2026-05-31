@@ -11,8 +11,8 @@ import { protect } from '../middlewares/auth.middleware'
 const router = express.Router()
 
 router.post('/', protect, upload.array('files'), createMessage)
-router.get('/:roomId', getMessagesByRoom)
-router.patch('/:messageId', updateMessage)
-router.delete('/:messageId', deleteMessage)
+router.get('/:roomId', protect, getMessagesByRoom)
+router.patch('/:messageId', protect, updateMessage)
+router.delete('/:messageId', protect, deleteMessage)
 
 export default router

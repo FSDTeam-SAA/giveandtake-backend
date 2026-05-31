@@ -25,7 +25,7 @@ router.put('/:id',upload.fields([
 router.get('/user/:userId', getCompanyByUserId)
 router.get('/companies/slug/:slug', getCompanyByUserSlug)
 router.get('/employee/:userId', getCompanyByEmployeeId)
-router.delete('/:id', deleteCompany)
+router.delete('/:id', protect, deleteCompany)
 router.get('/company-employess/skills/:userId', getCompanyEmployeesWithSkills)
 
 router.post('/apply-for-company-employee',protect, employeeReq)

@@ -29,6 +29,11 @@ import {
 } from "../services/embedding.service";
 import { jobFitService } from "../services/jobFit.service";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
+import { isPrivilegedRole, idToString } from "../utils/authz";
+
+// Escape user/resume-derived input before using it in a RegExp to avoid regex injection / ReDoS.
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
   console.warn(
@@ -263,12 +268,65 @@ const deriveExpiryDate = (
   return undefined;
 };
 
+/**
+ * Determine whether a user may manage (edit/delete) a given job.
+ * Mirrors the ownership logic used by `editJob`:
+ *  - company owner whose company owns the job
+ *  - recruiter who owns the job, is the job's recruiter, or is tied to the
+ *    job's company
+ * Admins/super-admins always pass.
+ */
+const userCanManageJob = async (user: any, job: any): Promise<boolean> => {
+  if (!user || !job) return false;
+  if (isPrivilegedRole(user.role)) return true;
+
+  const userId = String(user._id);
+
+  if (user.role === "company") {
+    const company = await Company.findOne({ userId: user._id });
+    if (
+      company &&
+      job.companyId?.toString() ===
+        (company._id as mongoose.Types.ObjectId).toString()
+    ) {
+      return true;
+    }
+  } else if (user.role === "recruiter") {
+    const recruiter = await RecruiterAccount.findOne({ userId: user._id });
+    if (recruiter) {
+      // own job
+      if (job.userId?.toString() === userId) return true;
+      // same recruiter
+      if (
+        job.recruiterId &&
+        recruiter._id &&
+        job.recruiterId.toString() ===
+          (recruiter._id as mongoose.Types.ObjectId).toString()
+      ) {
+        return true;
+      }
+      // recruiter tied to same company
+      if (
+        recruiter.companyId &&
+        job.companyId &&
+        recruiter.companyId.toString() === job.companyId.toString()
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 /*******************
  * // CREATE A JOB *
  *******************/
 export const createJob = catchAsync(async (req: Request, res: Response) => {
+  // Derive the owner from the authenticated token — never trust a client userId.
+  const userId = req.user?._id ? String(req.user._id) : undefined;
+
   const {
-    userId,
     title,
     description,
     companyName,
@@ -379,6 +437,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     applicationRequirement,
     customQuestion,
     jobApprove,
+    // Force the default moderation state: a client may never self-approve.
+    // Only an admin/super-admin may publish a job pre-approved.
+    adminApprove: isPrivilegedRole(req.user?.role) ? req.body?.adminApprove === true : false,
     employement_Type,
     website_Url,
     publishDate: publishDateValue ?? publishDate ?? undefined,
@@ -486,16 +547,12 @@ export const getJobPostingUsage = catchAsync(
 export const editJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  // Require userId in body to authorize edit
-  const { userId } = req.body || {};
-  if (!userId) {
-    throw new AppError(httpStatus.BAD_REQUEST, "userId is required");
-  }
-
-  const user = await User.findById(userId);
+  // Authorize off the AUTHENTICATED user (set by protect), never a body userId.
+  const user = req.user;
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
   }
+  const userId = idToString(user._id);
 
   const job = await Job.findById(id);
   if (!job) {
@@ -503,7 +560,8 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   // ---- Permission checks (company & recruiter) ----
-  let canEdit = false;
+  // Admins/super-admins may edit any job; everyone else must own it.
+  let canEdit = isPrivilegedRole(user.role);
 
   if (user.role === "company") {
     const company = await Company.findOne({ userId });
@@ -536,7 +594,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
         canEdit = true;
       }
     }
-  } else {
+  } else if (!canEdit) {
     throw new AppError(
       httpStatus.FORBIDDEN,
       "You are not authorized to edit a job"
@@ -904,42 +962,65 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(400, "job not found");
   }
 
-  if (req.body.adminApprove) {
-    // Email notifications for job approvals are temporarily disabled.
-    const notification = await createNotification({
-      to: job.userId._id as mongoose.Types.ObjectId,
-      message: "Job Post Updated By Admin",
-      type: "job_application_status",
-      id: job._id as mongoose.Types.ObjectId,
-    });
+  // H13: a non-admin may only update their OWN job (admins/super-admins bypass).
+  if (!(await userCanManageJob(req.user, job))) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You do not have permission to update this job"
+    );
+  }
 
-    const count = await Notification.countDocuments({
-      to: job.userId._id,
-      isViewed: false,
-    });
+  // Only an admin/super-admin may change a job's moderation/approval state or
+  // re-assign ownership. Non-admins may edit their own jobs via `editJob`.
+  const isAdminCaller = isPrivilegedRole(req.user?.role);
+  const wantsApprovalChange =
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "adminApprove") ||
+    Object.prototype.hasOwnProperty.call(req.body ?? {}, "jobApprove");
+  if (wantsApprovalChange && !isAdminCaller) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "Only an admin can change a job's approval status."
+    );
+  }
 
-    io.to(job.userId._id.toString()).emit("newNotification", {
-      notification,
-      count,
-    });
-  } else {
-    // Email notifications for job denials are temporarily disabled.
-    const notification = await createNotification({
-      to: job.userId._id as mongoose.Types.ObjectId,
-      message: "Job Post Denied By Admin",
-      type: "job_application_status",
-      id: job._id as mongoose.Types.ObjectId,
-    });
+  if (isAdminCaller && wantsApprovalChange) {
+    if (req.body.adminApprove) {
+      // Email notifications for job approvals are temporarily disabled.
+      const notification = await createNotification({
+        to: job.userId._id as mongoose.Types.ObjectId,
+        message: "Job Post Updated By Admin",
+        type: "job_application_status",
+        id: job._id as mongoose.Types.ObjectId,
+      });
 
-    const count = await Notification.countDocuments({
-      to: job.userId._id,
-      isViewed: false,
-    });
+      const count = await Notification.countDocuments({
+        to: job.userId._id,
+        isViewed: false,
+      });
 
-    io.to(job.userId._id.toString()).emit("newNotification", {
-      notification,
-      count,
-    });
+      io.to(job.userId._id.toString()).emit("newNotification", {
+        notification,
+        count,
+      });
+    } else {
+      // Email notifications for job denials are temporarily disabled.
+      const notification = await createNotification({
+        to: job.userId._id as mongoose.Types.ObjectId,
+        message: "Job Post Denied By Admin",
+        type: "job_application_status",
+        id: job._id as mongoose.Types.ObjectId,
+      });
+
+      const count = await Notification.countDocuments({
+        to: job.userId._id,
+        isViewed: false,
+      });
+
+      io.to(job.userId._id.toString()).emit("newNotification", {
+        notification,
+        count,
+      });
+    }
   }
 
   const incomingPublishDate = coerceDate(req.body?.publishDate);
@@ -954,7 +1035,56 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     }
   );
 
-  const nextBody: Record<string, unknown> = { ...req.body };
+  // Whitelist of fields a client may update. `adminApprove`/`jobApprove` are
+  // applied separately for admins only; `userId` is never client-controllable.
+  const updatableFields = [
+    "title",
+    "description",
+    "companyName",
+    "salaryRange",
+    "location",
+    "shift",
+    "responsibilities",
+    "educationExperience",
+    "benefits",
+    "vacancy",
+    "experience",
+    "deadline",
+    "status",
+    "jobCategoryId",
+    "compensation",
+    "currencyType",
+    "arcrivedJob",
+    "applicationRequirement",
+    "customQuestion",
+    "employement_Type",
+    "website_Url",
+    "publishDate",
+    "career_Stage",
+    "location_Type",
+    "name",
+    "role",
+    "expiryDate",
+  ] as const;
+
+  const nextBody: Record<string, unknown> = {};
+  for (const field of updatableFields) {
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, field)) {
+      nextBody[field] = (req.body as Record<string, unknown>)[field];
+    }
+  }
+
+  // Approval state is admin-only and is taken from the validated values, never
+  // spread blindly from the body.
+  if (isAdminCaller) {
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "adminApprove")) {
+      nextBody.adminApprove = req.body.adminApprove === true;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "jobApprove")) {
+      nextBody.jobApprove = req.body.jobApprove;
+    }
+  }
+
   if (incomingPublishDate) {
     nextBody.publishDate = incomingPublishDate;
   }
@@ -988,6 +1118,19 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
+
+  const job = await Job.findById(id);
+  if (!job) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+
+  // Verify the caller owns the job (same logic as editJob) or is an admin.
+  const allowed = await userCanManageJob(req.user, job);
+  if (!allowed) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You do not have permission to delete this job"
+    );
+  }
+
   const deleted = await Job.findByIdAndDelete(id);
 
   if (!deleted) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
@@ -1048,14 +1191,25 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const matchConditions = [];
 
   if (title)
-    matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
+    matchConditions.push({
+      title: { $regex: new RegExp(escapeRegExp(String(title).slice(0, 100)), "i") },
+    });
   if (country)
-    matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
+    matchConditions.push({
+      location: { $regex: new RegExp(escapeRegExp(String(country).slice(0, 100)), "i") },
+    });
   if (skills.length > 0) {
     matchConditions.push({ responsibilities: { $in: skills } });
-    matchConditions.push({
-      description: { $regex: new RegExp(skills.join("|"), "i") },
-    });
+    const skillsPattern = skills
+      .slice(0, 50)
+      .map((skill: any) => escapeRegExp(String(skill).slice(0, 100)))
+      .filter((skill: string) => skill.length > 0)
+      .join("|");
+    if (skillsPattern) {
+      matchConditions.push({
+        description: { $regex: new RegExp(skillsPattern, "i") },
+      });
+    }
   }
   if (jobCategoryId) matchConditions.push({ jobCategoryId });
 

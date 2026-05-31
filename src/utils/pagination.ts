@@ -9,9 +9,15 @@ export interface PaginationParams {
   skip: number
 }
 
+const MAX_LIMIT = 100
+
 export function getPaginationParams(query: PaginationQuery): PaginationParams {
   const page = Math.max(1, parseInt(query.page as string) || 1)
-  const limit = Math.max(1, parseInt(query.limit as string) || 10)
+  // M9: clamp the page size so ?limit=100000000 can't force a full-collection load.
+  const limit = Math.min(
+    MAX_LIMIT,
+    Math.max(1, parseInt(query.limit as string) || 10)
+  )
   const skip = (page - 1) * limit
   return { page, limit, skip }
 }

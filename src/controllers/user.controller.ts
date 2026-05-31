@@ -4,6 +4,7 @@ import fs from "fs";
 import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
 import httpStatus from "http-status";
+import bcrypt from "bcrypt";
 import { generateOTP } from "../utils/generateOTP";
 import { createToken, verifyToken } from "../utils/authToken";
 import {
@@ -126,6 +127,10 @@ export const register = catchAsync(async (req, res) => {
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
+  // C2: never persist a client-supplied privileged role. Only self-service
+  // roles are accepted; anything else (incl. admin/super-admin) -> "candidate".
+  const SELF_SERVICE_ROLES = ["candidate", "recruiter", "company"];
+  const safeRole = SELF_SERVICE_ROLES.includes(role) ? role : "candidate";
   const otp = generateOTP();
   const jwtPayloadOTP = { otp };
   const otptoken = createToken(
@@ -139,7 +144,7 @@ export const register = catchAsync(async (req, res) => {
     password,
     phoneNum,
     address,
-    role,
+    role: safeRole,
     verificationInfo: { verified: false, token: otptoken, resetToken: "" },
     dateOfbirth,
   });
@@ -321,29 +326,24 @@ export const verifyEmail = catchAsync(async (req, res) => {
   }
   if (otp) {
     const savedOTP = decodeOtpToken(user.verificationInfo.token);
-    console.log(savedOTP);
     if (otp === savedOTP.otp) {
       user.verificationInfo.verified = true;
       user.verificationInfo.token = "";
       await user.save();
       if (user?.role === 'candidate') {
-        console.log('candidate')
         const resume = await CreateResume.findOne({ userId: user._id })
-        console.log(resume)
         if (resume) {
           resume.email = user.email
           await resume.save()
         }
       } else if (user?.role === 'recruiter') {
         const resume = await RecruiterAccount.findOne({ userId: user._id })
-        console.log(resume)
         if (resume) {
           resume.emailAddress = user.email
           await resume.save()
         }
       } else if (user?.role === 'company') {
         const resume = await Company.findOne({ userId: user._id })
-        console.log(resume)
         if (resume) {
           resume.cemail = user.email
           await resume.save()
@@ -465,17 +465,22 @@ export const changePassword = catchAsync(async (req, res) => {
       "Old password and new password cannot be same"
     );
   }
-  const user = await User.findById({ _id: req.user?._id });
+  // H1: must load the hashed password and verify the OLD password first.
+  const user = await User.findById(req.user?._id).select("+password");
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
   }
+  const matched = await User.isPasswordMatched(oldPassword, user.password);
+  if (!matched) {
+    throw new AppError(httpStatus.UNAUTHORIZED, "Old password is incorrect");
+  }
   user.password = newPassword;
-  await user.save();
+  await user.save(); // pre-save hook re-hashes and revokes sessions (H2)
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Password changed",
+    message: "Password changed. Please sign in again.",
     data: "",
   });
 });
@@ -539,19 +544,44 @@ export const getDefaultSecurityQuestions = catchAsync(async (_req, res) => {
  ***************************/
 export const submitSecurityAnswers = catchAsync(
   async (req: Request, res: Response) => {
-    const { email, securityQuestions } = req.body;
-    // console.log("securityQuestions", securityQuestions)
+    const { securityQuestions } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email : "";
 
     if (!email || !Array.isArray(securityQuestions)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
     const user = await User.findOne({ email });
-    // console.log("first", user)
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
-    // Overwrite existing questions
-    user.securityQuestions = securityQuestions;
+    // H5: block overwriting an existing set unless the caller is the
+    // authenticated owner. Otherwise an attacker could reset a victim's
+    // answers by email and then take over the account via the reset flow.
+    const alreadySet =
+      Array.isArray(user.securityQuestions) &&
+      user.securityQuestions.length > 0;
+    const isOwner =
+      !!req.user && req.user._id?.toString() === user._id?.toString();
+    if (alreadySet && !isOwner) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "Security questions are already set. Sign in to change them."
+      );
+    }
+
+    // H5: hash each answer with bcrypt — never store plaintext answers.
+    const hashed = await Promise.all(
+      securityQuestions.map(
+        async (q: { question: string; answer: string }) => ({
+          question: q.question,
+          answer: await bcrypt.hash(
+            String(q.answer).trim().toLowerCase(),
+            10
+          ),
+        })
+      )
+    );
+    user.securityQuestions = hashed;
     await user.save();
 
     res.status(httpStatus.OK).json({
@@ -563,15 +593,13 @@ export const submitSecurityAnswers = catchAsync(
 
 export const checkSubmitSecurityAnswers = catchAsync(
   async (req: Request, res: Response) => {
-    const { email } = req.body;
-    // console.log("securityQuestions", securityQuestions)
+    const email = typeof req.body.email === "string" ? req.body.email : "";
 
     if (!email) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
     const user = await User.findOne({ email });
-    // console.log("first", user)
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
     if (!user.securityQuestions) {
@@ -595,28 +623,42 @@ export const checkSubmitSecurityAnswers = catchAsync(
  ***************************/
 export const verifySecurityAnswers = catchAsync(
   async (req: Request, res: Response) => {
-    const { email, answers } = req.body;
+    const { answers } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email : "";
 
     if (!email || !Array.isArray(answers)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
     const user = await User.findOne({ email }).select("securityQuestions");
+    const questions = user?.securityQuestions;
 
-    if (user?.securityQuestions?.length !== answers.length) {
+    if (!user || !questions || questions.length <= 0) {
+      throw new AppError(httpStatus.NOT_FOUND, "Security questions not found");
+    }
+
+    if (questions.length !== answers.length) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         "Number of answers does not match the number of security questions"
       );
     }
 
-    if (!user || user.securityQuestions.length <= 0) {
-      throw new AppError(httpStatus.NOT_FOUND, "Security questions not found");
-    }
-
-    const matched = user.securityQuestions?.every((q, i) => {
-      return q.answer.trim().toLowerCase() === answers[i]?.trim().toLowerCase();
-    });
+    // H5: answers are now bcrypt-hashed, but older accounts may still have
+    // legacy plaintext answers — support both during the transition.
+    const results = await Promise.all(
+      questions.map(async (q, i) => {
+        const provided = String(answers[i] ?? "")
+          .trim()
+          .toLowerCase();
+        const stored = q.answer ?? "";
+        if (stored.startsWith("$2")) {
+          return bcrypt.compare(provided, stored);
+        }
+        return provided === stored.trim().toLowerCase();
+      })
+    );
+    const matched = results.every(Boolean);
 
     if (!matched) {
       throw new AppError(
@@ -657,11 +699,27 @@ export const securityResetPassword = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "New password is required");
     }
 
+    // H5: cryptographically verify the token (signature + expiry) instead of a
+    // bare DB string match, then bind it to the matching user. A leaked,
+    // forged, or expired token no longer works.
+    let decoded: JwtPayload;
+    try {
+      decoded = verifyToken(
+        token,
+        process.env.JWT_ACCESS_SECRET as string
+      ) as JwtPayload;
+    } catch {
+      throw new AppError(
+        httpStatus.UNAUTHORIZED,
+        "Invalid or expired reset token"
+      );
+    }
+
     const user = await User.findOne({
       "verificationInfo.resetToken": token,
     }).select("+password");
 
-    if (!user) {
+    if (!user || decoded.email !== user.email) {
       throw new AppError(
         httpStatus.UNAUTHORIZED,
         "Invalid or expired reset token"
@@ -670,7 +728,7 @@ export const securityResetPassword = catchAsync(
 
     // Set new password (bcrypt will hash in pre-save hook)
     user.password = newPassword;
-    user.verificationInfo.resetToken = ""; // clear token
+    user.verificationInfo.resetToken = ""; // single-use: clear token
     await user.save();
 
     res.status(httpStatus.OK).json({
@@ -976,7 +1034,6 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       filteredData[field] = updateData[field];
     }
   }
-  console.log("filteredData", filteredData)
 
   // Handle avatar upload
   if (req.files && (req.files as any).photo) {
@@ -993,11 +1050,8 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
     filteredData.avatar = {
       url: uploadResult?.secure_url,
     };
-    console.log(existingUser)
     if (existingUser?.role === 'candidate') {
-      console.log('candidate')
       const resume = await CreateResume.findOne({ userId: id })
-      console.log(resume)
       if (resume) {
         resume.photo = uploadResult?.secure_url!
         if (updateData.name) {
@@ -1008,7 +1062,6 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       }
     } else if (existingUser?.role === 'recruiter') {
       const resume = await RecruiterAccount.findOne({ userId: id })
-      console.log(resume)
       if (resume) {
         resume.photo = uploadResult?.secure_url!
         if (updateData.name) {
@@ -1019,18 +1072,15 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       }
     } else if (existingUser?.role === 'company') {
       const resume = await Company.findOne({ userId: id })
-      console.log(resume)
       if (resume) {
         resume.clogo = uploadResult?.secure_url!
         await resume.save()
       }
     }
-    console.log(photo.path)
 
     // Delete local file
     fs.unlinkSync(photo.path);
   }
-  console.log(filteredData)
 
   const updatedUser = await User.findByIdAndUpdate(id, filteredData, {
     new: true,
@@ -1064,6 +1114,11 @@ export const refreshToken = catchAsync(async (req, res) => {
   if (!user) {
     throw new AppError(401, "Invalid refresh token");
   }
+  // H2: the presented refresh token must equal the one currently stored, so a
+  // leaked or rotated-out token cannot keep minting access tokens.
+  if (!user.refresh_token || user.refresh_token !== refreshToken) {
+    throw new AppError(401, "Invalid refresh token");
+  }
   const jwtPayload = {
     _id: user._id,
     email: user.email,
@@ -1089,6 +1144,21 @@ export const refreshToken = catchAsync(async (req, res) => {
     success: true,
     message: "Token refreshed successfully",
     data: { accessToken: accessToken, refreshToken: refreshToken1 },
+  });
+});
+
+// H2: logout — revoke the stored refresh token so it can no longer be used.
+export const logout = catchAsync(async (req, res) => {
+  const user = await User.findById(req.user?._id);
+  if (user) {
+    user.refresh_token = undefined;
+    await user.save();
+  }
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Logged out successfully",
+    data: "",
   });
 });
 
@@ -1465,7 +1535,7 @@ export const deleteUser = catchAsync(async (req, res) => {
 
 export const emailChange = catchAsync(async (req, res) => {
   const id = req.user?._id;
-  const { email } = req.body;
+  const email = typeof req.body.email === "string" ? req.body.email : "";
   if (!email) {
     throw new AppError(httpStatus.BAD_REQUEST, "New email is required");
   }

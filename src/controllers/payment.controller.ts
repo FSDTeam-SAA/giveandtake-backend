@@ -7,6 +7,7 @@ import { createOrder, captureOrder, refundOrder } from "../services/paypal.servi
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { refundProcessedTemplate, sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
+import { assertOwner } from "../utils/authz";
 import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
 import { computeExpiryFromStart } from "../utils/subscription";
@@ -33,8 +34,33 @@ const validateJsonBody = (
  ****************************/
 export const createPaypalOrder = async (req: Request, res: Response) => {
   try {
-    const { amount } = req.body;
-    const order = await createOrder(amount);
+    // C6: derive the order amount from the server-side plan price when a planId
+    // is supplied (never trust a client amount). Falls back to a validated
+    // client amount for legacy callers; the authoritative check is at capture.
+    const { planId } = req.body;
+    let amountValue: string | undefined;
+    if (planId) {
+      const plan = await SubscriptionPlan.findById(planId);
+      if (!plan) {
+        res
+          .status(404)
+          .json({ success: false, message: "Subscription plan not found" });
+        return;
+      }
+      amountValue = Number(plan.price).toFixed(2);
+    } else if (
+      req.body.amount != null &&
+      !Number.isNaN(Number(req.body.amount))
+    ) {
+      amountValue = Number(req.body.amount).toFixed(2);
+    }
+    if (!amountValue || Number(amountValue) <= 0) {
+      res
+        .status(400)
+        .json({ success: false, message: "Invalid payment amount" });
+      return;
+    }
+    const order = await createOrder(amountValue);
     res.status(200).json({
       success: true,
       message: "PayPal order created",
@@ -114,7 +140,9 @@ const resolvePaygRate = async (audience: string) => {
  ****************************/
 export const capturePaypalPayment = async (req: Request, res: Response) => {
   try {
-    const { orderId, userId, planId, seasonId } = req.body;
+    // C5: bind the payment to the authenticated user, not a client-supplied id.
+    const { orderId, planId, seasonId } = req.body;
+    const userId = req.user?._id;
     if (!planId) {
       throw new AppError(400, "Plan ID is required");
     }
@@ -133,6 +161,20 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     const numericAmount = Number(captureDetails.amount.value);
     if (Number.isNaN(numericAmount)) {
       throw new AppError(400, "Unable to determine payment amount");
+    }
+
+    // C6: captured payment must be USD and at least the plan price. Blocks the
+    // "pay $0.01 for any plan" bypass before any entitlement is recorded.
+    const capturedCurrency = (
+      captureDetails.amount.currency_code || ""
+    ).toUpperCase();
+    const expectedAmount = Number(plan.price);
+    if (
+      capturedCurrency !== "USD" ||
+      Number.isNaN(expectedAmount) ||
+      numericAmount + 0.001 < expectedAmount
+    ) {
+      throw new AppError(400, "Captured payment does not match the plan price");
     }
 
     const audience = (plan.for || user.role || "").toLowerCase();
@@ -277,16 +319,12 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
 `;
 
 
-    console.log(captureDetails);
-
     if (captureDetails.status === "COMPLETED") {
       const sender = resolveSenderForAudience(audience);
-      console.log("ami hoisi");
       await sendEmail(user.email, "Payment Complete", emailBody, {
         from: sender,
         includeLegalFooter: true,
       });
-      console.log("email sent");
     }
 
     res.status(200).json({
@@ -298,7 +336,14 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ message: "Payment capture failed", error });
+    // Preserve AppError status codes (e.g. the C6 amount-mismatch 400) and
+    // never serialize the raw error object back to the client.
+    const status = error instanceof AppError ? error.statusCode : 500;
+    res.status(status).json({
+      success: false,
+      message:
+        error instanceof AppError ? error.message : "Payment capture failed",
+    });
   }
 };
 
@@ -336,6 +381,8 @@ export const getAllPayments = catchAsync(
 export const getPaymentsByUserId = catchAsync(
   async (req: Request, res: Response) => {
     const userId = req.params.userId;
+    // C5: a user may only read their own payment history (admins bypass).
+    assertOwner(req, userId);
     const { page, limit, skip } = getPaginationParams(req.query);
 
     const [payments, total] = await Promise.all([

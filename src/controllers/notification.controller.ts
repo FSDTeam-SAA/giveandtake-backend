@@ -4,13 +4,19 @@ import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { broadcastUnreadCount } from '../sockets/notification.service'
+import { asQueryString, assertOwner, isPrivilegedRole } from '../utils/authz'
 
 /*********************************
  * GET ALL NOTIFICATIONS BY USER *
  *********************************/
 export const getUserNotifications = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId } = req.params
+    // Notifications are private: only the recipient (or an admin) may read
+    // them, and the query is always scoped to the authenticated user.
+    assertOwner(req, req.params.userId, 'You are not allowed to view these notifications.')
+    const userId = isPrivilegedRole(req.user?.role)
+      ? asQueryString(req.params.userId) || String(req.user?._id)
+      : String(req.user?._id)
 
     const notifications = await Notification.find({ to: userId }).sort({
       createdAt: -1,
@@ -28,7 +34,12 @@ export const getUserNotifications = catchAsync(
  * MARK ALL NOTIFICATIONS AS READ *
  **********************************/
 export const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.params
+  // Only the recipient (or an admin) may mark notifications read; always
+  // scope the update to the authenticated user.
+  assertOwner(req, req.params.userId, 'You are not allowed to modify these notifications.')
+  const userId = isPrivilegedRole(req.user?.role)
+    ? asQueryString(req.params.userId) || String(req.user?._id)
+    : String(req.user?._id)
 
   const result = await Notification.updateMany(
     { to: userId, isViewed: false },
@@ -50,7 +61,7 @@ export const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
  ****************************************/
 export const markNotificationAsRead = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, notificationId } = req.params
+    const { notificationId } = req.params
 
     if (!notificationId) {
       throw new AppError(
@@ -58,6 +69,13 @@ export const markNotificationAsRead = catchAsync(
         'Notification ID is required'
       )
     }
+
+    // Only the recipient (or an admin) may mark a notification read; always
+    // scope the update to the authenticated user.
+    assertOwner(req, req.params.userId, 'You are not allowed to modify this notification.')
+    const userId = isPrivilegedRole(req.user?.role)
+      ? asQueryString(req.params.userId) || String(req.user?._id)
+      : String(req.user?._id)
 
     const notification = await Notification.findOneAndUpdate(
       { _id: notificationId, to: userId },

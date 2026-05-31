@@ -50,6 +50,10 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
   { timestamps: true }
 )
 
+// L10: a PayPal capture id is unique — prevent duplicate/replayed capture
+// records from being written for the same transaction.
+paymentInfoSchema.index({ transactionId: 1 }, { unique: true })
+
 export const paymentInfo = mongoose.model<IPaymentInfo, PaymentInfoModel>(
   'PaymentInfo',
   paymentInfoSchema

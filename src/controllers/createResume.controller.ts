@@ -11,6 +11,7 @@ import sendResponse from '../utils/sendResponse'
 import { uploadToCloudinary } from '../utils/cloudinary'
 import path from 'path'
 import { User } from '../models/user.model'
+import { asQueryString } from '../utils/authz'
 import fs from 'fs'
 
 
@@ -26,6 +27,39 @@ const catchAsync = (fn: AsyncRequestHandler): RequestHandler => {
   };
 };
 
+// Whitelist of resume fields a client is allowed to set/update.
+// `userId`, `photo`, `banner` and `file` are derived server-side and must
+// never be taken from the parsed client payload.
+const RESUME_FIELDS = [
+  "type",
+  "aboutUs",
+  "title",
+  "firstName",
+  "lastName",
+  "sureName",
+  "country",
+  "city",
+  "zipCode",
+  "jobCategoryId",
+  "email",
+  "phoneNumber",
+  "location",
+  "certifications",
+  "languages",
+  "sLink",
+  "skills",
+  "immediatelyAvailable",
+] as const;
+
+const pickResumeFields = (input: any): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (!input || typeof input !== "object") return out;
+  for (const key of RESUME_FIELDS) {
+    if (input[key] !== undefined) out[key] = input[key];
+  }
+  return out;
+};
+
 // helper to move resume file to uploads/resumes
 const moveFileToUploads = async (tempPath: string, destRelative: string): Promise<string> => {
   const uploadsDir = path.join(process.cwd(), "uploads");
@@ -39,8 +73,9 @@ const moveFileToUploads = async (tempPath: string, destRelative: string): Promis
 };
 
 export const createResume = catchAsync(async (req: Request, res: Response) => {
-  const { userId } = req.body;
-  if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User ID is required");
+  // Always derive ownership from the authenticated token, never the body.
+  const userId = req.user?._id;
+  if (!userId) throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
 
   const user = await User.findById(userId);
   if (!user) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
@@ -88,9 +123,9 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   }
   await user.save();
 
-  // save main resume doc
+  // save main resume doc — only whitelisted fields, ownership from token
   const resumeDoc = await CreateResume.create({
-    ...resume,
+    ...pickResumeFields(resume),
     userId,
     photo: photoUrl,
     banner: bannerUrl,
@@ -99,17 +134,17 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
       : [],
   });
 
-  // save related docs
+  // save related docs (force userId from token, drop any client-supplied userId/_id)
   const experienceDocs = experiences.length
-    ? await Experience.insertMany(experiences.map((exp: any) => ({ ...exp, userId })))
+    ? await Experience.insertMany(experiences.map((exp: any) => ({ ...exp, _id: undefined, userId })))
     : [];
 
   const educationDocs = educationList.length
-    ? await Education.insertMany(educationList.map((edu: any) => ({ ...edu, userId })))
+    ? await Education.insertMany(educationList.map((edu: any) => ({ ...edu, _id: undefined, userId })))
     : [];
 
   const awarenessDocs = awardsAndHonors.length
-    ? await AwardsAndHonor.insertMany(awardsAndHonors.map((honor: any) => ({ ...honor, userId })))
+    ? await AwardsAndHonor.insertMany(awardsAndHonors.map((honor: any) => ({ ...honor, _id: undefined, userId })))
     : [];
 
   return res.status(httpStatus.CREATED).json({
@@ -254,10 +289,14 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  // Update or create the main resume document
+  // Update or create the main resume document.
+  // Whitelist fields; force userId from token (server-derived photo/banner kept).
+  const resumeUpdate: Record<string, unknown> = pickResumeFields(resume);
+  if (resume.photo !== undefined) resumeUpdate.photo = resume.photo;
+  if (resume.banner !== undefined) resumeUpdate.banner = resume.banner;
   const updatedResume = await CreateResume.findOneAndUpdate(
     { userId },
-    { ...resume, userId },
+    { ...resumeUpdate, userId },
     { new: true, upsert: true }
   )
 
@@ -288,22 +327,30 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   //       : Promise.resolve([]),
   //   ])
 
+  // Strip client-supplied ownership/identity keys from a sub-doc payload so the
+  // mutation cannot reassign a record to (or away from) the authenticated user.
+  const sanitizeSubDoc = (input: any): Record<string, unknown> => {
+    const { _id, userId: _ignoredUserId, type, ...rest } = input ?? {};
+    return rest;
+  };
+
   const [updatedExperiences, updatedEducation, updatedAwards] = await Promise.all([
     // 🔹 Experiences
     Promise.all(
       experiences.map(async (exp: any) => {
         if (exp.type === "create") {
-          return await Experience.create({ ...exp, userId });
+          return await Experience.create({ ...sanitizeSubDoc(exp), userId });
         }
         if (exp.type === "update" && exp._id) {
-          return await Experience.findByIdAndUpdate(
-            exp._id,
-            { ...exp, userId },
+          // Scope by owner so an attacker cannot edit another user's sub-doc by _id.
+          return await Experience.findOneAndUpdate(
+            { _id: asQueryString(exp._id), userId },
+            { ...sanitizeSubDoc(exp), userId },
             { new: true }
           );
         }
         if (exp.type === "delete" && exp._id) {
-          return await Experience.findByIdAndDelete(exp._id);
+          return await Experience.findOneAndDelete({ _id: asQueryString(exp._id), userId });
         }
         return null;
       })
@@ -313,17 +360,17 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     Promise.all(
       educationList.map(async (edu: any) => {
         if (edu.type === "create") {
-          return await Education.create({ ...edu, userId });
+          return await Education.create({ ...sanitizeSubDoc(edu), userId });
         }
         if (edu.type === "update" && edu._id) {
-          return await Education.findByIdAndUpdate(
-            edu._id,
-            { ...edu, userId },
+          return await Education.findOneAndUpdate(
+            { _id: asQueryString(edu._id), userId },
+            { ...sanitizeSubDoc(edu), userId },
             { new: true }
           );
         }
         if (edu.type === "delete" && edu._id) {
-          return await Education.findByIdAndDelete(edu._id);
+          return await Education.findOneAndDelete({ _id: asQueryString(edu._id), userId });
         }
         return null;
       })
@@ -333,17 +380,17 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     Promise.all(
       awardsAndHonors.map(async (honor: any) => {
         if (honor.type === "create") {
-          return await AwardsAndHonor.create({ ...honor, userId });
+          return await AwardsAndHonor.create({ ...sanitizeSubDoc(honor), userId });
         }
         if (honor.type === "update" && honor._id) {
-          return await AwardsAndHonor.findByIdAndUpdate(
-            honor._id,
-            { ...honor, userId },
+          return await AwardsAndHonor.findOneAndUpdate(
+            { _id: asQueryString(honor._id), userId },
+            { ...sanitizeSubDoc(honor), userId },
             { new: true }
           );
         }
         if (honor.type === "delete" && honor._id) {
-          return await AwardsAndHonor.findByIdAndDelete(honor._id);
+          return await AwardsAndHonor.findOneAndDelete({ _id: asQueryString(honor._id), userId });
         }
         return null;
       })

@@ -15,8 +15,11 @@ import {
 } from '../services/videoProcessing.queue'
 import { createNotification } from '../sockets/notification.service'
 import { User } from '../models/user.model'
+import { AppliedJob } from '../models/appliedJob.model'
+import { Job } from '../models/job.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
+import { isPrivilegedRole, idToString, asQueryString } from '../utils/authz'
 
 const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
@@ -38,16 +41,69 @@ const ensureString = (value: unknown, field: string) => {
   return value.trim()
 }
 
+/**
+ * Resolve the userId a request operates on. Always derives from the
+ * authenticated user (req.user._id) so a caller cannot read/upload/complete/
+ * delete another user's pitch via ?userId=. A client-supplied ?userId= is only
+ * honoured for privileged (admin/super-admin) callers.
+ */
 const resolveUserId = (req: Request): string => {
-  if (typeof req.query.userId === 'string' && req.query.userId.trim()) {
+  const authUserId = idToString(req.user?._id)
+  if (!authUserId) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Authentication required')
+  }
+
+  if (
+    isPrivilegedRole(req.user?.role) &&
+    typeof req.query.userId === 'string' &&
+    req.query.userId.trim()
+  ) {
     return req.query.userId.trim()
   }
-  // @ts-ignore - added by auth middleware
-  if (req.user?._id) {
-    // @ts-ignore
-    return req.user._id.toString()
+
+  return authUserId
+}
+
+/**
+ * C9: authorize access to a pitch's protected media (key/segment) for the
+ * media routes that are keyed by :userId rather than the pitch :id (so the
+ * checkVideoAccess middleware, which reads req.params.id, cannot be wired
+ * directly). Mirrors checkVideoAccess semantics:
+ *   - admin/super-admin: allowed
+ *   - pitch owner: allowed
+ *   - pitch owned by a recruiter/company: allowed (public-facing profile video)
+ *   - the recruiter who posted a job the pitch owner applied to: allowed
+ * Throws 401/403 otherwise.
+ */
+const assertPitchMediaAccess = async (
+  req: Request,
+  ownerUserId: unknown
+): Promise<void> => {
+  const requesterId = idToString(req.user?._id)
+  if (!requesterId) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Authentication required')
   }
-  throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
+
+  if (isPrivilegedRole(req.user?.role)) return
+
+  const ownerId = idToString(ownerUserId)
+
+  // Owner can always access their own media.
+  if (ownerId && requesterId === ownerId) return
+
+  // If the pitch owner is a recruiter/company, the video is profile-facing.
+  const owner = await User.findById(ownerId, 'role')
+  const ownerRole = owner?.role
+  if (ownerRole === 'recruiter' || ownerRole === 'company') return
+
+  // Otherwise allow only the recruiter who posted a job the owner applied to.
+  const appliedJob = await AppliedJob.findOne({ userId: ownerId })
+  if (appliedJob) {
+    const job = await Job.findById(appliedJob.jobId)
+    if (job && idToString(job.userId) === requesterId) return
+  }
+
+  throw new AppError(httpStatus.FORBIDDEN, 'Access denied')
 }
 
 const sanitizeFileName = (name: string) =>
@@ -185,7 +241,10 @@ export const requestElevatorPitchUploadUrl = catchAsync(
 export const completeElevatorPitchUpload = catchAsync(
   async (req: Request, res: Response) => {
     const userId = resolveUserId(req)
-    const fileKey = ensureString(req.body?.fileKey, 'fileKey')
+    // NOTE: the client-supplied fileKey is read for validation only and is
+    // never trusted; the key used for signing/probing/queueing is the
+    // server-derived rawKey stored on the upload session below.
+    const clientFileKey = ensureString(req.body?.fileKey, 'fileKey')
     const fileName =
       typeof req.body?.fileName === 'string' ? req.body.fileName : undefined
     const fileSize =
@@ -209,6 +268,26 @@ export const completeElevatorPitchUpload = catchAsync(
         'Elevator pitch already completed. Delete the existing video to re-upload.'
       )
     }
+
+    // H21: Do NOT trust the client fileKey. Re-derive the expected source key
+    // from this user's upload session and require strict equality plus the
+    // per-user source prefix. This prevents naming another user's (or any other)
+    // bucket object for signing/probing/transcoding.
+    const expectedPrefix = `elevator_pitches/${userId}/source/`
+    const expectedKey = pitch.video?.rawKey ?? ''
+    if (
+      !expectedKey ||
+      !expectedKey.startsWith(expectedPrefix) ||
+      clientFileKey !== expectedKey
+    ) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Invalid file key for this upload session. Request a new upload URL.'
+      )
+    }
+
+    // Only the server-derived key is used from here on.
+    const fileKey = expectedKey
 
     // Save raw reference early so failures can be audited & cleaned up.
     pitch.video = {
@@ -369,10 +448,8 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
   if (isPrivateBucket) {
     // ✅ Use R2-aware key extraction
     const s3Key = extractR2Key(hlsUrl);
-    console.log("Resolved R2 key:", s3Key);
 
     const signedUrl = await getSignedS3Url(s3Key, 3600);
-    console.log("Signed R2 URL:", signedUrl);
 
     // Fetch and rewrite playlist
     const playlistRes = await axios.get(signedUrl);
@@ -408,12 +485,17 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
 
 
 export const secureStream = catchAsync(async (req: Request, res: Response) => {
-  const { userId, segment } = req.params
+  const { segment } = req.params
+  // Neutralise NoSQL operator injection on the client-supplied userId.
+  const userId = asQueryString(req.params.userId)
 
   const pitch = await ElevatorPitch.findOne({ userId })
   if (!pitch || !pitch.video?.hlsUrl) {
     throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
   }
+
+  // C9: only owner/recruiter/applicant-job-poster/admin may stream segments.
+  await assertPitchMediaAccess(req, pitch.userId)
 
   if (pitch.processing?.state !== 'ready') {
     throw new AppError(
@@ -454,12 +536,17 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
 
 export const getEncryptionKey = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, key } = req.params
+    const { key } = req.params
+    // Neutralise NoSQL operator injection on the client-supplied userId.
+    const userId = asQueryString(req.params.userId)
 
     const pitch = await ElevatorPitch.findOne({ userId })
     if (!pitch || !pitch.video?.encryptionKeyUrl) {
       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
     }
+
+    // C9: only owner/recruiter/applicant-job-poster/admin may fetch the AES key.
+    await assertPitchMediaAccess(req, pitch.userId)
 
     if (pitch.processing?.state !== 'ready') {
       throw new AppError(

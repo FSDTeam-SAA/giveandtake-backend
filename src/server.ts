@@ -66,3 +66,20 @@ connectDB().then(() => {
     console.log(`Server is running on port ${PORT}`)
   })
 })
+
+// L20: keep a failing cron job / stray rejection from silently crashing the
+// process, and shut down cleanly on termination signals.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err)
+})
+
+const gracefulShutdown = (signal: string) => {
+  console.log(`${signal} received — shutting down gracefully...`)
+  httpServer.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 10000).unref()
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))

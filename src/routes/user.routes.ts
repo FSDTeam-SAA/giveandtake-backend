@@ -28,20 +28,23 @@ import {
   getAllUser,
   deleteUser,
   emailChange,
+  logout,
 } from "../controllers/user.controller";
-import { protect } from "../middlewares/auth.middleware";
+import { protect, isAdmin } from "../middlewares/auth.middleware";
+import { authLimiter, otpLimiter } from "../middlewares/rateLimit.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
 
 const router = express.Router();
 
-router.post("/user/register", register);
-router.post("/user/login", login);
-router.post("/user/verify", verifyEmail);
-router.post("/user/resend-otp", resendVerificationOtp);
-router.post("/user/verify-reset-otp", otpVerifyResetPassword);
-router.post("/user/forget", forgetPassword),
-router.post("/user/reset-password", resetPassword);
+router.post("/user/register", authLimiter, register);
+router.post("/user/login", authLimiter, login);
+router.post("/user/verify", otpLimiter, verifyEmail);
+router.post("/user/resend-otp", otpLimiter, resendVerificationOtp);
+router.post("/user/verify-reset-otp", otpLimiter, otpVerifyResetPassword);
+router.post("/user/forget", otpLimiter, forgetPassword);
+router.post("/user/reset-password", otpLimiter, resetPassword);
 router.post("/user/change-password", protect, changePassword);
+router.post("/user/logout", protect, logout);
 router.patch("/user/deactivate", protect, deactivateUser);
 router.patch("/user/disable", protect, softDeactivateUser);
 
@@ -49,27 +52,34 @@ router.patch("/user/disable", protect, softDeactivateUser);
  * SECURITY QUESTIONS *
  **********************/
 router.get("/default-security-questions", getDefaultSecurityQuestions);
-router.post("/security-answers", submitSecurityAnswers);
-router.post("/security-answers/check", checkSubmitSecurityAnswers);
-router.post("/verify-security-answers", verifySecurityAnswers);
-router.post("/security-answers/reset-password", securityResetPassword);
+router.post("/security-answers", otpLimiter, submitSecurityAnswers);
+router.post("/security-answers/check", otpLimiter, checkSubmitSecurityAnswers);
+router.post("/verify-security-answers", otpLimiter, verifySecurityAnswers);
+router.post(
+  "/security-answers/reset-password",
+  otpLimiter,
+  securityResetPassword
+);
 
-router.get("/all/user", getAllUserEmails);
-router.post("/change-email",protect, emailChange);
-router.get("/all/all-user", getAllUser);
-router.delete("/delete/user/:id", deleteUser);
+// getAllUserEmails exposes user emails -> require authentication (H15/H29).
+router.get("/all/user", protect, getAllUserEmails);
+router.post("/change-email", protect, emailChange);
+// getAllUser returns full user documents -> admin only (C3/H29).
+router.get("/all/all-user", protect, isAdmin, getAllUser);
+router.delete("/delete/user/:id", protect, isAdmin, deleteUser);
 router.get("/all/companies", getAllCompanies);
 
 router.get("/user/single", protect, getUserById);
 router.get("/user/single/:userId", protect, getUserById1);
 router.patch("/user/update", protect, resumeUpload, updateUser);
-router.post("/refresh-token", refreshToken);
+router.post("/refresh-token", authLimiter, refreshToken);
 
-router.get("/candidates", getCandidates);
-router.get("/recruiters", getRecruitersWithAccounts);
-router.get("/companies", getCompaniesWithAccounts);
+// People-directory listings expose PII (emails/phones) -> require auth (H15).
+router.get("/candidates", protect, getCandidates);
+router.get("/recruiters", protect, getRecruitersWithAccounts);
+router.get("/companies", protect, getCompaniesWithAccounts);
 
 // fetch all user without admin
-router.get("/fetch/all/users", fetchAllUsers);
+router.get("/fetch/all/users", protect, fetchAllUsers);
 
 export default router;

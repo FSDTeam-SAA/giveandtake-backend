@@ -4,10 +4,11 @@ import {
   getAllContent,
   getContentByType,
 } from "../controllers/contentController";
+import { protect, isAdmin } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-router.post("/", upsertContent);        // create or update
+router.post("/", protect, isAdmin, upsertContent); // create or update (admin only)
 router.get("/", getAllContent);         // get all
 router.get("/:type", getContentByType); // get one by type
 

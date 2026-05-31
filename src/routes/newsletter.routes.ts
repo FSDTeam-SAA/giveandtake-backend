@@ -5,7 +5,7 @@ import {
   getAllSubscribers,
   sendNewsletterToSubscribers,
 } from '../controllers/newsletter.controller'
-import { protect } from '../middlewares/auth.middleware'
+import { protect, isAdmin } from '../middlewares/auth.middleware'
 
 
 const router = express.Router()
@@ -19,7 +19,7 @@ router.delete('/unsubscribe/:email', deleteNewsletterSubscription)
 /**************************
  * ADMIN PROTECTED ROUTES *
  **************************/
-router.get('/subscribers', protect,  getAllSubscribers)
-router.post('/send', protect, sendNewsletterToSubscribers)
+router.get('/subscribers', protect, isAdmin, getAllSubscribers)
+router.post('/send', protect, isAdmin, sendNewsletterToSubscribers)
 
 export default router

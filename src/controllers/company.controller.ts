@@ -17,6 +17,7 @@ import { User } from '../models/user.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
+import { assertOwner } from '../utils/authz'
 
 /******************
  * CREATE COMPANY *
@@ -209,7 +210,39 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
 export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
 
-  const companyData = { ...req.body } as any
+  const company = await Company.findById(id)
+  if (!company) {
+    res.status(httpStatus.NOT_FOUND).json({
+      success: false,
+      message: 'Company not found',
+    })
+    return
+  }
+
+  // Only the owning user (or an admin/super-admin) may update this company.
+  assertOwner(req, company.userId)
+
+  // Whitelist of safe, client-updatable company fields. Sensitive fields such
+  // as userId, slug and employeesId are intentionally excluded to prevent
+  // mass-assignment / ownership takeover.
+  const ALLOWED_FIELDS = [
+    'clogo',
+    'aboutUs',
+    'cname',
+    'country',
+    'city',
+    'zipcode',
+    'cemail',
+    'cPhoneNumber',
+    'industry',
+  ] as const
+
+  const companyData: Record<string, any> = {}
+  for (const field of ALLOWED_FIELDS) {
+    if (req.body[field] !== undefined) {
+      companyData[field] = req.body[field]
+    }
+  }
 
   const files = req.files as Record<string, Express.Multer.File[]>
 
@@ -227,9 +260,12 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  companyData.employeesId = JSON.parse(req.body.employeesId || '[]')
-  companyData.sLink = JSON.parse(req.body.sLink || '[]')
-  companyData.service = JSON.parse(req.body.service || '[]')
+  if (req.body.sLink !== undefined) {
+    companyData.sLink = JSON.parse(req.body.sLink || '[]')
+  }
+  if (req.body.service !== undefined) {
+    companyData.service = JSON.parse(req.body.service || '[]')
+  }
 
   const updated = await Company.findByIdAndUpdate(id, companyData, {
     new: true,
@@ -443,6 +479,19 @@ export const getCompanyByEmployeeId = catchAsync(
  ************************/
 export const deleteCompany = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
+
+  const company = await Company.findById(id)
+  if (!company) {
+    res.status(404).json({
+      success: false,
+      message: 'Company not found',
+    })
+    return
+  }
+
+  // Only the owning user (or an admin/super-admin) may delete this company.
+  assertOwner(req, company.userId)
+
   const deleted = await Company.findByIdAndDelete(id)
 
   if (!deleted) {

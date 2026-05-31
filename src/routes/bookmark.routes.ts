@@ -9,8 +9,8 @@ import { protect } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-router.post('/', createBookmark)
-router.patch('/update',protect, updateBookmarked)
-router.get('/user/:userId', getBookmarksByUser)
+router.post('/', protect, createBookmark)
+router.patch('/update', protect, updateBookmarked)
+router.get('/user/:userId', protect, getBookmarksByUser)
 
 export default router

@@ -7,6 +7,12 @@ import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import path from 'path'
 import { getSignedS3Url, uploadFileToS3 } from '../services/s3.service'
+import {
+  assertOwner,
+  isPrivilegedRole,
+  idToString,
+  asQueryString,
+} from '../utils/authz'
 
 const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || ''
 
@@ -94,7 +100,11 @@ export const getResumeByUserId = catchAsync(
 
 export const getResumeByUserId1 = catchAsync(
   async (req: Request, res: Response) => {
-    const {userId} = req.params
+    // Neutralise NoSQL operator injection on the client-supplied id. This is a
+    // legitimate cross-user read (recruiters/companies/admins viewing an
+    // applicant CV) so it stays accessible to any authenticated user via
+    // `protect`, but is not owner-locked.
+    const userId = asQueryString(req.params.userId)
 
     const resumes = await Resume.find({ userId })
 
@@ -120,6 +130,21 @@ export const getResumeDownloadUrl = catchAsync(
     const resume = await Resume.findById(resumeId)
     if (!resume) {
       throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
+    }
+
+    // Allow the resume owner, or an authorized recruiter/company/admin to
+    // download an applicant CV. Block cross-candidate enumeration by other
+    // (non-privileged, non-recruiting) authenticated users.
+    const requesterId = idToString(req.user?._id)
+    const isOwner = requesterId !== '' && requesterId === idToString(resume.userId)
+    const role = req.user?.role
+    const canRecruit =
+      role === 'recruiter' || role === 'company' || isPrivilegedRole(role)
+    if (!isOwner && !canRecruit) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You are not allowed to access this resume.'
+      )
     }
 
     const file = fileId
@@ -176,6 +201,8 @@ export const updateResumeFiles = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
     }
 
+    assertOwner(req, resume.userId)
+
     if (!req.files || !(req.files instanceof Array) || req.files.length === 0) {
       throw new AppError(httpStatus.BAD_REQUEST, 'No resume files uploaded')
     }
@@ -211,11 +238,14 @@ export const updateResumeFiles = catchAsync(
 export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   const { resumeId } = req.params
 
-  const deleted = await Resume.findByIdAndDelete(resumeId)
-
-  if (!deleted) {
+  const resume = await Resume.findById(resumeId)
+  if (!resume) {
     throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
   }
+
+  assertOwner(req, resume.userId)
+
+  await Resume.findByIdAndDelete(resumeId)
 
   sendResponse(res, {
     statusCode: httpStatus.OK,

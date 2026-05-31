@@ -75,12 +75,15 @@ export const globalErrorHandler: ErrorRequestHandler = (
       },
     ];
   } else if (err instanceof Error) {
-    //default error pattern
-    message = err?.message;
+    // M7: don't leak raw internal error text to clients in production.
+    message =
+      process.env.NODE_ENV === 'production'
+        ? 'An unexpected error occurred'
+        : err?.message;
     errorSources = [
       {
         path: '',
-        message: err.message,
+        message,
       },
     ];
   }

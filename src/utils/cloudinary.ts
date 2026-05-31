@@ -3,15 +3,13 @@ import fs from 'fs'
 import config from '../config/config'
 import path from 'path'
 
-// cloudinary.config({
-//   cloud_name: config.cloudinary.cloudName,
-//   api_key: config.cloudinary.apiKey,
-//   api_secret: config.cloudinary.apiSecret,
-// })
+// Credentials are loaded from env (CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
+// CLOUDINARY_API_SECRET). Never hardcode the api_secret — the previous literal
+// value is compromised and must be rotated in the Cloudinary dashboard.
 cloudinary.config({
-  cloud_name: 'ddtuyxcsl',
-  api_key: '155594432527689',
-  api_secret: 'fw86uLN2JW_S9tYxb69R48Fym2k',
+  cloud_name: config.cloudinary.cloudName,
+  api_key: config.cloudinary.apiKey,
+  api_secret: config.cloudinary.apiSecret,
 })
 
 export const uploadToCloudinary = async (

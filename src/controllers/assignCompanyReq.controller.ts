@@ -6,6 +6,7 @@ import { RecruiterAccount } from "../models/recruiterAccount.model";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
 import { createNotification } from "../sockets/notification.service";
+import { assertOwner } from "../utils/authz";
 
 const findCompanyByIdentifier = async (companyId: string) => {
   let company = null;
@@ -104,16 +105,21 @@ export const UpdateEmployeeReq = catchAsync(async (req, res) => {
     throw new AppError(400, "Request not found");
   }
 
+  // Authorize against the company referenced by the request itself, never the
+  // client-supplied companyId. Only the company owner (or an admin) may
+  // approve/reject employee requests.
+  const requestCompany = await Company.findById(check.company);
+  if (!requestCompany) {
+    throw new AppError(404, "Company not found");
+  }
+  assertOwner(req, requestCompany.userId);
+
   if (status === "accepted") {
     if (!companyId || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new AppError(400, "Invalid companyId or userId");
     }
 
-    const company = await findCompanyByIdentifier(companyId);
-
-    if (!company) {
-      throw new AppError(404, "Company not found");
-    }
+    const company = requestCompany;
 
     await Company.findByIdAndUpdate(
       { _id: company._id },
@@ -173,6 +179,9 @@ export const companyEmployeeAdd = catchAsync(async (req, res) => {
     throw new AppError(404, "Company not found");
   }
 
+  // Only the company owner (or an admin) may add employees to the company.
+  assertOwner(req, company.userId);
+
   const employeeObjectIds = employeesList.map(
     (id: string) => new mongoose.Types.ObjectId(id)
   );
@@ -214,6 +223,9 @@ export const companyEmployeeRemove = catchAsync(async (req, res) => {
   if (!company) {
     throw new AppError(404, "Company not found");
   }
+
+  // Only the company owner (or an admin) may remove employees from the company.
+  assertOwner(req, company.userId);
 
   const employeeObjectId = new mongoose.Types.ObjectId(employeeId);
 

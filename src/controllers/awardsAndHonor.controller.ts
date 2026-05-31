@@ -4,14 +4,22 @@ import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import sendResponse from '../utils/sendResponse'
+import { isPrivilegedRole } from '../utils/authz'
 
 /******************************
  * CREATE AWARNESS AND Honor *
  ******************************/
 export const createAwardAndHonor = catchAsync(
   async (req: Request, res: Response) => {
-    const data = req.body
-    const result = await AwardsAndHonor.create(data)
+    const { title, programeName, programeDate, issuer, description } = req.body
+    const result = await AwardsAndHonor.create({
+      userId: req.user?._id,
+      title,
+      programeName,
+      programeDate,
+      issuer,
+      description,
+    })
 
     sendResponse(res, {
       statusCode: httpStatus.CREATED,
@@ -43,9 +51,17 @@ export const getByUserId = catchAsync(async (req: Request, res: Response) => {
 export const updateAwardsAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
-    const updates = req.body
+    const { title, programeName, programeDate, issuer, description } = req.body
 
-    const result = await AwardsAndHonor.findByIdAndUpdate(id, updates, {
+    // Whitelist editable fields; never allow userId/_id reassignment.
+    const updates = { title, programeName, programeDate, issuer, description }
+
+    // Owners may only touch their own entries; admins/super-admins bypass.
+    const filter = isPrivilegedRole(req.user?.role)
+      ? { _id: id }
+      : { _id: id, userId: req.user?._id }
+
+    const result = await AwardsAndHonor.findOneAndUpdate(filter, updates, {
       new: true,
     })
 
@@ -69,7 +85,12 @@ export const deleteAwardsAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
 
-    const result = await AwardsAndHonor.findByIdAndDelete(id)
+    // Owners may only delete their own entries; admins/super-admins bypass.
+    const filter = isPrivilegedRole(req.user?.role)
+      ? { _id: id }
+      : { _id: id, userId: req.user?._id }
+
+    const result = await AwardsAndHonor.findOneAndDelete(filter)
 
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'Entry not found')

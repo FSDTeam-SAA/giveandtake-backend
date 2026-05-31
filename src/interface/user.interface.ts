@@ -20,7 +20,7 @@ export interface IUser {
   }
 
   dateOfbirth?: Date
-  role: 'admin' | 'candidate' | 'recruiter' | 'company'
+  role: 'admin' | 'super-admin' | 'candidate' | 'recruiter' | 'company'
   verificationInfo: {
     verified: boolean
     token: string
@@ -29,7 +29,8 @@ export interface IUser {
   password_reset_token: string
   deactivate: boolean
   dateOfdeactivate: Date | undefined
-  refresh_token: string
+  refresh_token?: string
+  passwordChangedAt?: Date
 }
 
 export interface UserModel extends Model<IUser> {

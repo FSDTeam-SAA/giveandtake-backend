@@ -7,6 +7,10 @@ import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary";
 import AppError from "../errors/AppError";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 
+// Escape user input before using it in a RegExp to avoid regex injection / ReDoS.
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // create category
 export const createJobCategory = catchAsync(
   async (req: Request, res: Response) => {
@@ -48,15 +52,16 @@ export const createJobCategory = catchAsync(
 export const getAllCategorys = catchAsync(
   async (req: Request, res: Response) => {
     const { page, limit, skip } = getPaginationParams(req.query);
-    const search = req.query.search ? String(req.query.search) : ''
+    const search = req.query.search ? String(req.query.search).slice(0, 100) : ''
 
     // Build search filter
     let filter: any = {};
     if (search) {
+      const escapedSearch = escapeRegExp(search);
       filter = {
         $or: [
-          { name: { $regex: search, $options: "i" } }, // case-insensitive search for name
-          { role: { $in: [new RegExp(search, "i")] } }, // search inside role array
+          { name: { $regex: escapedSearch, $options: "i" } }, // case-insensitive search for name
+          { role: { $in: [new RegExp(escapedSearch, "i")] } }, // search inside role array
         ],
       };
     }

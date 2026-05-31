@@ -38,6 +38,7 @@ const userSchema: Schema = new Schema<IUser>(
     deactivate: { type: Boolean, default: false },
     dateOfdeactivate: { type: Date },
     refresh_token: { type: String },
+    passwordChangedAt: { type: Date },
   },
   { timestamps: true }
 )
@@ -52,6 +53,13 @@ userSchema.pre('save', async function (next) {
   if (user.isModified('password')) {
     const saltRounds = Number(process.env.bcrypt_salt_round) || 10
     user.password = await bcrypt.hash(user.password, saltRounds)
+    if (!user.isNew) {
+      // H2: revoke existing sessions and record the change time so any access
+      // token issued before this moment is rejected by `protect`.
+      // 1s earlier avoids a same-second race with a freshly minted token.
+      user.passwordChangedAt = new Date(Date.now() - 1000)
+      user.refresh_token = undefined
+    }
   }
 
   // ✅ Slug logic for name changes
@@ -106,7 +114,12 @@ userSchema.pre(['save', 'findOneAndUpdate'], async function (next) {
 // ✅ Static methods remain exactly the same
 //
 userSchema.statics.isUserExistsByEmail = async function (email: string) {
-  return await User.findOne({ email }).select('+password +secureFolderPin')
+  // H6: coerce to a primitive string so objects like {"$ne": null} cannot
+  // reach the query as Mongo operators (NoSQL injection).
+  const safeEmail = typeof email === 'string' ? email : ''
+  return await User.findOne({ email: safeEmail }).select(
+    '+password +secureFolderPin'
+  )
 }
 
 userSchema.statics.isOTPVerified = async function (id: string) {
@@ -119,6 +132,17 @@ userSchema.statics.isPasswordMatched = async function (
   hashPassword: string
 ) {
   return await bcrypt.compare(plainTextPassword, hashPassword)
+}
+
+// H2: was declared on the interface but never implemented. Returns true when
+// the password was changed AFTER the JWT was issued (so the token is stale).
+userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
+  passwordChangeTimeStamp: Date,
+  jwtIssuedTimeStamp: number
+) {
+  const changedAtSeconds =
+    new Date(passwordChangeTimeStamp).getTime() / 1000
+  return changedAtSeconds > jwtIssuedTimeStamp
 }
 
 export const User = mongoose.model<IUser, UserModel>('User', userSchema)

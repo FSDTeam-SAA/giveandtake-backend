@@ -15,9 +15,18 @@ import { Job } from "../models/job.model";
 import { User } from "../models/user.model";
 import { io } from "../server";
 import { Notification } from "../models/notification.model";
+import { assertOwner, isPrivilegedRole } from "../utils/authz";
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
-  const { jobId, userId, status, resumeId, answer, hasValidVisa } = req.body;
+  const { jobId, resumeId, answer, hasValidVisa } = req.body;
+
+  // Always derive the applicant from the authenticated user — never trust the body.
+  const userId = String(req.user?._id);
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+
+  if (!mongoose.Types.ObjectId.isValid(jobId)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
+  }
 
   const exists = await AppliedJob.findOne({ jobId, userId });
   if (exists) {
@@ -35,6 +44,20 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
       404,
       "You need to create your resume before applying to this job"
     );
+  }
+
+  // If a resumeId is supplied, it must reference a resume owned by the applicant.
+  if (resumeId !== undefined && resumeId !== null && resumeId !== "") {
+    if (!mongoose.Types.ObjectId.isValid(resumeId)) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid resume ID");
+    }
+    const ownedResume = await CreateResume.findOne({ _id: resumeId, userId });
+    if (!ownedResume) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You can only apply with your own resume"
+      );
+    }
   }
 
   const noticePeriodReq = job.applicationRequirement.find(
@@ -72,8 +95,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
 
   const application = await AppliedJob.create({
     jobId,
-    userId,
-    status,
+    userId: userObjectId,
+    status: "pending", // safe default — applicants cannot self-assign a status
     resumeId,
     answer,
     hasValidVisa:
@@ -103,7 +126,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   });
 
   await createNotification({
-    to: userId,
+    to: userObjectId,
     message: `You have successfully applied for the job "${job.title}".`,
     type: "job_application_confirmation",
     id: application._id,
@@ -137,6 +160,18 @@ export const getApplicationsByJob = catchAsync(
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
     }
+
+    // Only the owner of the job (the recruiter/company that posted it) or an
+    // admin may view the applicants for that job.
+    const job = await Job.findById(jobId).select("userId");
+    if (!job) {
+      throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+    }
+    assertOwner(
+      req,
+      job.userId,
+      "You are not allowed to view applications for this job"
+    );
 
     // ✅ Extract pagination params (default: page=1, limit=10)
     const page = parseInt(req.query.page as string) || 1;
@@ -189,6 +224,22 @@ export const getApplicationsByUser = catchAsync(
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid user ID");
+    }
+
+    // The applicant themself, or an authorised recruiter/company/admin, may read
+    // these applications. Candidates may not browse another candidate's data.
+    const requesterId = String(req.user?._id);
+    const requesterRole = req.user?.role;
+    const isAuthorisedReader =
+      requesterId === String(userId) ||
+      isPrivilegedRole(requesterRole) ||
+      requesterRole === "recruiter" ||
+      requesterRole === "company";
+    if (!isAuthorisedReader) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You are not allowed to view these applications"
+      );
     }
 
     const filter: any = { userId };
@@ -249,6 +300,26 @@ export const updateApplicationStatus = catchAsync(
     if (!["shortlisted", "rejected", "pending"].includes(normalizedStatus)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
     }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid application ID");
+    }
+
+    // Only the owner of the job being applied to (or an admin) may change the
+    // application status. Load the application and assert job ownership first.
+    const application = await AppliedJob.findById(id);
+    if (!application) {
+      throw new AppError(httpStatus.NOT_FOUND, "Application not found");
+    }
+    const job = await Job.findById(application.jobId).select("userId");
+    if (!job) {
+      throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+    }
+    assertOwner(
+      req,
+      job.userId,
+      "You are not allowed to update this application"
+    );
 
     const updated = await AppliedJob.findByIdAndUpdate(
       id,
@@ -317,6 +388,30 @@ if (normalizedStatus === "shortlisted") {
 export const deleteApplication = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError(httpStatus.BAD_REQUEST, "Invalid application ID");
+    }
+
+    const application = await AppliedJob.findById(id);
+    if (!application) {
+      throw new AppError(httpStatus.NOT_FOUND, "Application not found");
+    }
+
+    // The applicant, the owner of the job, or an admin may delete the application.
+    const requesterId = String(req.user?._id);
+    const isApplicant = requesterId === String(application.userId);
+    if (!isApplicant && !isPrivilegedRole(req.user?.role)) {
+      const job = await Job.findById(application.jobId).select("userId");
+      if (!job) {
+        throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+      }
+      assertOwner(
+        req,
+        job.userId,
+        "You are not allowed to delete this application"
+      );
+    }
 
     const deleted = await AppliedJob.findByIdAndDelete(id);
 

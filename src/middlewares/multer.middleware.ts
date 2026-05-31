@@ -51,13 +51,13 @@ export const upload = multer({
     fileSize: 600 * 1024 * 1024, 
   },
   fileFilter: (req, file, cb) => {
-    console.log("Uploading file with mimetype:", file.mimetype);
-
     const extname = path.extname(file.originalname).toLowerCase();
     const mimetypeAllowed = ALLOWED_MIME_TYPES.has(file.mimetype);
     const extensionAllowed = ALLOWED_EXTENSIONS.has(extname);
 
-    if (mimetypeAllowed || extensionAllowed) {
+    // M1: require BOTH the mimetype AND the extension to be allowlisted, so a
+    // forged mimetype OR a misleading extension alone cannot smuggle a file.
+    if (mimetypeAllowed && extensionAllowed) {
       return cb(null, true);
     }
 
@@ -69,6 +69,27 @@ export const upload = multer({
   },
 });
 
+// M1: types that render/execute in a browser and must never be accepted as an
+// upload (prevents stored-XSS via files served from /uploads).
+const BLOCKED_UPLOAD_EXTENSIONS = new Set([
+  ".html",
+  ".htm",
+  ".xhtml",
+  ".svg",
+  ".xml",
+  ".js",
+  ".mjs",
+]);
+const BLOCKED_UPLOAD_MIME_TYPES = new Set([
+  "text/html",
+  "application/xhtml+xml",
+  "image/svg+xml",
+  "text/xml",
+  "application/xml",
+  "text/javascript",
+  "application/javascript",
+]);
+
 export const resumeUpload = upload.fields([
   { name: "videoFile", maxCount: 1 },
   { name: "photo", maxCount: 1 },
@@ -78,6 +99,18 @@ export const resumeFileUpload = multer({
   storage,
   limits: {
     fileSize: 100 * 1024 * 1024, // ✅ Also increase for resume files
+  },
+  // M1: previously had NO filter (accepted any type). Block browser-renderable
+  // types to close the stored-XSS-via-upload vector without over-restricting.
+  fileFilter: (req, file, cb) => {
+    const extname = path.extname(file.originalname).toLowerCase();
+    if (
+      BLOCKED_UPLOAD_EXTENSIONS.has(extname) ||
+      BLOCKED_UPLOAD_MIME_TYPES.has(file.mimetype)
+    ) {
+      return cb(new Error("This file type is not allowed."));
+    }
+    cb(null, true);
   },
 }).array("resumes", 5);
 

@@ -5,13 +5,17 @@ import sendResponse from "../utils/sendResponse";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
+import { asQueryString, assertOwner, isPrivilegedRole } from "../utils/authz";
 
 /***********************
  * CREATE BOOKMARK
  ***********************/
 export const createBookmark = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId, jobId, bookmarked } = req.body;
+    const { jobId, bookmarked } = req.body;
+
+    // Bookmarks always belong to the authenticated user.
+    const userId = String(req.user?._id);
 
     const existing = await Bookmark.findOne({ userId, jobId });
     if (existing)
@@ -32,7 +36,10 @@ export const createBookmark = catchAsync(
 );
 
 export const updateBookmarked = catchAsync(async (req, res) => {
-  const { bookmarked, userId, jobId } = req.body;
+  const { bookmarked, jobId } = req.body;
+
+  // Scope the bookmark to the authenticated user — ignore any body userId.
+  const userId = String(req.user?._id);
 
   let update = await Bookmark.findOneAndUpdate(
     { userId: userId, jobId: jobId },
@@ -56,7 +63,13 @@ export const updateBookmarked = catchAsync(async (req, res) => {
  ***********************/
 export const getBookmarksByUser = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId } = req.params;
+    // A user's bookmarks are private: only the owner (or an admin) may read
+    // them. Normal users are always scoped to their own id; admins may view
+    // any user's list via the path param.
+    assertOwner(req, req.params.userId, "You are not allowed to view these bookmarks.");
+    const userId = isPrivilegedRole(req.user?.role)
+      ? asQueryString(req.params.userId) || String(req.user?._id)
+      : String(req.user?._id);
 
     // GET QUERYES FOR PAGINATION
     const { page, limit, skip } = getPaginationParams(req.query);

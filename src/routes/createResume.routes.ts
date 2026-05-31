@@ -11,7 +11,7 @@ import { upload } from '../middlewares/multer.middleware'
 
 const router = express.Router()
 
-router.post('/create-resume', upload.fields([
+router.post('/create-resume', protect, upload.fields([
     { name: "photo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
   ]), createResume)
