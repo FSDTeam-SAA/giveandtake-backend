@@ -58,21 +58,29 @@ app.use(
 // CORS (L1): env-driven allowlist via CORS_ORIGINS (comma-separated). When
 // unset, the previous permissive behaviour is preserved (reflect the request
 // origin) so nothing breaks — set CORS_ORIGINS in production to lock down.
+// Local development origins (http://localhost:<port> and http://127.0.0.1:<port>)
+// are ALWAYS allowed so a dev frontend can talk to this API regardless of the
+// CORS_ORIGINS allowlist.
 const allowedOrigins = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
 
+const isLocalhostOrigin = (origin: string): boolean =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Non-browser clients (curl, server-to-server) send no Origin header.
+      if (!origin) return callback(null, true);
+      if (isLocalhostOrigin(origin)) return callback(null, true);
       if (allowedOrigins.length === 0) return callback(null, true);
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
+      if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
