@@ -23,11 +23,43 @@ import { isPrivilegedRole, idToString, asQueryString } from '../utils/authz'
 
 const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
+// Robust R2/S3 object-key extractor. Handles every URL shape the upload
+// pipeline can produce: the account endpoint (https://<account>.r2.../<bucket>/<key>),
+// the bucket-subdomain endpoint (https://<bucket>.<account>.r2.../<key>), a custom
+// domain / CDN configured via R2_PUBLIC_BASE (optionally with a sub-path), and a
+// bare key. Mirrors normalizeR2Key() in videoProcessing.queue.ts so the playlist /
+// segment / key routes resolve the same object the transcoder uploaded.
 const extractR2Key = (url: string): string => {
-  const afterHost = url.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, "");
-  return BUCKET && afterHost.startsWith(`${BUCKET}/`)
-    ? afterHost.slice(BUCKET.length + 1)
-    : afterHost;
+  if (!url) return url;
+  try {
+    const parsed = new URL(url, "http://placeholder.local");
+    let key = parsed.pathname.replace(/^\/+/, "");
+
+    // Strip a leading "<bucket>/" left by the account-style endpoint.
+    if (BUCKET && key.startsWith(`${BUCKET}/`)) {
+      key = key.slice(BUCKET.length + 1);
+    }
+
+    // Strip any sub-path baked into R2_PUBLIC_BASE (custom domain with a prefix).
+    const publicBase = process.env.R2_PUBLIC_BASE;
+    if (publicBase) {
+      try {
+        const basePath = new URL(publicBase, "http://placeholder.local")
+          .pathname.replace(/^\/+/, "")
+          .replace(/\/+$/, "");
+        if (basePath && key.startsWith(`${basePath}/`)) {
+          key = key.slice(basePath.length + 1);
+        }
+      } catch {
+        // ignore invalid R2_PUBLIC_BASE config
+      }
+    }
+
+    return key;
+  } catch {
+    // Not a URL — treat it as an already-bare key.
+    return url.replace(/^\/+/, "");
+  }
 };
 
 
@@ -451,9 +483,26 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
 
     const signedUrl = await getSignedS3Url(s3Key, 3600);
 
-    // Fetch and rewrite playlist
-    const playlistRes = await axios.get(signedUrl);
-    let playlistContent = playlistRes.data as string;
+    // Fetch and rewrite playlist. A failure here is almost always a storage
+    // misconfiguration (bad R2 credentials, wrong key, object missing). Log the
+    // real cause and return a 502 instead of an opaque 500 so it is diagnosable.
+    let playlistContent: string;
+    try {
+      const playlistRes = await axios.get(signedUrl, { responseType: "text" });
+      playlistContent = playlistRes.data as string;
+    } catch (err: any) {
+      console.error("[streamElevatorPitch] Failed to fetch HLS playlist from storage", {
+        pitchId: id,
+        s3Key,
+        hlsUrl,
+        status: err?.response?.status,
+        message: err?.message,
+      });
+      throw new AppError(
+        httpStatus.BAD_GATEWAY,
+        "Unable to load the video playlist from storage."
+      );
+    }
 
     const rewriteAssetLine = (line: string) => {
       const trimmed = line.trim();
