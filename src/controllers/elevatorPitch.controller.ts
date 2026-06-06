@@ -20,6 +20,7 @@ import { Job } from '../models/job.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
 import { isPrivilegedRole, idToString, asQueryString } from '../utils/authz'
+import { signMediaToken, isValidMediaToken } from '../utils/mediaToken'
 
 const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
@@ -504,11 +505,15 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
       );
     }
 
+    // Mint a short-lived token so the player can fetch the nested playlist,
+    // segments, and AES key WITHOUT an Authorization header (native players drop
+    // that header on HLS sub-requests). Scoped to this pitch owner.
+    const mediaToken = signMediaToken(pitch.userId.toString());
     const rewriteAssetLine = (line: string) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) return line;
       if (/\.(ts|m3u8)$/i.test(trimmed)) {
-        return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`;
+        return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}?t=${mediaToken}`;
       }
       return line;
     };
@@ -543,8 +548,12 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
   }
 
-  // C9: only owner/recruiter/applicant-job-poster/admin may stream segments.
-  await assertPitchMediaAccess(req, pitch.userId)
+  // Authorise via the short-lived media token baked into the playlist URLs.
+  // The master playlist already ran protect + checkVideoAccess before minting
+  // this token, so a valid token proves the holder passed that same check.
+  if (!isValidMediaToken(req.query.t, pitch.userId.toString())) {
+    throw new AppError(httpStatus.FORBIDDEN, 'Access denied')
+  }
 
   if (pitch.processing?.state !== 'ready') {
     throw new AppError(
@@ -563,17 +572,51 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const baseDirectory = baseS3Key.replace(/[^/]+$/, '')
   const segmentS3Key = `${baseDirectory}${sanitizedSegment}`
   const isPlaylist = sanitizedSegment.toLowerCase().endsWith('.m3u8')
+  // Already validated as a real media token by the check above.
+  const token = req.query.t as string
 
   try {
     const signedSegmentUrl = await getSignedS3Url(segmentS3Key, 3600)
+
+    if (isPlaylist) {
+      // A nested playlist references the AES key and the .ts segments. Rewrite
+      // those URLs so they carry the same `?t=` token — the player fetches them
+      // without an Authorization header.
+      const playlistRes = await axios.get(signedSegmentUrl, {
+        responseType: 'text',
+      })
+      const rewritten = (playlistRes.data as string)
+        .split('\n')
+        .map((line) => {
+          if (line.startsWith('#EXT-X-KEY')) {
+            return line.replace(
+              /URI="([^"]+)"/,
+              (_m, uri) =>
+                `URI="${uri}${uri.includes('?') ? '&' : '?'}t=${token}"`
+            )
+          }
+          const trimmed = line.trim()
+          if (trimmed && !trimmed.startsWith('#') && /\.(ts|m3u8)$/i.test(trimmed)) {
+            return `${trimmed}${trimmed.includes('?') ? '&' : '?'}t=${token}`
+          }
+          return line
+        })
+        .join('\n')
+
+      res.set({
+        'Content-Type': 'application/vnd.apple.mpegurl',
+        'Cache-Control': 'no-cache',
+      })
+      res.send(rewritten)
+      return
+    }
+
     const response = await axios.get(signedSegmentUrl, {
       responseType: 'stream',
     })
 
     res.set({
-      'Content-Type': isPlaylist
-        ? 'application/vnd.apple.mpegurl'
-        : 'video/mp2t',
+      'Content-Type': 'video/mp2t',
       'Cache-Control': 'no-cache',
     })
 
@@ -594,8 +637,12 @@ export const getEncryptionKey = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
     }
 
-    // C9: only owner/recruiter/applicant-job-poster/admin may fetch the AES key.
-    await assertPitchMediaAccess(req, pitch.userId)
+    // Authorise via the short-lived media token (the player fetches the AES key
+    // without an Authorization header). The token was minted only after
+    // checkVideoAccess passed on the master playlist.
+    if (!isValidMediaToken(req.query.t, pitch.userId.toString())) {
+      throw new AppError(httpStatus.FORBIDDEN, 'Access denied')
+    }
 
     if (pitch.processing?.state !== 'ready') {
       throw new AppError(
