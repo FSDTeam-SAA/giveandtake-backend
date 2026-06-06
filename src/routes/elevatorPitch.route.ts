@@ -38,7 +38,7 @@ import {
   getEncryptionKey,
   getAllElevatorPitches,
 } from "../controllers/elevatorPitch.controller";
-import { protect } from "../middlewares/auth.middleware";
+import { protect, protectAllowQueryToken } from "../middlewares/auth.middleware";
 import { checkVideoAccess } from "../middlewares/checkVideoAccess.middleware";
 
 const router = express.Router();
@@ -54,8 +54,10 @@ router.delete("/video", protect, deleteResume);
 // streamElevatorPitch bakes into the rewritten playlist URLs (see secureStream).
 router.get("/stream/:userId/:segment", secureStream);
 
-// Playlist route is keyed by the pitch :id, so checkVideoAccess applies directly.
-router.get("/stream/:id", protect, checkVideoAccess, streamElevatorPitch);
+// Master playlist route, keyed by the pitch :id. Accepts the access token from
+// either the Authorization header (web) or a `?token=` query param (native
+// mobile players that can't set headers on HLS), then checkVideoAccess applies.
+router.get("/stream/:id", protectAllowQueryToken, checkVideoAccess, streamElevatorPitch);
 
 // AES key route — same story: the native player fetches the key without an
 // Authorization header, so it is authorised by the `?t=` media token inside

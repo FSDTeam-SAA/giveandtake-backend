@@ -36,6 +36,22 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
+// Same as `protect`, but also accepts the access token from a `?token=` query
+// param. Needed ONLY for the HLS master playlist: native iOS players won't send
+// the Authorization header on an HLS request, so the mobile app passes the token
+// in the URL instead. Scoped to that one route — do not reuse elsewhere, because
+// tokens in URLs can land in access logs.
+export const protectAllowQueryToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.headers.authorization && typeof req.query.token === "string") {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  return protect(req, res, next);
+};
+
 export const isAdmin = (req: Request, res: Response, next: NextFunction): void => {
   if (req.user?.role !== "admin" && req.user?.role !== 'super-admin') {
     throw new AppError(403, "Access denied. You are not an admin.");
