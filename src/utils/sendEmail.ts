@@ -71,6 +71,17 @@ function getFirstName(fullName?: string): string {
   return trimmed.split(/\s+/)[0];
 }
 
+// Escape user-supplied values (e.g. job titles) before embedding them in the
+// HTML email body so they cannot break the markup or inject content.
+function escapeHtml(value?: string): string {
+  return (value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export const accountCreationOtpTemplate = (name: string, otp: string) => `<!doctype html>
 <html lang="en">
 <head>
@@ -338,4 +349,147 @@ export const refundProcessedTemplate = (name: string) => `<!doctype html>
   </table>
 </body>
 </html>`;
+
+/**
+ * Shared shell for job-status emails (pending review / approved / declined).
+ * Mirrors the house style used by the OTP/refund templates above.
+ */
+const jobStatusEmailLayout = (
+  subtitle: string,
+  name: string,
+  bodyHtml: string
+) => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${subtitle} — Elevator Video Pitch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
+    <tr>
+      <td align="center" style="padding:20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
+                    <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${subtitle}</p>
+                  </td>
+                  <td style="text-align:right;vertical-align:middle;">
+                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
+                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg"
+                           alt="EVP Logo"
+                           class="logo-img"
+                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;"
+                           width="120"
+                           height="48" />
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:24px;">
+              <p style="margin:0 0 12px;font-size:15px;color:#111;">
+                Dear <strong>${getFirstName(name)}</strong>,
+              </p>
+              ${bodyHtml}
+              <p style="margin:18px 0 0;font-size:14px;color:#374151;">
+                Best regards,<br>
+                <strong>Admin</strong><br>
+                Elevator Video Pitch©
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
+              <div style="max-width:520px;margin:0 auto;">
+                <p style="margin:0 0 8px;">&copy; ${new Date().getFullYear()} Elevator Video Pitch©. All rights reserved.</p>
+                <p style="margin:0;">Need help? Contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+/**
+ * Sent to a company/recruiter when they post (or edit) a job. The advert is
+ * held as `adminApprove: false` until a moderator reviews it.
+ */
+export const jobPendingReviewTemplate = (
+  name: string,
+  jobTitle: string,
+  action: "posted" | "updated" = "posted"
+) => {
+  const safeTitle = escapeHtml(jobTitle);
+  const intro =
+    action === "updated"
+      ? `Your job <strong>${safeTitle}</strong> has been updated successfully. Because of these changes, your advert is now <strong>pending admin review</strong> again.`
+      : `Thank you for posting your job <strong>${safeTitle}</strong> on Elevator Video Pitch©. Your advert has been submitted successfully and is now <strong>pending admin review</strong>.`;
+  return jobStatusEmailLayout(
+    "Job Pending Admin Review",
+    name,
+    `
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        ${intro}
+      </p>
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        It will become visible to candidates as soon as our team has approved it.
+      </p>
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
+        We will email you again once a decision has been made. No further action is required from you at this time.
+      </p>
+    `
+  );
+};
+
+/** Sent to the job owner when an admin approves their job. */
+export const jobApprovedTemplate = (name: string, jobTitle: string) =>
+  jobStatusEmailLayout(
+    "Job Approved",
+    name,
+    `
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        Good news! Your job <strong>${escapeHtml(
+          jobTitle
+        )}</strong> has been reviewed and <strong>approved</strong> by our admin team.
+      </p>
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
+        It is now live and visible to candidates on Elevator Video Pitch©.
+      </p>
+    `
+  );
+
+/** Sent to the job owner when an admin declines their job. */
+export const jobDeclinedTemplate = (name: string, jobTitle: string) =>
+  jobStatusEmailLayout(
+    "Job Declined",
+    name,
+    `
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        We're sorry to let you know that your job <strong>${escapeHtml(
+          jobTitle
+        )}</strong> was not approved by our admin team and is not currently visible to candidates.
+      </p>
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
+        If you believe this was a mistake or would like more information, please contact us at
+        <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a>.
+      </p>
+    `
+  );
 

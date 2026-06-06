@@ -30,6 +30,12 @@ import {
 import { jobFitService } from "../services/jobFit.service";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 import { isPrivilegedRole, idToString } from "../utils/authz";
+import {
+  sendEmail,
+  jobPendingReviewTemplate,
+  jobApprovedTemplate,
+  jobDeclinedTemplate,
+} from "../utils/sendEmail";
 
 // Escape user/resume-derived input before using it in a RegExp to avoid regex injection / ReDoS.
 const escapeRegExp = (value: string): string =>
@@ -103,6 +109,72 @@ const sendPaygExpiryNotification = async (job: any) => {
     });
   } catch (error) {
     console.warn("Failed to dispatch PAYG expiry notification:", error);
+  }
+};
+
+/**
+ * Notify a job owner that their advert was posted/edited and is now waiting on
+ * an admin moderator. Sends both an in-app notification and an email. Failures
+ * are logged but never break the create/edit response.
+ */
+const notifyJobPendingReview = async (
+  job: any,
+  owner: any,
+  action: "posted" | "updated"
+) => {
+  if (!owner?._id) return;
+  const ownerId = owner._id as mongoose.Types.ObjectId;
+  const message =
+    action === "posted"
+      ? `Your job "${job.title}" has been posted and is pending admin review.`
+      : `Your job "${job.title}" has been updated and is pending admin review.`;
+
+  try {
+    await createNotification({
+      to: ownerId,
+      message,
+      type: "job_application_status",
+      id: job._id as mongoose.Types.ObjectId,
+    });
+  } catch (error) {
+    console.warn("Failed to dispatch job pending-review notification:", error);
+  }
+
+  if (owner.email) {
+    try {
+      await sendEmail(
+        owner.email,
+        "Your job is pending admin review - Elevator Video Pitch©",
+        jobPendingReviewTemplate(owner.name, job.title, action)
+      );
+    } catch (error) {
+      console.warn("Failed to send job pending-review email:", error);
+    }
+  }
+};
+
+/**
+ * Email a job owner the admin's moderation decision (approved/declined).
+ * The in-app notification is created separately by the caller.
+ */
+const sendJobDecisionEmail = async (
+  owner: any,
+  jobTitle: string,
+  decision: "approved" | "declined"
+) => {
+  if (!owner?.email) return;
+  const subject =
+    decision === "approved"
+      ? "Your job has been approved - Elevator Video Pitch©"
+      : "Your job has been declined - Elevator Video Pitch©";
+  const html =
+    decision === "approved"
+      ? jobApprovedTemplate(owner.name, jobTitle)
+      : jobDeclinedTemplate(owner.name, jobTitle);
+  try {
+    await sendEmail(owner.email, subject, html);
+  } catch (error) {
+    console.warn(`Failed to send job ${decision} email:`, error);
   }
 };
 
@@ -457,6 +529,13 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
 
   await attachEmbeddingBeforeSave(job);
   await job.save();
+
+  // Let the poster know their advert is in the moderation queue. New company/
+  // recruiter jobs start with `adminApprove: false`, so this always fires here.
+  if (!job.adminApprove) {
+    await notifyJobPendingReview(job, user, "posted");
+  }
+
   const refreshedPostingAllowance = await evaluateJobPostingAllowance(
     new mongoose.Types.ObjectId(userId),
     { suppressErrors: true }
@@ -724,6 +803,14 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   await attachEmbeddingBeforeSave(job);
   await job.save();
 
+  // Editing resets `adminApprove` to false, so the advert re-enters the
+  // moderation queue. Tell the job OWNER (not necessarily the editor, who may
+  // be an admin) that it is pending review again.
+  if (!job.adminApprove) {
+    const owner = await User.findById(job.userId);
+    await notifyJobPendingReview(job, owner, "updated");
+  }
+
   // ---- Optional: notify followers if the job just became active or newly published now ----
   const justActivated = prevStatus !== "active" && job.status === "active";
 
@@ -983,43 +1070,50 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  if (isAdminCaller && wantsApprovalChange) {
-    if (req.body.adminApprove) {
-      // Email notifications for job approvals are temporarily disabled.
+  // Treat this as an admin moderation DECISION only when `adminApprove` is
+  // explicitly present in the body. A `jobApprove`-only update must never be
+  // read as a decline. Also require an owner to notify (jobs can be orphaned
+  // if the owner was deleted) so we never dereference a null `job.userId`.
+  const adminApproveProvided = Object.prototype.hasOwnProperty.call(
+    req.body ?? {},
+    "adminApprove"
+  );
+
+  if (isAdminCaller && adminApproveProvided && job.userId?._id) {
+    const ownerObjectId = job.userId._id as mongoose.Types.ObjectId;
+    const willApprove = req.body.adminApprove === true;
+    const alreadyApproved = job.adminApprove === true;
+
+    // Skip a no-op re-approval (approved -> approved) so the owner is not
+    // emailed/notified twice for the same decision. A decline is always sent
+    // when explicitly requested, because the `adminApprove` boolean cannot
+    // distinguish a still-pending job from a previously-declined one.
+    if (!(willApprove && alreadyApproved)) {
       const notification = await createNotification({
-        to: job.userId._id as mongoose.Types.ObjectId,
-        message: "Job Post Updated By Admin",
+        to: ownerObjectId,
+        message: willApprove
+          ? `Your job "${job.title}" has been approved by the admin.`
+          : `Your job "${job.title}" has been declined by the admin.`,
         type: "job_application_status",
         id: job._id as mongoose.Types.ObjectId,
       });
 
       const count = await Notification.countDocuments({
-        to: job.userId._id,
+        to: ownerObjectId,
         isViewed: false,
       });
 
-      io.to(job.userId._id.toString()).emit("newNotification", {
+      io.to(ownerObjectId.toString()).emit("newNotification", {
         notification,
         count,
       });
-    } else {
-      // Email notifications for job denials are temporarily disabled.
-      const notification = await createNotification({
-        to: job.userId._id as mongoose.Types.ObjectId,
-        message: "Job Post Denied By Admin",
-        type: "job_application_status",
-        id: job._id as mongoose.Types.ObjectId,
-      });
 
-      const count = await Notification.countDocuments({
-        to: job.userId._id,
-        isViewed: false,
-      });
-
-      io.to(job.userId._id.toString()).emit("newNotification", {
-        notification,
-        count,
-      });
+      // Email the owner of the admin's decision.
+      await sendJobDecisionEmail(
+        job.userId,
+        job.title,
+        willApprove ? "approved" : "declined"
+      );
     }
   }
 
