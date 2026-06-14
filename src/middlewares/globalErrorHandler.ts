@@ -38,6 +38,11 @@ export const globalErrorHandler: ErrorRequestHandler = (
   // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
   next,
 ) => {
+  console.error(
+    `[GlobalError] ${req.method} ${req.originalUrl}`,
+    err
+  );
+
   // setting default values
   let statusCode = 500;
   let message = 'An unexpected error occurred';
@@ -81,6 +86,20 @@ export const globalErrorHandler: ErrorRequestHandler = (
       {
         path: '',
         message: err.message,
+      },
+    ];
+  } else if (err && typeof err === 'object') {
+    const errRecord = err as Record<string, unknown>;
+    const fallbackMessage =
+      typeof errRecord.message === 'string' && errRecord.message.trim().length > 0
+        ? errRecord.message
+        : 'An unexpected error occurred';
+
+    message = fallbackMessage;
+    errorSources = [
+      {
+        path: '',
+        message: fallbackMessage,
       },
     ];
   }

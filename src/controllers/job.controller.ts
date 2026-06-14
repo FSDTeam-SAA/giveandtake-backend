@@ -314,18 +314,18 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   // ROLE BASE APPROVE LOGIC
-  let jobApprove: "pending" | "approved" | "denied" = "approved";
+  let jobApprove: "pending" | "approved" | "denied" = "pending";
   let companyId;
   let recruiterId;
 
   if (user.role === "company") {
-    jobApprove = "approved";
+    jobApprove = "pending";
     const a = await Company.findOne({ userId: userId });
     if (a) {
       companyId = a._id;
     }
   } else if (user.role === "recruiter") {
-    jobApprove = "approved";
+    jobApprove = "pending";
     const a = await RecruiterAccount.findOne({ userId: userId });
     if (a) {
       if (a.companyId) {
@@ -377,6 +377,7 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     applicationRequirement,
     customQuestion,
     jobApprove,
+    adminApprove: false,
     employement_Type,
     website_Url,
     publishDate: publishDateValue ?? publishDate ?? undefined,
@@ -639,6 +640,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   job.adminApprove = false;
+  job.jobApprove = "pending";
   if (prevStatus !== "deactivate" && job.status === "deactivate") {
     job.deactivatedAt = new Date();
   } else if (
@@ -1588,13 +1590,13 @@ export const getPendingJobsForCompany = catchAsync(
 export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
 
-  const jobs = await Job.find({ jobApprove: "approved" })
+  const jobs = await Job.find({ jobApprove: "pending" })
     .populate("companyId recruiterId")
     .sort({ updatedAt: -1 })
     .skip(skip)
     .limit(limit);
 
-  const total = await Job.countDocuments({});
+  const total = await Job.countDocuments({ jobApprove: "pending" });
 
   const meta = buildMetaPagination(total, page, limit);
 

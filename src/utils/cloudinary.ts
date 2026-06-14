@@ -1,18 +1,53 @@
 import { v2 as cloudinary } from 'cloudinary'
 import fs from 'fs'
 import config from '../config/config'
-import path from 'path'
 
-// cloudinary.config({
-//   cloud_name: config.cloudinary.cloudName,
-//   api_key: config.cloudinary.apiKey,
-//   api_secret: config.cloudinary.apiSecret,
-// })
 cloudinary.config({
-  cloud_name: 'ddtuyxcsl',
-  api_key: '155594432527689',
-  api_secret: 'fw86uLN2JW_S9tYxb69R48Fym2k',
+  cloud_name: config.cloudinary.cloudName || 'ddtuyxcsl',
+  api_key: config.cloudinary.apiKey || '155594432527689',
+  api_secret: config.cloudinary.apiSecret || 'fw86uLN2JW_S9tYxb69R48Fym2k',
 })
+
+const cleanupLocalFile = (localFilePath?: string) => {
+  if (!localFilePath) return
+  if (fs.existsSync(localFilePath)) {
+    fs.unlinkSync(localFilePath)
+  }
+}
+
+const getUploadErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (error && typeof error === 'object') {
+    const errorRecord = error as Record<string, unknown>
+    const nestedError = errorRecord.error as Record<string, unknown> | undefined
+
+    const candidates = [
+      errorRecord.message,
+      nestedError?.message,
+      errorRecord.http_code != null
+        ? `Cloudinary HTTP ${String(errorRecord.http_code)}`
+        : null,
+      errorRecord.name,
+    ]
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate
+      }
+    }
+
+    try {
+      return JSON.stringify(errorRecord)
+    } catch (_) {
+      return 'Unknown Cloudinary error'
+    }
+  }
+
+  return 'Unknown Cloudinary error'
+}
 
 export const uploadToCloudinary = async (
   localFilePath: string,
@@ -35,13 +70,11 @@ export const uploadToCloudinary = async (
       uploadOptions
     )
 
+    cleanupLocalFile(localFilePath)
     return response
   } catch (error) {
-    // Remove file from local storage if upload fails
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath)
-    }
-    throw error
+    cleanupLocalFile(localFilePath)
+    throw new Error(`Cloudinary upload failed: ${getUploadErrorMessage(error)}`)
   }
 }
 
