@@ -6,6 +6,7 @@ import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { CreateResume } from "../models/createResume.model";
+import { Resume } from "../models/resume.model";
 import { Education } from "../models/education.model";
 import { Experience } from "../models/experience.model";
 import { ElevatorPitch } from "../models/elevatorPitch.model";
@@ -13,9 +14,11 @@ import { AwardsAndHonor } from "../models/awardsAndHonor.model";
 import { createNotification } from "../sockets/notification.service";
 import { Job } from "../models/job.model";
 import { User } from "../models/user.model";
+import { Company } from "../models/company.model";
+import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { io } from "../server";
 import { Notification } from "../models/notification.model";
-import { assertOwner, isPrivilegedRole } from "../utils/authz";
+import { assertOwner, idToString, isPrivilegedRole } from "../utils/authz";
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, resumeId, answer, hasValidVisa } = req.body;
@@ -46,12 +49,15 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  // If a resumeId is supplied, it must reference a resume owned by the applicant.
+  // If a resumeId is supplied, it must reference an uploaded resume owned by the
+  // applicant. AppliedJob.resumeId refs the `Resume` collection (the uploaded CV
+  // files), NOT `CreateResume` (the structured profile) — validate against the
+  // same collection the id comes from, or every valid upload is rejected as 403.
   if (resumeId !== undefined && resumeId !== null && resumeId !== "") {
     if (!mongoose.Types.ObjectId.isValid(resumeId)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid resume ID");
     }
-    const ownedResume = await CreateResume.findOne({ _id: resumeId, userId });
+    const ownedResume = await Resume.findOne({ _id: resumeId, userId });
     if (!ownedResume) {
       throw new AppError(
         httpStatus.FORBIDDEN,
@@ -161,17 +167,43 @@ export const getApplicationsByJob = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
     }
 
-    // Only the owner of the job (the recruiter/company that posted it) or an
-    // admin may view the applicants for that job.
-    const job = await Job.findById(jobId).select("userId");
+    // Only the owner of the job, the linked company/recruiter account owner,
+    // or an admin may view the applicants for that job.
+    const job = await Job.findById(jobId).select(
+      "userId companyId recruiterId"
+    );
     if (!job) {
       throw new AppError(httpStatus.NOT_FOUND, "Job not found");
     }
-    assertOwner(
-      req,
-      job.userId,
-      "You are not allowed to view applications for this job"
-    );
+
+    const requesterId = idToString(req.user?._id);
+    const isDirectOwner = requesterId === idToString(job.userId);
+    let isCompanyOwner = false;
+    let isRecruiterOwner = false;
+
+    if (job.companyId) {
+      const company = await Company.findById(job.companyId).select("userId");
+      isCompanyOwner = requesterId === idToString(company?.userId);
+    }
+
+    if (job.recruiterId) {
+      const recruiter = await RecruiterAccount.findById(job.recruiterId).select(
+        "userId"
+      );
+      isRecruiterOwner = requesterId === idToString(recruiter?.userId);
+    }
+
+    if (
+      !isPrivilegedRole(req.user?.role) &&
+      !isDirectOwner &&
+      !isCompanyOwner &&
+      !isRecruiterOwner
+    ) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You are not allowed to view applications for this job"
+      );
+    }
 
     // ✅ Extract pagination params (default: page=1, limit=10)
     const page = parseInt(req.query.page as string) || 1;
@@ -191,7 +223,10 @@ export const getApplicationsByJob = catchAsync(
 
     const applicationsWithResume = await Promise.all(
       applications.map(async (app) => {
-        const resume = await CreateResume.findOne({ userId: app.userId._id });
+        const candidateUserId = idToString((app.userId as any)?._id ?? app.userId);
+        const resume = candidateUserId
+          ? await CreateResume.findOne({ userId: candidateUserId })
+          : null;
         return {
           ...app.toObject(),
           resume,

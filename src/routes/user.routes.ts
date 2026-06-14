@@ -79,7 +79,7 @@ router.get("/candidates", protect, getCandidates);
 router.get("/recruiters", protect, getRecruitersWithAccounts);
 router.get("/companies", protect, getCompaniesWithAccounts);
 
-// fetch all user without admin
-router.get("/fetch/all/users", protect, fetchAllUsers);
+// Public people search used by the unauthenticated drawer/global search.
+router.get("/fetch/all/users", fetchAllUsers);
 
 export default router;

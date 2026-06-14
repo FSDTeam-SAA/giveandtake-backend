@@ -1331,9 +1331,7 @@ export const fetchAllUsers = catchAsync(async (req, res) => {
   const users = await User.find({
     role: { $ne: "admin" },
     deactivate: { $ne: true },
-  }).select(
-    "name avatar address phoneNum role slug"
-  );
+  }).select("name avatar address role slug");
 
   // Enrich users with photo and immediatelyAvailable (for candidates)
   const enrichedUsers = await Promise.all(
