@@ -125,6 +125,22 @@ const getContentType = (filename: string): string => {
     ".key": "application/octet-stream", // AES-128 key file
     ".mp4": "video/mp4",
     ".m4s": "video/iso.segment",
+    // Images — required so R2-served images render inline instead of downloading.
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    // Other media / documents that may be uploaded as attachments.
+    ".mov": "video/quicktime",
+    ".avi": "video/x-msvideo",
+    ".webm": "video/webm",
+    ".pdf": "application/pdf",
+    ".xlsx":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   };
   return contentTypes[ext] || "application/octet-stream";
 };

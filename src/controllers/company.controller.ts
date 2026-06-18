@@ -3,7 +3,7 @@ import { Company } from '../models/company.model'
 import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
-import { uploadToCloudinary } from '../utils/cloudinary'
+import { uploadToR2 } from '../utils/r2Upload'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import mongoose from 'mongoose'
 import AppError from '../errors/AppError'
@@ -118,7 +118,7 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     const user = await User.findById(req?.user?._id) as any
 
     if (files?.clogo?.[0]?.path) {
-      const logoRes = await uploadToCloudinary(files.clogo[0].path)
+      const logoRes = await uploadToR2(files.clogo[0].path)
       if (logoRes?.secure_url) {
         companyData.clogo = logoRes.secure_url
                 if (!user.avatar) {
@@ -130,7 +130,7 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
     }
 
     if (files?.banner?.[0]?.path) {
-      const certRes = await uploadToCloudinary(files.banner[0].path)
+      const certRes = await uploadToR2(files.banner[0].path)
       if (certRes?.secure_url) {
         companyData.banner = certRes.secure_url
       }
@@ -247,14 +247,14 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const files = req.files as Record<string, Express.Multer.File[]>
 
   if (files?.clogo) {
-    const logoRes = await uploadToCloudinary(files.clogo[0].path)
+    const logoRes = await uploadToR2(files.clogo[0].path)
     if (logoRes?.secure_url) {
       companyData.clogo = logoRes.secure_url
     }
   }
 
   if (files?.banner) {
-    const certRes = await uploadToCloudinary(files.banner[0].path)
+    const certRes = await uploadToR2(files.banner[0].path)
     if (certRes?.secure_url) {
       companyData.banner = certRes.secure_url
     }

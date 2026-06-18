@@ -3,7 +3,7 @@ import catchAsync from "../utils/catchAsync";
 import { JobCategory } from "../models/jobCategory.model";
 import sendResponse from "../utils/sendResponse";
 import httpStatus from "http-status";
-import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary";
+import { uploadToR2, deleteFromR2 } from "../utils/r2Upload";
 import AppError from "../errors/AppError";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 
@@ -21,7 +21,7 @@ export const createJobCategory = catchAsync(
 
     let categoryIcon = "";
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path);
+      const result = await uploadToR2(req.file.path);
 
       if (!result) {
         throw new AppError(
@@ -114,14 +114,14 @@ export const updateJobCategory = catchAsync(
     let newIcon = category.categoryIcon;
 
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path);
+      const result = await uploadToR2(req.file.path);
       if (!result) {
         throw new AppError(
           httpStatus.INTERNAL_SERVER_ERROR,
           "Failed to upload image"
         );
       }
-      await deleteFromCloudinary(category.categoryIcon);
+      await deleteFromR2(category.categoryIcon);
 
       newIcon = result.secure_url;
     }
@@ -153,7 +153,7 @@ export const deleteJobCategory = catchAsync(
     // Delete icon from Cloudinary
     const publicId = category.categoryIcon?.split("/").pop()?.split(".")[0];
     if (publicId) {
-      await deleteFromCloudinary(publicId);
+      await deleteFromR2(publicId);
     }
 
     await category.deleteOne();

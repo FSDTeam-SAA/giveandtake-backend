@@ -4,7 +4,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
-import { uploadToCloudinary } from '../utils/cloudinary'
+import { uploadToR2 } from '../utils/r2Upload'
 import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
 import mongoose, { Schema } from 'mongoose'
@@ -80,12 +80,12 @@ export const createRecruiterAccount = catchAsync(
     const files = req.files as { [fieldname: string]: Express.Multer.File[] }
 
     if (files?.videoFile?.[0]) {
-      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
+      const uploaded = await uploadToR2(files.videoFile[0].path)
       if (uploaded) videoUrl = uploaded.secure_url
     }
 
     if (files?.photo?.[0]) {
-      const uploaded = await uploadToCloudinary(files.photo[0].path)
+      const uploaded = await uploadToR2(files.photo[0].path)
       if (uploaded) {
         photoUrl = uploaded.secure_url
 
@@ -100,7 +100,7 @@ export const createRecruiterAccount = catchAsync(
     }
 
     if (files?.banner?.[0]?.path) {
-      const certRes = await uploadToCloudinary(files.banner[0].path);
+      const certRes = await uploadToR2(files.banner[0].path);
       if (certRes?.secure_url) {
         banner = certRes.secure_url;
       }
@@ -231,13 +231,13 @@ export const updateRecruiterAccount = catchAsync(
     }
 
     if (files?.videoFile) {
-      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
+      const uploaded = await uploadToR2(files.videoFile[0].path)
       if (uploaded) updates.videoFile = uploaded.secure_url
     }
 
     // // Handle new video upload
     if (files?.banner) {
-      const uploadedVideo = await uploadToCloudinary(files?.banner[0]?.path)
+      const uploadedVideo = await uploadToR2(files?.banner[0]?.path)
       if (uploadedVideo?.secure_url) {
         updates.banner = uploadedVideo.secure_url
         // Optional: delete old video from Cloudinary if storing public_id
@@ -246,7 +246,7 @@ export const updateRecruiterAccount = catchAsync(
 
     // Handle new photo upload
     if (files?.photo) {
-      const uploadedPhoto = await uploadToCloudinary(files?.photo[0]?.path)
+      const uploadedPhoto = await uploadToR2(files?.photo[0]?.path)
       if (uploadedPhoto?.secure_url) {
         updates.photo = uploadedPhoto.secure_url
         // Optional: delete old photo from Cloudinary if storing public_id

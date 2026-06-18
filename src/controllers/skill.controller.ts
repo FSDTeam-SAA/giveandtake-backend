@@ -3,7 +3,6 @@ import httpStatus from "http-status";
 import { SkillModel } from "../models/skill.model";
 import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
-import { uploadToCloudinary } from "../utils/cloudinary";
 import AppError from "../errors/AppError";
 
 // CREATE Skill
@@ -16,7 +15,7 @@ export const createSkill = catchAsync(async (req: Request, res: Response) => {
 
   let categoryIcon = "";
 //   if (req.file) {
-//     const result = await uploadToCloudinary(req.file.path);
+//     const result = await uploadToR2(req.file.path);
 
 //     if (!result) {
 //       throw new AppError(
@@ -79,7 +78,7 @@ export const updateSkill = catchAsync(async (req: Request, res: Response) => {
   if (name) updateData.name = name;
 
 //   if (req.file) {
-//     const result = await uploadToCloudinary(req.file.path);
+//     const result = await uploadToR2(req.file.path);
 //     if (!result) {
 //       throw new AppError(
 //         httpStatus.INTERNAL_SERVER_ERROR,

@@ -19,7 +19,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { Request, Response } from "express";
 
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
-import { deleteFromCloudinary, uploadToCloudinary } from "../utils/cloudinary";
+import { deleteFromR2, uploadToR2 } from "../utils/r2Upload";
 import { CreateResume } from "../models/createResume.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
@@ -1038,13 +1038,13 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
   // Handle avatar upload
   if (req.files && (req.files as any).photo) {
     const photo = (req.files as any).photo[0];
-    const uploadResult = await uploadToCloudinary(photo.path, "avatars");
+    const uploadResult = await uploadToR2(photo.path, "avatars");
 
     // Remove old avatar from Cloudinary if needed (optional)
     const existingUser = await User.findById(id).select("avatar role");
     if (existingUser?.avatar?.url) {
       const publicId = path.basename(existingUser.avatar.url).split(".")[0];
-      await deleteFromCloudinary(publicId);
+      await deleteFromR2(publicId);
     }
 
     filteredData.avatar = {

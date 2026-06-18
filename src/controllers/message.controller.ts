@@ -5,7 +5,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import mongoose from 'mongoose'
 import { io } from '../server'
-import { uploadToCloudinary } from '../utils/cloudinary' // Adjust path
+import { uploadToR2 } from '../utils/r2Upload' // Adjust path
 import { MessageRoom } from '../models/messageRoom.model'
 import { idToString, isPrivilegedRole } from '../utils/authz'
 import stripHtml from '../utils/stripHtml'
@@ -40,7 +40,7 @@ const isRoomParticipant = (req: Request, room: any): boolean => {
 //   // Upload all files to Cloudinary
 //   const fileData = await Promise.all(
 //     files.map(async (file) => {
-//       const result = await uploadToCloudinary(file.path)
+//       const result = await uploadToR2(file.path)
 //       if (result) {
 //         return {
 //           filename: file.originalname,
@@ -126,7 +126,7 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   // Upload all files to Cloudinary
   const fileData = await Promise.all(
     files.map(async (file) => {
-      const result = await uploadToCloudinary(file.path)
+      const result = await uploadToR2(file.path)
       if (result) {
         return {
           filename: file.originalname,

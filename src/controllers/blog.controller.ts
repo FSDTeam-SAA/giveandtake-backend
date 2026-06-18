@@ -4,7 +4,7 @@ import { Blog } from '../models/Blog.model'
 import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import sendResponse from '../utils/sendResponse'
-import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
+import { deleteFromR2, uploadToR2 } from '../utils/r2Upload'
 import fs from 'fs'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 import chatbotService from '../services/chatbot.service'
@@ -90,7 +90,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
     const localPath = req.file.path
 
     // Upload image to Cloudinary
-    const uploadResult = await uploadToCloudinary(localPath, 'blogs')
+    const uploadResult = await uploadToR2(localPath, 'blogs')
 
     if (!uploadResult?.secure_url) {
       throw new AppError(
@@ -196,7 +196,7 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
     const localPath = req.file.path
 
     // Upload new image to Cloudinary
-    const uploadResult = await uploadToCloudinary(localPath, 'blogs')
+    const uploadResult = await uploadToR2(localPath, 'blogs')
 
     if (!uploadResult?.secure_url) {
       throw new AppError(
@@ -207,7 +207,7 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
 
     // Delete old image from Cloudinary if exists
     if (blog.imagePublicId) {
-      await deleteFromCloudinary(blog.imagePublicId)
+      await deleteFromR2(blog.imagePublicId)
     }
 
     // Update with new image details
