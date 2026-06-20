@@ -1058,6 +1058,12 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
           resume.firstName = updateData.name.split(" ")[0]
           resume.lastName = updateData.name.split(" ")[1]
         }
+        // Self-heal a corrupted role discriminator. The resume update flow
+        // previously persisted a mutation marker (e.g. "update") into
+        // CreateResume.type, which then failed full validation here on save().
+        if (!["candidate", "recruiter", "admin"].includes(resume.type as string)) {
+          resume.type = "candidate"
+        }
         await resume.save()
       }
     } else if (existingUser?.role === 'recruiter') {

@@ -271,6 +271,28 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     new: true,
     runValidators: true,
   })
+
+  // Keep the owner's shared User identity in sync with the company profile.
+  // The navbar/account avatar+name (and search/listing photos) are read from
+  // the User document via GET /user/single, and createCompany + the recruiter
+  // and candidate controllers already mirror logo/name onto it. updateCompany
+  // previously skipped this, so company logo/name edits never reached those
+  // surfaces — mirror it here so edits reflect everywhere.
+  const owner = await User.findById(company.userId)
+  if (owner) {
+    let ownerChanged = false
+    if (companyData.clogo) {
+      if (!owner.avatar) owner.avatar = { url: '' }
+      owner.avatar.url = companyData.clogo
+      ownerChanged = true
+    }
+    if (typeof companyData.cname === 'string' && companyData.cname.trim()) {
+      owner.name = companyData.cname
+      ownerChanged = true
+    }
+    if (ownerChanged) await owner.save()
+  }
+
   const honors = JSON.parse(req.body.honors || '[]') // expecting array
   let results
   if (honors.length > 0) {

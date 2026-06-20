@@ -256,10 +256,24 @@ export const updateRecruiterAccount = catchAsync(
         user.avatar.url = uploadedPhoto.secure_url || "";
       }
     }
-      if (typeof req.body.name === 'string' && req.body.name) {
-    user.name = req.body.name
-  }
-  await user?.save()
+    // Keep the shared User.name in sync with the recruiter profile. The edit
+    // form submits firstName/sureName separately (not a combined `name`), and
+    // createRecruiterAccount already mirrors them onto User.name — do the same on
+    // update so the navbar / mobile drawer name reflects a rename. Fall back to
+    // an explicit `name` if one is sent.
+    if (req.body.firstName !== undefined || req.body.sureName !== undefined) {
+      const first = (req.body.firstName ?? existingAccount.firstName ?? '')
+        .toString()
+        .trim()
+      const sure = (req.body.sureName ?? existingAccount.sureName ?? '')
+        .toString()
+        .trim()
+      const combined = [first, sure].filter(Boolean).join(' ')
+      if (combined) user.name = combined
+    } else if (typeof req.body.name === 'string' && req.body.name) {
+      user.name = req.body.name
+    }
+    await user?.save()
 
     const updatedAccount = await RecruiterAccount.findOneAndUpdate(
       { userId },

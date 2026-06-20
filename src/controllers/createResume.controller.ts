@@ -31,7 +31,10 @@ const catchAsync = (fn: AsyncRequestHandler): RequestHandler => {
 // `userId`, `photo`, `banner` and `file` are derived server-side and must
 // never be taken from the parsed client payload.
 const RESUME_FIELDS = [
-  "type",
+  // NOTE: `type` is intentionally NOT here. It is the role discriminator
+  // (candidate|recruiter|admin) and must be derived server-side. The client
+  // sends a mutation marker ("update") under this key, which previously got
+  // persisted into CreateResume.type and corrupted the document.
   "aboutUs",
   "title",
   "firstName",
@@ -127,6 +130,13 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const resumeDoc = await CreateResume.create({
     ...pickResumeFields(resume),
     userId,
+    // Role discriminator is derived from the authenticated user, never the body.
+    type:
+      user.role === "recruiter"
+        ? "recruiter"
+        : user.role === "admin"
+        ? "admin"
+        : "candidate",
     photo: photoUrl,
     banner: bannerUrl,
     file: resumeFileRelative
@@ -294,6 +304,14 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   const resumeUpdate: Record<string, unknown> = pickResumeFields(resume);
   if (resume.photo !== undefined) resumeUpdate.photo = resume.photo;
   if (resume.banner !== undefined) resumeUpdate.banner = resume.banner;
+  // Role discriminator is server-derived; this also repairs any document
+  // previously corrupted with a mutation marker ("update") in this field.
+  resumeUpdate.type =
+    user.role === "recruiter"
+      ? "recruiter"
+      : user.role === "admin"
+      ? "admin"
+      : "candidate";
   const updatedResume = await CreateResume.findOneAndUpdate(
     { userId },
     { ...resumeUpdate, userId },
