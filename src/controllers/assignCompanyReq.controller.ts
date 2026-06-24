@@ -65,7 +65,7 @@ export const employeeReq = catchAsync(async (req, res) => {
       to: company.userId as any,
       message: `Recruiter connection request received`,
       type: "req_application",
-      id: updatedReq?._id as any,
+      id: company.userId as any,
     });
 
     return sendResponse(res, {
@@ -84,7 +84,7 @@ export const employeeReq = catchAsync(async (req, res) => {
     to: company.userId as any,
     message: `Recruiter connection request received`,
     type: "req_application",
-    id: reqCom._id,
+    id: company.userId as any,
   });
 
   sendResponse(res, {

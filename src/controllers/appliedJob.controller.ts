@@ -120,7 +120,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     to: job.userId as mongoose.Types.ObjectId,
     message: `A new candidate has applied for your job "${job.title}".`,
     type: "job_application",
-    id: application._id,
+    id: job._id as mongoose.Types.ObjectId,
   });
   const count = await Notification.countDocuments({
     to: job.userId,

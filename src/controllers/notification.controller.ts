@@ -5,6 +5,9 @@ import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { broadcastUnreadCount } from '../sockets/notification.service'
 import { asQueryString, assertOwner, isPrivilegedRole } from '../utils/authz'
+import { AppliedJob } from '../models/appliedJob.model'
+import { Job } from '../models/job.model'
+import { ReqCompany } from '../models/assignCompanyReq.model'
 
 /*********************************
  * GET ALL NOTIFICATIONS BY USER *
@@ -21,11 +24,69 @@ export const getUserNotifications = catchAsync(
     const notifications = await Notification.find({ to: userId }).sort({
       createdAt: -1,
     })
+    const applicationNotificationIds = notifications
+      .filter((notification) => notification.type === 'job_application')
+      .map((notification) => notification.id)
+
+    const applications = applicationNotificationIds.length
+      ? await AppliedJob.find({ _id: { $in: applicationNotificationIds } }).select('jobId')
+      : []
+    const applicationJobIds = new Map(
+      applications.map((application) => [
+        String(application._id),
+        application.jobId,
+      ])
+    )
+    const expiryNotificationJobIds = notifications
+      .filter((notification) => notification.type === 'job_expiry_warning')
+      .map((notification) => notification.id)
+    const expiryJobs = expiryNotificationJobIds.length
+      ? await Job.find({ _id: { $in: expiryNotificationJobIds } }).select('companyId recruiterId')
+      : []
+    const expiryJobHrefs = new Map(
+      expiryJobs.map((job) => [
+        String(job._id),
+        job.companyId ? `/manage-jobs/${job.companyId}` : '/recruiter-dashboard',
+      ])
+    )
+    const companyRequestNotificationIds = notifications
+      .filter((notification) => notification.type === 'req_application')
+      .map((notification) => notification.id)
+    const companyRequests = companyRequestNotificationIds.length
+      ? await ReqCompany.find({ _id: { $in: companyRequestNotificationIds } })
+          .select('company')
+          .populate('company', 'userId')
+      : []
+    const companyRequestHrefs = new Map(
+      companyRequests
+        .map((request) => {
+          const company = request.company as any
+          const companyUserId = company?.userId
+          return companyUserId
+            ? [String(request._id), `/internal-recruiter-list/${companyUserId}`]
+            : null
+        })
+        .filter((entry): entry is [string, string] => Boolean(entry))
+    )
+    const data = notifications.map((notification) => {
+      const plainNotification = notification.toObject()
+      const jobId = applicationJobIds.get(String(notification.id))
+      const href = expiryJobHrefs.get(String(notification.id))
+        ?? (
+          notification.message.toLowerCase().includes('request received')
+            ? companyRequestHrefs.get(String(notification.id))
+            : undefined
+        )
+
+      if (jobId) return { ...plainNotification, id: jobId }
+      if (href) return { ...plainNotification, href }
+      return plainNotification
+    })
 
     res.status(httpStatus.OK).json({
       success: true,
       message: 'Notifications fetched successfully',
-      data: notifications,
+      data,
     })
   }
 )
