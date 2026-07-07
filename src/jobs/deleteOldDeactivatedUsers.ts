@@ -11,6 +11,7 @@ import { AppliedJob } from '../models/appliedJob.model'
 import { Resume } from '../models/resume.model'
 import { deleteFromS3, deleteS3Keys, listS3KeysByPrefix } from '../services/s3.service'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
+import { sendEmail } from '../utils/sendEmail'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -19,6 +20,23 @@ const SUBSCRIPTION_EXPIRY_NOTICE =
   'Your subscription has expired, please renew or upload a free 30-second elevator pitch video today.';
 const PITCH_REMOVAL_NOTICE =
   'Renew your plan to upload a new 60-seconds video or upload a free 30-seconds video.';
+const PITCH_EXPIRED_EMAIL_SUBJECT = 'Your EVPitch has expired';
+
+const buildExpiredPitchEmail = (name?: string) =>
+  buildEvpEmail({
+    heading: 'EVPitch Expired',
+    greetingName: getFirstName(name) || 'User',
+    signer: 'EVP Admin',
+    titleTag: PITCH_EXPIRED_EMAIL_SUBJECT,
+    bodyHtml: `
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        Your EVPitch has expired and is no longer available on your profile.
+      </p>
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        Please upload a new EVPitch Video before applying for roles.
+      </p>
+    `,
+  });
 
 export const deleteOldDeactivatedUsers = async () => {
   const THIRTY_DAYS = 30 * MILLIS_PER_DAY
@@ -333,12 +351,12 @@ export const removeExpiredElevatorPitches = async () => {
       continue;
     }
 
-    const hasActivePlan = await paymentInfo.exists({
+    const activePlan = await paymentInfo.findOne({
       userId: plan.userId,
       planStatus: "active",
       paymentStatus: "complete",
     });
-    if (hasActivePlan) {
+    if (activePlan && !isPaymentExpired(activePlan, now)) {
       if (plan.isModified("expiresAt")) {
         await plan.save();
       }
@@ -351,6 +369,8 @@ export const removeExpiredElevatorPitches = async () => {
       await plan.save();
       continue;
     }
+
+    const user = await User.findById(plan.userId).select('name email');
 
     await removeElevatorPitchArtifacts({
       userId: String(plan.userId),
@@ -367,6 +387,14 @@ export const removeExpiredElevatorPitches = async () => {
       type: "elevator_pitch_removed",
       id: pitch._id as mongoose.Types.ObjectId,
     });
+
+    if (user?.email) {
+      await sendEmail(
+        user.email,
+        PITCH_EXPIRED_EMAIL_SUBJECT,
+        buildExpiredPitchEmail(user.name)
+      );
+    }
   }
 
   console.log(

@@ -10,7 +10,7 @@ import { protect } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-router.post('/', applyForJob)
+router.post('/', protect, applyForJob)
 router.get('/job/:jobId', getApplicationsByJob)
 router.get('/user/:userId', getApplicationsByUser)
 router.patch('/:id/status', protect, updateApplicationStatus)

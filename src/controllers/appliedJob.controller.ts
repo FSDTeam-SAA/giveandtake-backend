@@ -15,9 +15,15 @@ import { Job } from "../models/job.model";
 import { User } from "../models/user.model";
 import { io } from "../server";
 import { Notification } from "../models/notification.model";
+import { assertUserCanApplyWithElevatorPitch } from "../helper/elevatorPitchApplicationAccess";
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
-  const { jobId, userId, status, resumeId, answer, hasValidVisa } = req.body;
+  const { jobId, status, resumeId, answer, hasValidVisa } = req.body;
+  const userId = req.user?._id?.toString();
+
+  if (!userId) {
+    throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
+  }
 
   const exists = await AppliedJob.findOne({ jobId, userId });
   if (exists) {
@@ -36,6 +42,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
       "You need to create your resume before applying to this job"
     );
   }
+
+  await assertUserCanApplyWithElevatorPitch(userId);
 
   const noticePeriodReq = job.applicationRequirement.find(
     (req: any) => req.requirement === "noticePeriod"

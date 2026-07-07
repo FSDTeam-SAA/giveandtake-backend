@@ -107,6 +107,16 @@ class VideoProcessingQueue {
       await downloadS3ObjectToFile({ key: s3Key, destinationPath: localSource })
 
       const metadata = await getVideoMetadata(localSource)
+      pitch.metadata = {
+        duration: metadata.duration,
+        format: metadata.format,
+        vcodec: metadata.vcodec,
+        rotation: metadata.rotation,
+        width: metadata.width,
+        height: metadata.height,
+      }
+      await pitch.save()
+
       await validateElevatorPitchAccess(userId.toString(), metadata.duration)
 
       const workingHlsDir = path.join(
@@ -149,14 +159,6 @@ class VideoProcessingQueue {
           hls: null,
           key: null,
         },
-      }
-      pitch.metadata = {
-        duration: metadata.duration,
-        format: metadata.format,
-        vcodec: metadata.vcodec,
-        rotation: metadata.rotation,
-        width: metadata.width,
-        height: metadata.height,
       }
       pitch.processing = {
         ...(pitch.processing ?? {}),
