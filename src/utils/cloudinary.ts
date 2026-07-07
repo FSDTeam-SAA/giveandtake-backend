@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary'
 import fs from 'fs'
+import path from 'path'
 import config from '../config/config'
 
 cloudinary.config({

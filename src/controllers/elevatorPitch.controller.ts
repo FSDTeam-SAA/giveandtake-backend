@@ -6,6 +6,7 @@ import AppError from '../errors/AppError'
 import catchAsync from '../utils/catchAsync'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import {
+  deleteFromS3,
   getSignedS3Url,
   getSignedUploadUrl,
 } from '../services/s3.service'
@@ -50,6 +51,15 @@ const resolveUserId = (req: Request): string => {
   throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 }
 
+const resolveUploadUserId = (req: Request): string => {
+  // @ts-ignore - added by auth middleware
+  if (req.user?._id) {
+    // @ts-ignore
+    return req.user._id.toString()
+  }
+  throw new AppError(httpStatus.BAD_REQUEST, 'Authenticated user is required')
+}
+
 const sanitizeFileName = (name: string) =>
   name
     .trim()
@@ -83,9 +93,35 @@ const buildRawS3Key = (userId: string, fileName: string) => {
   return `elevator_pitches/${userId}/source/${Date.now()}-${token}-${fileName}`
 }
 
+const assertUploadKeyMatchesSession = (
+  userId: string,
+  fileKey: string,
+  expectedKey?: string | null
+) => {
+  const expectedPrefix = `elevator_pitches/${userId}/source/`
+
+  if (!fileKey.startsWith(expectedPrefix)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid upload file key')
+  }
+
+  if (!expectedKey) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      'Upload session is no longer valid. Request a new upload URL.'
+    )
+  }
+
+  if (fileKey !== expectedKey) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      'Upload session mismatch. Request a new upload URL and retry.'
+    )
+  }
+}
+
 export const requestElevatorPitchUploadUrl = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = resolveUserId(req)
+    const userId = resolveUploadUserId(req)
 
     const fileNameRaw = ensureString(req.body?.fileName, 'fileName')
     const fileType = ensureString(req.body?.fileType, 'fileType')
@@ -184,7 +220,7 @@ export const requestElevatorPitchUploadUrl = catchAsync(
 
 export const completeElevatorPitchUpload = catchAsync(
   async (req: Request, res: Response) => {
-    const userId = resolveUserId(req)
+    const userId = resolveUploadUserId(req)
     const fileKey = ensureString(req.body?.fileKey, 'fileKey')
     const fileName =
       typeof req.body?.fileName === 'string' ? req.body.fileName : undefined
@@ -209,6 +245,8 @@ export const completeElevatorPitchUpload = catchAsync(
         'Elevator pitch already completed. Delete the existing video to re-upload.'
       )
     }
+
+    assertUploadKeyMatchesSession(userId, fileKey, pitch.video?.rawKey)
 
     // Save raw reference early so failures can be audited & cleaned up.
     pitch.video = {
@@ -238,10 +276,7 @@ export const completeElevatorPitchUpload = catchAsync(
       // Use a short-lived signed URL so ffprobe can read from S3 without downloading the whole file.
       const signedGetUrl = await getSignedS3Url(fileKey, 10 * 60) // 10 minutes
       const meta = await getVideoMetadata(signedGetUrl)
-      // Enforce access limits here so the client gets an immediate error (not 202)
-      await validateElevatorPitchAccess(userId.toString(), meta.duration)
 
-      // persist basic metadata early (optional but handy)
       pitch.metadata = {
         duration: meta.duration,
         format: meta.format,
@@ -251,6 +286,9 @@ export const completeElevatorPitchUpload = catchAsync(
         height: meta.height,
       }
       await pitch.save()
+
+      // Enforce access limits here so the client gets an immediate error (not 202).
+      await validateElevatorPitchAccess(userId.toString(), meta.duration)
     } catch (error) {
       const message =
         (error as Error)?.message ?? 'Validation failed for uploaded video'
@@ -265,9 +303,16 @@ export const completeElevatorPitchUpload = catchAsync(
       }
       await pitch.save()
 
-      // Optionally delete the just-uploaded source and any leftover HLS artifacts
-      // (safe to keep if you prefer debugging). Comment this out if you want to retain the raw file.
-      await removeElevatorPitchArtifacts({ userId, rawKey: fileKey })
+      // Remove only this failed source object. Deleting whole prefixes here can
+      // race with a retry or an already-ready HLS output for the same user.
+      try {
+        await deleteFromS3(fileKey)
+      } catch (deleteError) {
+        console.warn(
+          `Failed to delete invalid elevator pitch source "${fileKey}":`,
+          deleteError
+        )
+      }
 
       // Re-throw so catchAsync sends the proper HTTP status (from AppError)
       throw error
