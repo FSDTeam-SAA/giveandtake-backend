@@ -1,0 +1,7 @@
+node_modules
+uploads
+dist
+test.html
+/temp/
+
+.env

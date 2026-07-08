@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Full Message System Tester</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; }
+    .file-preview img, .file-preview video { max-width: 100px; max-height: 100px; margin: 5px; }
+    .message { border-bottom: 1px solid #ccc; padding: 10px 0; }
+    #pagination button { margin: 5px; }
+  </style>
+</head>
+<body>
+  <h2>📤 Send a Message</h2>
+
+  <form id="messageForm">
+    <label>User ID:</label>
+    <input type="text" id="userId" required />
+
+    <label>Room ID:</label>
+    <input type="text" id="roomId" required />
+
+    <label>Message:</label>
+    <textarea id="message" required></textarea>
+
+    <label>Upload Files:</label>
+    <input type="file" id="files" multiple />
+    <div class="file-preview" id="filePreview"></div>
+
+    <button type="submit">Send Message</button>
+  </form>
+
+  <hr/>
+
+  <h2>💬 Messages</h2>
+  <div id="messages"></div>
+  <div id="pagination"></div>
+
+  <script>
+    const API_BASE = 'http://localhost:5000/api/v1/message'; // Change if needed
+    const socket = io('http://localhost:5000'); // Change if needed
+
+    const messageForm = document.getElementById('messageForm');
+    const messagesContainer = document.getElementById('messages');
+    const fileInput = document.getElementById('files');
+    const filePreview = document.getElementById('filePreview');
+    const pagination = document.getElementById('pagination');
+
+    let currentRoom = '';
+    let currentPage = 1;
+
+    // ----------- Preview Uploaded Files -------------
+    fileInput.addEventListener('change', () => {
+      filePreview.innerHTML = '';
+      [...fileInput.files].forEach(file => {
+        const url = URL.createObjectURL(file);
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (['jpg', 'jpeg', 'png'].includes(ext)) {
+          filePreview.innerHTML += `<img src="${url}" />`;
+        } else if (['mp4', 'mov', 'avi'].includes(ext)) {
+          filePreview.innerHTML += `<video src="${url}" controls></video>`;
+        }
+      });
+    });
+
+    // ----------- Send Message -------------
+    messageForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const userId = document.getElementById('userId').value;
+      const roomId = document.getElementById('roomId').value;
+      const message = document.getElementById('message').value;
+
+      const formData = new FormData();
+      formData.append('userId', userId);
+      formData.append('roomId', roomId);
+      formData.append('message', message);
+      [...fileInput.files].forEach(file => {
+        formData.append('files', file);
+      });
+
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('message').value = '';
+        fileInput.value = '';
+        filePreview.innerHTML = '';
+        fetchMessages(roomId, 1);
+      } else {
+        alert('Error: ' + data.message);
+      }
+    });
+
+    // ----------- Fetch Messages with Pagination -------------
+    async function fetchMessages(roomId, page = 1) {
+      const res = await fetch(`${API_BASE}/${roomId}?page=${page}&limit=5`);
+      const data = await res.json();
+      currentPage = page;
+
+      if (!data.success) return alert('Failed to fetch messages');
+
+      messagesContainer.innerHTML = '';
+      data.data.forEach(msg => {
+        messagesContainer.innerHTML += `
+          <div class="message">
+            <strong>${msg.userId}</strong>: ${msg.message}<br/>
+            ${msg.file?.map(f => {
+              const ext = f.filename.split('.').pop();
+              if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                return `<img src="${f.url}" style="max-height:80px;" />`;
+              } else if (['mp4', 'mov', 'avi'].includes(ext)) {
+                return `<video src="${f.url}" controls style="max-height:80px;"></video>`;
+              } else {
+                return `<a href="${f.url}" target="_blank">${f.filename}</a>`;
+              }
+            }).join('') || ''}
+            <br/><small>${new Date(msg.createdAt).toLocaleString()}</small>
+          </div>
+        `;
+      });
+
+      // Pagination controls
+      pagination.innerHTML = '';
+      for (let i = 1; i <= data.meta.totalPages; i++) {
+        pagination.innerHTML += `<button onclick="fetchMessages('${roomId}', ${i})" ${i === page ? 'disabled' : ''}>${i}</button>`;
+      }
+    }
+
+    // ----------- Socket.io: Join Room and Listen -------------
+    document.getElementById('roomId').addEventListener('blur', (e) => {
+      const roomId = e.target.value;
+      if (roomId && roomId !== currentRoom) {
+        if (currentRoom) socket.emit('leaveRoom', currentRoom);
+        currentRoom = roomId;
+        socket.emit('joinRoom', roomId);
+        fetchMessages(roomId, 1);
+      }
+    });
+
+    socket.on('newMessage', (message) => {
+      if (message.roomId === currentRoom) {
+        fetchMessages(currentRoom, currentPage);
+      }
+    });
+  </script>
+</body>
+</html>
