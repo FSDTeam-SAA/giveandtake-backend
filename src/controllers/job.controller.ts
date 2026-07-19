@@ -29,6 +29,9 @@ import {
 } from "../services/embedding.service";
 import { jobFitService } from "../services/jobFit.service";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
+import { capQuery, escapeRegex, wordStartRegex } from "../utils/regex";
+import { SkillModel } from "../models/skill.model";
+import { JobCategory } from "../models/jobCategory.model";
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
   console.warn(
@@ -755,130 +758,215 @@ function makeLooseRegexFromQuery(q: string): RegExp {
   return new RegExp(loose, "i");
 }
 
-export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
-  // Normalize title safely
-  const rawTitle = req.query.title;
-  const title =
-    typeof rawTitle === "string"
-      ? rawTitle
-      : Array.isArray(rawTitle)
-      ? rawTitle.join(" ")
-      : undefined;
+const LOCATION_TYPE_SYNONYMS: Record<string, string[]> = {
+  remote: ["remote", "wfh", "work from home", "work-from-home"],
+  hybrid: ["hybrid"],
+  onsite: ["onsite", "on-site", "on site", "in office", "in-office"],
+};
 
-  const detectedEmploymentTypes = detectEmploymentTypes(title);
+// 🧠 Detect location types (onsite/remote/hybrid) from a free-text query
+function detectLocationTypes(q: unknown): string[] {
+  if (!q) return [];
+  const text = Array.isArray(q)
+    ? q.join(" ").toLowerCase()
+    : String(q).toLowerCase();
 
-  // Common approval/date filters
-  const publishDateFilter = {
-    $or: [
-      { publishDate: { $exists: false } },
-      { publishDate: null },
-      { publishDate: { $lte: new Date() } },
-    ],
-  };
-  const deadlineFilter = {
-    $or: [
-      { deadline: { $exists: false } },
-      { deadline: null },
-      { deadline: { $gte: new Date() } },
-    ],
-  };
+  const matches = new Set<string>();
+  for (const [canonical, variants] of Object.entries(LOCATION_TYPE_SYNONYMS)) {
+    for (const v of variants) {
+      const pattern = v.replace(/\s*-\s*/g, "[-\\s]?").replace(/\s+/g, "\\s*");
+      const re = new RegExp(`\\b${pattern}\\b`, "i");
+      if (re.test(text)) {
+        matches.add(canonical);
+        break;
+      }
+    }
+  }
+  return Array.from(matches);
+}
 
-  const baseFilter: any = {
+// Remove every synonym token from the text; used to decide whether a query is
+// nothing but structured intent (e.g. "remote full time") and $text can be skipped.
+function stripSynonymTokens(
+  text: string,
+  synonymMaps: Record<string, string[]>[]
+): string {
+  let t = text.toLowerCase();
+  for (const map of synonymMaps) {
+    for (const variants of Object.values(map)) {
+      for (const v of variants) {
+        const pattern = v
+          .toLowerCase()
+          .replace(/\s*-\s*/g, "[-\\s]?")
+          .replace(/\s+/g, "\\s*");
+        t = t.replace(new RegExp(`\\b${pattern}\\b`, "ig"), " ");
+      }
+    }
+  }
+  return t.trim();
+}
+
+const JOB_EMPLOYMENT_TYPES = [
+  "full-time",
+  "part-time",
+  "internship",
+  "contract",
+  "temporary",
+  "freelance",
+  "volunteer",
+];
+const JOB_LOCATION_TYPES = ["onsite", "remote", "hybrid"];
+
+// Parse a comma-separated enum param, keeping only allowed values
+function parseEnumList(raw: unknown, allowed: string[]): string[] {
+  const text = Array.isArray(raw)
+    ? raw.join(",")
+    : typeof raw === "string"
+    ? raw
+    : "";
+  if (!text) return [];
+  const set = new Set(allowed);
+  return Array.from(
+    new Set(
+      text
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter((v) => set.has(v))
+    )
+  );
+}
+
+// Shared gating for publicly visible jobs (approval + publish/deadline windows).
+// All date gating lives inside `$and` so extra clauses can be pushed safely
+// without clobbering the `$or` blocks.
+function buildLiveJobFilter() {
+  const now = new Date();
+  return {
     arcrivedJob: false,
     jobApprove: "approved",
     adminApprove: true,
-    ...publishDateFilter,
-    $and: [deadlineFilter],
+    $and: [
+      {
+        $or: [
+          { publishDate: { $exists: false } },
+          { publishDate: null },
+          { publishDate: { $lte: now } },
+        ],
+      },
+      {
+        $or: [
+          { deadline: { $exists: false } },
+          { deadline: null },
+          { deadline: { $gte: now } },
+        ],
+      },
+    ] as any[],
   };
+}
 
-  // If employment intent detected, add explicit filter by enum
-  if (detectedEmploymentTypes.length > 0) {
-    baseFilter.employement_Type = { $in: detectedEmploymentTypes };
+export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
+  // Free-text query: `q` preferred, `title` kept for back-compat (`q` wins)
+  const q = capQuery(req.query.q, 200) || capQuery(req.query.title, 200);
+  const location = capQuery(req.query.location, 200);
+
+  // Structured filters (invalid values silently ignored — no 500s)
+  const categoryRaw =
+    typeof req.query.category === "string" ? req.query.category : "";
+  const category = mongoose.isValidObjectId(categoryRaw) ? categoryRaw : "";
+  const locationTypeParam = parseEnumList(
+    req.query.locationType ?? req.query.location_Type,
+    JOB_LOCATION_TYPES
+  );
+  const employmentTypeParam = parseEnumList(
+    req.query.employmentType ?? req.query.employement_Type,
+    JOB_EMPLOYMENT_TYPES
+  );
+
+  // Explicit params override free-text intent sniffing
+  const employmentTypes = employmentTypeParam.length
+    ? employmentTypeParam
+    : detectEmploymentTypes(q);
+  const locationTypes = locationTypeParam.length
+    ? locationTypeParam
+    : detectLocationTypes(q);
+
+  const { page, limit: rawLimit } = getPaginationParams(req.query);
+  // Generous cap: existing mobile clients may request large pages
+  const limit = Math.min(rawLimit, 100);
+  const skip = (page - 1) * limit;
+
+  const filter: any = buildLiveJobFilter();
+
+  if (employmentTypes.length > 0) {
+    filter.employement_Type = { $in: employmentTypes };
+  }
+  if (locationTypes.length > 0) {
+    filter.location_Type = { $in: locationTypes };
+  }
+  if (category) {
+    filter.jobCategoryId = new mongoose.Types.ObjectId(category);
+  }
+  if (location) {
+    filter.$and.push({
+      location: { $regex: escapeRegex(location), $options: "i" },
+    });
   }
 
-  const { page, limit, skip } = getPaginationParams(req.query);
+  // If the query is nothing but structured intent (e.g. "remote full time"),
+  // the enum filters above already cover it — skip $text entirely.
+  const onlyStructuredIntent =
+    !!q &&
+    (employmentTypes.length > 0 || locationTypes.length > 0) &&
+    stripSynonymTokens(q, [EMPLOYMENT_SYNONYMS, LOCATION_TYPE_SYNONYMS])
+      .length === 0;
+  const hasTextQuery = !!q && !onlyStructuredIntent;
 
-  // Heuristic: if the query looks like it's ONLY employment-type intent,
-  // skip $text entirely (since employement_Type isn't in the text index).
-  const onlyEmploymentIntent =
-    !!title &&
-    detectedEmploymentTypes.length > 0 &&
-    // strip the matched variants from the query and see if anything meaningful remains
-    (() => {
-      let t = title!.toLowerCase();
-      for (const variants of Object.values(EMPLOYMENT_SYNONYMS)) {
-        for (const v of variants) {
-          const pattern = v
-            .toLowerCase()
-            .replace(/\s*-\s*/g, "[-\\s]?")
-            .replace(/\s+/g, "\\s*");
-          t = t.replace(new RegExp(`\\b${pattern}\\b`, "ig"), " ");
-        }
-      }
-      // if nothing but whitespace remains, it's only employment intent
-      return t.trim().length === 0;
-    })();
-
-  let filter: any = { ...baseFilter };
-  if (title && !onlyEmploymentIntent) {
-    // Use $text only when there's more than just employment-type intent
-    filter.$text = { $search: title };
-  }
-
-  let [totalJobs, jobs] = await Promise.all([
-    Job.countDocuments(filter),
-    Job.find(filter)
-      .select("-embedding")
-      .skip(skip)
-      .limit(limit)
-      .sort(
-        filter.$text ? { score: { $meta: "textScore" } } : { createdAt: -1 }
-      )
-      .populate("companyId recruiterId userId")
-      .lean(),
-  ]);
-
-  // Fallback regex search if we used $text and got nothing
-  if (title && !onlyEmploymentIntent && jobs.length === 0) {
-    const looseRe = makeLooseRegexFromQuery(title);
-
-    const regexFilter: any = {
-      ...baseFilter,
-      $or: [
-        { title: { $regex: looseRe } },
-        { description: { $regex: looseRe } },
-        { location: { $regex: looseRe } },
-        { location_Type: { $regex: looseRe } },
-        // also try to match employement_Type textually for flexibility
-        { employement_Type: { $regex: looseRe } },
-      ],
-    };
-
-    [totalJobs, jobs] = await Promise.all([
-      Job.countDocuments(regexFilter),
-      Job.find(regexFilter)
+  const runQuery = (f: any, sort: Record<string, any>) =>
+    Promise.all([
+      Job.countDocuments(f),
+      Job.find(f)
         .select("-embedding")
         .skip(skip)
         .limit(limit)
-        .sort({ createdAt: -1 })
-        .populate("userId companyId recruiterId ")
-        .lean(),
-    ]);
-  }
-
-  // Special path: query is ONLY employment-type (e.g., "full time")
-  // We already put the enum filter in baseFilter; just run a simple find.
-  if (title && onlyEmploymentIntent) {
-    [totalJobs, jobs] = await Promise.all([
-      Job.countDocuments(baseFilter),
-      Job.find(baseFilter)
-        .select("-embedding")
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 })
+        .sort(sort)
         .populate("companyId recruiterId userId")
         .lean(),
     ]);
+
+  let totalJobs = 0;
+  let jobs: any[] = [];
+
+  if (hasTextQuery) {
+    // Decide text-vs-fallback mode by COUNT, not by page contents — otherwise
+    // paginating past the last text-search page would silently switch modes.
+    const textFilter = { ...filter, $text: { $search: q } };
+    const textCount = await Job.countDocuments(textFilter);
+
+    if (textCount > 0) {
+      totalJobs = textCount;
+      jobs = await Job.find(textFilter)
+        .select("-embedding")
+        .skip(skip)
+        .limit(limit)
+        .sort({ score: { $meta: "textScore" }, createdAt: -1 })
+        .populate("companyId recruiterId userId")
+        .lean();
+    } else {
+      // Loose regex fallback (typos in word boundaries, partial words)
+      const looseRe = makeLooseRegexFromQuery(q);
+      filter.$and.push({
+        $or: [
+          { title: { $regex: looseRe } },
+          { description: { $regex: looseRe } },
+          { location: { $regex: looseRe } },
+          { companyName: { $regex: looseRe } },
+          { responsibilities: { $regex: looseRe } },
+        ],
+      });
+      [totalJobs, jobs] = await runQuery(filter, { createdAt: -1 });
+    }
+  } else {
+    [totalJobs, jobs] = await runQuery(filter, { createdAt: -1 });
   }
 
   const meta = buildMetaPagination(totalJobs, page, limit);
@@ -890,6 +978,129 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     data: { meta, jobs },
   });
 });
+
+/*************************************
+ * SEARCH SUGGESTIONS (TYPEAHEAD)    *
+ * GET /jobs/suggestions?q=&limit=   *
+ *************************************/
+const emptySuggestionGroups = (query: string) => ({
+  query,
+  groups: { titles: [], skills: [], categories: [], locations: [] },
+});
+
+export const getJobSuggestions = catchAsync(
+  async (req: Request, res: Response) => {
+    const q = capQuery(req.query.q, 100);
+    const rawLimit = parseInt(String(req.query.limit)) || 5;
+    const limit = Math.min(Math.max(rawLimit, 1), 10);
+
+    // Too-short queries return empty groups (cheap 200; keeps the client dumb)
+    if (q.length < 2) {
+      return sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Suggestions fetched successfully",
+        data: emptySuggestionGroups(q),
+      });
+    }
+
+    const rx = wordStartRegex(q);
+    const qLower = q.toLowerCase();
+    const liveFilter = buildLiveJobFilter();
+
+    // Titles are what users primarily search for: give them the largest share
+    // of the dropdown and keep the secondary groups small so the total stays
+    // reasonably sized. With the default limit (5) this yields up to 10 titles
+    // and 3 each of skills / categories / locations.
+    const titleLimit = Math.min(limit + 5, 10);
+    const secondaryLimit = Math.min(limit, 3);
+
+    // Dedupe case-insensitively ("Java Developer" / "java developer" collapse
+    // into one entry, keeping the first casing seen) and rank prefix matches
+    // ("java" -> "Java Developer") above mid-word matches ("Senior Java
+    // Engineer"), then by how many live jobs share the value.
+    const groupedFieldSuggestions = (
+      field: "title" | "location",
+      groupLimit: number
+    ) =>
+      Job.aggregate([
+        {
+          $match: {
+            ...liveFilter,
+            $and: [
+              ...liveFilter.$and,
+              { [field]: { $type: "string", $ne: "" } },
+              { [field]: rx },
+            ],
+          },
+        },
+        {
+          $group: {
+            // Trim + lowercase so "Java ", "java" and "Java" collapse into
+            // one suggestion (dirty data has stray whitespace/casing).
+            _id: { $toLower: { $trim: { input: `$${field}` } } },
+            value: { $first: { $trim: { input: `$${field}` } } },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $addFields: {
+            // _id is the lowercased value, so this is a cheap prefix test.
+            prefixMatch: {
+              $cond: [{ $eq: [{ $indexOfCP: ["$_id", qLower] }, 0] }, 1, 0],
+            },
+          },
+        },
+        { $sort: { prefixMatch: -1, count: -1, _id: 1 } },
+        { $limit: groupLimit },
+        { $project: { _id: 0, value: 1, count: 1 } },
+      ]).option({ maxTimeMS: 2000 });
+
+    const [titles, locations, skills, categories] = await Promise.all([
+      groupedFieldSuggestions("title", titleLimit),
+      groupedFieldSuggestions("location", secondaryLimit),
+      // The skills collection has no unique index on `name`, so the same
+      // skill appears once per job/seed row ("Java" x5). Group
+      // case-insensitively before limiting so each skill shows up once.
+      SkillModel.aggregate([
+        { $match: { name: rx } },
+        {
+          $group: {
+            _id: { $toLower: { $trim: { input: "$name" } } },
+            value: { $first: { $trim: { input: "$name" } } },
+          },
+        },
+        { $sort: { _id: 1 } },
+        { $limit: secondaryLimit },
+        { $project: { _id: 0, value: 1 } },
+      ]).option({ maxTimeMS: 2000 }),
+      JobCategory.find({ name: rx })
+        .select("name")
+        .sort({ name: 1 })
+        .limit(secondaryLimit)
+        .lean()
+        .maxTimeMS(2000),
+    ]);
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Suggestions fetched successfully",
+      data: {
+        query: q,
+        groups: {
+          titles,
+          skills, // already { value } from the dedupe aggregation
+          categories: categories.map((c: any) => ({
+            value: c.name,
+            id: String(c._id),
+          })),
+          locations,
+        },
+      },
+    });
+  }
+);
 
 /*******************
  * // UPDATE A JOB *
@@ -1047,13 +1258,13 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   const matchConditions = [];
 
   if (title)
-    matchConditions.push({ title: { $regex: new RegExp(title, "i") } });
+    matchConditions.push({ title: { $regex: new RegExp(escapeRegex(title), "i") } });
   if (country)
-    matchConditions.push({ location: { $regex: new RegExp(country, "i") } });
+    matchConditions.push({ location: { $regex: new RegExp(escapeRegex(country), "i") } });
   if (skills.length > 0) {
     matchConditions.push({ responsibilities: { $in: skills } });
     matchConditions.push({
-      description: { $regex: new RegExp(skills.join("|"), "i") },
+      description: { $regex: new RegExp(skills.map(escapeRegex).join("|"), "i") },
     });
   }
   if (jobCategoryId) matchConditions.push({ jobCategoryId });

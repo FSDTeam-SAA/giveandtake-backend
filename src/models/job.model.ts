@@ -94,28 +94,39 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
 
 /**
  * 🔍 Full-Text Search Index
- * - Includes title, description, location, and location_Type
- * - Assigns higher weight to title and description
- * - Enables ranking by relevance when using `$text` search
+ * - Covers title, company name, responsibilities (skills), description, location
+ * - location_Type / employement_Type are enums handled by structured filters,
+ *   so they stay out of the text index
+ * - NOTE: changing these fields requires dropping the old index first
+ *   (MongoDB allows one text index per collection) — run `npm run sync-indexes`
  */
 jobSchema.index(
   {
     title: "text",
+    companyName: "text",
+    responsibilities: "text",
     description: "text",
     location: "text",
-    location_Type: "text",
-    employement_Type: "text", // ← added
   },
   {
     weights: {
-      title: 5,
+      title: 10,
+      companyName: 6,
+      responsibilities: 5,
       description: 3,
       location: 2,
-      location_Type: 2,
-      employement_Type: 3, // ← weight for employment type
     },
     name: "JobTextIndex",
   }
+);
+
+// Structured filter indexes for faceted search
+jobSchema.index({ jobCategoryId: 1 }, { name: "job_category_idx" });
+jobSchema.index({ employement_Type: 1 }, { name: "job_employment_type_idx" });
+jobSchema.index({ location_Type: 1 }, { name: "job_location_type_idx" });
+jobSchema.index(
+  { arcrivedJob: 1, adminApprove: 1, jobApprove: 1, createdAt: -1 },
+  { name: "job_browse_idx" }
 );
 
 export const Job = mongoose.model<IJob, JobModel>("Job", jobSchema);

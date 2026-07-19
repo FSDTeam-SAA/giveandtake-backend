@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "sync-indexes": "ts-node --transpile-only src/scripts/sync-search-indexes.ts",
     "lint": "eslint . --ext .ts",
     "start": "node dist/server.js",
     "build": "tsc"

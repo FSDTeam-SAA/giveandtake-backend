@@ -26,6 +26,7 @@ import { paymentInfo } from "../models/paymentInfo.model";
 import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
+import { capQuery, escapeRegex } from "../utils/regex";
 
 const DEFAULT_NO_REPLY_EMAIL =
   process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
@@ -1251,110 +1252,347 @@ export const getCompaniesWithAccounts = async (req: Request, res: Response) => {
 };
 
 // fetch all user without admin
-export const fetchAllUsers = catchAsync(async (req, res) => {
-  const rawQ = Array.isArray(req.query.q)
-    ? req.query.q[0]
-    : req.query.q;
-  const q = typeof rawQ === "string" ? rawQ.trim().toLowerCase() : "";
-  const hasQuery = q.length > 0;
+/****************************************************
+ * PEOPLE / COMPANY SEARCH (single aggregation)     *
+ ****************************************************/
+const PEOPLE_ROLES = ["candidate", "recruiter", "company"];
 
-  const users = await User.find({
-    role: { $ne: "admin" },
-    deactivate: { $ne: true },
-  }).select(
-    "name avatar address phoneNum role slug"
-  );
+interface PeopleSearchArgs {
+  q: string;
+  role: string; // one of PEOPLE_ROLES or "" for all
+  immediate: boolean;
+}
 
-  // Enrich users with photo and immediatelyAvailable (for candidates)
-  const enrichedUsers = await Promise.all(
-    users.map(async (user) => {
-      let photoUrl: string | null = null;
-      let name1 = null;
-      let immediatelyAvailable: boolean | null = null;
-      let locationParts: string[] = [];
-
-      if (user.role === "candidate") {
-        const resume = await CreateResume.findOne({ userId: user._id }).select(
-          "photo immediatelyAvailable location city country"
-        );
-        if (!resume) return null;
-        photoUrl = resume?.photo || null;
-        immediatelyAvailable =
-          typeof resume.immediatelyAvailable === "boolean"
-            ? resume.immediatelyAvailable
-            : null;
-        locationParts = [resume.location, resume.city, resume.country].filter(
-          Boolean
-        ) as string[];
-      } else if (user.role === "recruiter") {
-        const recruiter = await RecruiterAccount.findOne({
-          userId: user._id,
-        }).select("photo location city country");
-        if (!recruiter) return null;
-        photoUrl = recruiter?.photo || null;
-        locationParts = [
-          recruiter.location,
-          recruiter.city,
-          recruiter.country,
-        ].filter(Boolean) as string[];
-      } else if (user.role === "company") {
-        const company = await Company.findOne({ userId: user._id }).select(
-          "clogo cname city country"
-        );
-        if (!company) return null;
-        photoUrl = company?.clogo || null;
-        name1 = company?.cname;
-        locationParts = [company.city, company.country].filter(
-          Boolean
-        ) as string[];
-      }
-
-      // safely assign to avatar.url and include immediatelyAvailable (only meaningful for candidates)
-      const enriched = {
-        ...user.toObject(),
-        name: name1 ? name1 : user.name,
-        avatar: {
-          ...user.avatar,
-          url: photoUrl || user.avatar?.url || null,
+// Builds the shared aggregation: role/active match → profile $lookups →
+// enrichment fields → optional q/immediate matches → availability-first sort.
+// Callers append their own projection / pagination stages.
+function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
+  const pipeline: any[] = [
+    {
+      $match: {
+        role: { $in: role ? [role] : PEOPLE_ROLES },
+        deactivate: { $ne: true },
+      },
+    },
+    {
+      $lookup: {
+        from: "createresumes",
+        localField: "_id",
+        foreignField: "userId",
+        as: "resume",
+        pipeline: [
+          { $limit: 1 },
+          {
+            $project: {
+              photo: 1,
+              immediatelyAvailable: 1,
+              location: 1,
+              city: 1,
+              country: 1,
+              title: 1,
+              skills: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: "recruiteraccounts",
+        localField: "_id",
+        foreignField: "userId",
+        as: "recruiter",
+        pipeline: [
+          { $limit: 1 },
+          { $project: { photo: 1, location: 1, city: 1, country: 1, title: 1 } },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: "companies",
+        localField: "_id",
+        foreignField: "userId",
+        as: "company",
+        pipeline: [
+          { $limit: 1 },
+          {
+            $project: {
+              clogo: 1,
+              cname: 1,
+              city: 1,
+              country: 1,
+              industry: 1,
+              service: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $addFields: {
+        resume: { $first: "$resume" },
+        recruiter: { $first: "$recruiter" },
+        company: { $first: "$company" },
+      },
+    },
+    // Same semantics as before: users missing their role's profile doc are dropped
+    {
+      $match: {
+        $expr: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: ["$role", "candidate"] },
+                then: { $gt: ["$resume", null] },
+              },
+              {
+                case: { $eq: ["$role", "recruiter"] },
+                then: { $gt: ["$recruiter", null] },
+              },
+              {
+                case: { $eq: ["$role", "company"] },
+                then: { $gt: ["$company", null] },
+              },
+            ],
+            default: false,
+          },
         },
-        immediatelyAvailable,
-      };
+      },
+    },
+    {
+      $addFields: {
+        displayName: { $ifNull: ["$company.cname", "$name"] },
+        photoUrl: {
+          $ifNull: [
+            {
+              $switch: {
+                branches: [
+                  {
+                    case: { $eq: ["$role", "candidate"] },
+                    then: "$resume.photo",
+                  },
+                  {
+                    case: { $eq: ["$role", "recruiter"] },
+                    then: "$recruiter.photo",
+                  },
+                  {
+                    case: { $eq: ["$role", "company"] },
+                    then: "$company.clogo",
+                  },
+                ],
+                default: null,
+              },
+            },
+            { $ifNull: ["$avatar.url", null] },
+          ],
+        },
+        immediatelyAvailable: {
+          $cond: [
+            { $eq: ["$role", "candidate"] },
+            { $ifNull: ["$resume.immediatelyAvailable", null] },
+            null,
+          ],
+        },
+        position: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: ["$role", "candidate"] },
+                then: { $ifNull: ["$resume.title", null] },
+              },
+              {
+                case: { $eq: ["$role", "recruiter"] },
+                then: { $ifNull: ["$recruiter.title", null] },
+              },
+              {
+                case: { $eq: ["$role", "company"] },
+                then: { $ifNull: ["$company.industry", null] },
+              },
+            ],
+            default: null,
+          },
+        },
+        locationArr: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: ["$role", "candidate"] },
+                then: [
+                  { $ifNull: ["$resume.location", ""] },
+                  { $ifNull: ["$resume.city", ""] },
+                  { $ifNull: ["$resume.country", ""] },
+                ],
+              },
+              {
+                case: { $eq: ["$role", "recruiter"] },
+                then: [
+                  { $ifNull: ["$recruiter.location", ""] },
+                  { $ifNull: ["$recruiter.city", ""] },
+                  { $ifNull: ["$recruiter.country", ""] },
+                ],
+              },
+              {
+                case: { $eq: ["$role", "company"] },
+                then: [
+                  { $ifNull: ["$company.city", ""] },
+                  { $ifNull: ["$company.country", ""] },
+                ],
+              },
+            ],
+            default: [],
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        locationText: {
+          $reduce: {
+            input: {
+              $filter: {
+                input: "$locationArr",
+                as: "part",
+                cond: { $ne: ["$$part", ""] },
+              },
+            },
+            initialValue: "",
+            in: {
+              $cond: [
+                { $eq: ["$$value", ""] },
+                "$$this",
+                { $concat: ["$$value", ", ", "$$this"] },
+              ],
+            },
+          },
+        },
+        sortAvail: {
+          $cond: [{ $eq: ["$immediatelyAvailable", true] }, 1, 0],
+        },
+      },
+    },
+  ];
 
-      return { user: enriched, locationParts };
-    })
-  );
-
-  let data = enrichedUsers.filter(Boolean) as Array<{
-    user: any;
-    locationParts: string[];
-  }>;
-
-  if (hasQuery) {
-    data = data.filter(({ user, locationParts }) => {
-      const availabilityText =
-        user?.immediatelyAvailable === true
-          ? "immediately available immediate available"
-          : "";
-      const searchBlob = [
-        user?.name,
-        user?.role,
-        user?.address,
-        ...locationParts,
-        availabilityText,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return searchBlob.includes(q);
-    });
+  if (q) {
+    const rx = new RegExp(escapeRegex(q), "i");
+    const or: any[] = [
+      { displayName: rx },
+      { name: rx },
+      { role: rx },
+      { address: rx },
+      { locationText: rx },
+      { position: rx },
+      { "resume.skills": rx },
+      { "company.industry": rx },
+      { "company.service": rx },
+    ];
+    // Preserve old behavior: searching "immediate…" surfaces available candidates
+    if (/immediat/i.test(q)) {
+      or.push({ immediatelyAvailable: true });
+    }
+    pipeline.push({ $match: { $or: or } });
   }
+
+  if (immediate) {
+    pipeline.push({ $match: { immediatelyAvailable: true } });
+  }
+
+  pipeline.push({ $sort: { sortAvail: -1, displayName: 1, _id: 1 } });
+  return pipeline;
+}
+
+// Final output shape: superset of the legacy item (adds position + location)
+const PEOPLE_PROJECT_STAGE = {
+  $project: {
+    name: "$displayName",
+    role: 1,
+    slug: 1,
+    address: 1,
+    phoneNum: 1,
+    avatar: {
+      $mergeObjects: [{ $ifNull: ["$avatar", {}] }, { url: "$photoUrl" }],
+    },
+    immediatelyAvailable: 1,
+    position: 1,
+    location: "$locationText",
+  },
+};
+
+/**
+ * LEGACY route — GET /fetch/all/users?q=
+ * Keeps the original contract exactly (flat array in `data`, no pagination)
+ * because the mobile app consumes it. Internally replaced the N+1
+ * find-per-user loop with the single aggregation above.
+ */
+export const fetchAllUsers = catchAsync(async (req, res) => {
+  const q = capQuery(req.query.q, 200);
+
+  const pipeline = buildPeopleSearchPipeline({ q, role: "", immediate: false });
+  pipeline.push(PEOPLE_PROJECT_STAGE);
+
+  const users = await User.aggregate(pipeline).collation({
+    locale: "en",
+    strength: 2,
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "All users fetched successfully",
-    data: data.map((item) => item.user),
+    data: users,
+  });
+});
+
+/**
+ * NEW route — GET /search/people?q=&role=&immediate=&page=&limit=
+ * Server-side people/company search with pagination meta. Used by the web
+ * frontend (navbar dropdown + /all-users page).
+ */
+export const searchPeople = catchAsync(async (req, res) => {
+  const q = capQuery(req.query.q, 200);
+  const roleRaw =
+    typeof req.query.role === "string" ? req.query.role.trim().toLowerCase() : "";
+  const role = PEOPLE_ROLES.includes(roleRaw) ? roleRaw : "";
+  const immediateRaw = Array.isArray(req.query.immediate)
+    ? req.query.immediate[0]
+    : req.query.immediate;
+  const immediate = immediateRaw === "1" || immediateRaw === "true";
+
+  const { page, limit: rawLimit } = getPaginationParams(req.query);
+  const limit = Math.min(rawLimit, 50);
+  const skip = (page - 1) * limit;
+
+  // Never enumerate the whole user base: a blank query returns nothing (and no
+  // total), so the endpoint can't be used to learn how many users exist.
+  if (!q) {
+    return sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "People fetched successfully",
+      data: { meta: buildMetaPagination(0, page, limit), users: [] },
+    });
+  }
+
+  const pipeline = buildPeopleSearchPipeline({ q, role, immediate });
+  pipeline.push({
+    $facet: {
+      users: [{ $skip: skip }, { $limit: limit }, PEOPLE_PROJECT_STAGE],
+      total: [{ $count: "count" }],
+    },
+  });
+
+  const [result] = await User.aggregate(pipeline).collation({
+    locale: "en",
+    strength: 2,
+  });
+  const users = result?.users ?? [];
+  const totalItems = result?.total?.[0]?.count ?? 0;
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "People fetched successfully",
+    data: { meta: buildMetaPagination(totalItems, page, limit), users },
   });
 });
 

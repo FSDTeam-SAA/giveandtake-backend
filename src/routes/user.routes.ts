@@ -21,6 +21,7 @@ import {
   getRecruitersWithAccounts,
   getCompaniesWithAccounts,
   fetchAllUsers,
+  searchPeople,
   getAllCompanies,
   softDeactivateUser,
   checkSubmitSecurityAnswers,
@@ -69,7 +70,10 @@ router.get("/candidates", getCandidates);
 router.get("/recruiters", getRecruitersWithAccounts);
 router.get("/companies", getCompaniesWithAccounts);
 
-// fetch all user without admin
+// fetch all user without admin (LEGACY shape — kept for the mobile app)
 router.get("/fetch/all/users", fetchAllUsers);
+
+// paginated people/company search (new web frontend)
+router.get("/search/people", searchPeople);
 
 export default router;

@@ -43,6 +43,9 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
   { timestamps: true }
 )
 
+// Drives people-search $lookup and the many findOne({ userId }) calls
+createResumeSchema.index({ userId: 1 }, { name: 'resume_user_idx' })
+
 export const CreateResume = mongoose.model<ICreateResume, CreateResumeModel>(
   'CreateResume',
   createResumeSchema

@@ -121,4 +121,7 @@ userSchema.statics.isPasswordMatched = async function (
   return await bcrypt.compare(plainTextPassword, hashPassword)
 }
 
+// Supports people search (role filter + active users)
+userSchema.index({ role: 1, deactivate: 1 }, { name: 'user_role_active_idx' })
+
 export const User = mongoose.model<IUser, UserModel>('User', userSchema)

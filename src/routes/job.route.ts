@@ -2,6 +2,7 @@ import express from "express";
 import {
   createJob,
   getAllJobs,
+  getJobSuggestions,
   updateJob,
   deleteJob,
   getSingleJob,
@@ -23,6 +24,8 @@ import { protect } from "../middlewares/auth.middleware";
 const router = express.Router();
 
 router.route("/jobs").post(createJob).get(getAllJobs);
+// NOTE: must stay above "/jobs/:id" or the param route captures it
+router.get("/jobs/suggestions", getJobSuggestions);
 router.get("/jobs/posting/usage", protect, getJobPostingUsage);
 router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
 

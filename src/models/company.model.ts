@@ -28,6 +28,9 @@ const companySchema: Schema<ICompany> = new Schema(
   }
 );
 
+// Drives people-search $lookup and the many findOne({ userId }) calls
+companySchema.index({ userId: 1 }, { name: "company_user_idx" });
+
 export const Company = mongoose.model<ICompany, CompanyModel>(
   "Company",
   companySchema

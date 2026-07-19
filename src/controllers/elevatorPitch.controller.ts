@@ -18,6 +18,26 @@ import { createNotification } from '../sockets/notification.service'
 import { User } from '../models/user.model'
 import { getVideoMetadata } from '../services/ffmpeg.service'
 import { validateElevatorPitchAccess } from '../helper/validateElevatorPitchAccess'
+import { createToken } from '../utils/authToken'
+import {
+  canViewCandidatePitch,
+  PITCH_PLAYBACK_SCOPE,
+  PITCH_PLAYBACK_SECRET,
+} from '../middlewares/checkVideoAccess.middleware'
+
+const PUBLIC_OWNER_ROLES = ['recruiter', 'company']
+
+// Read the `?t=` playback token off a stream request so it can be propagated
+// into rewritten playlist URLs (segments + key). Empty string when absent.
+const getPlaybackTokenParam = (req: Request): string => {
+  const raw = Array.isArray(req.query.t) ? req.query.t[0] : req.query.t
+  return typeof raw === 'string' && raw ? raw : ''
+}
+
+const appendPlaybackToken = (urlPath: string, token: string): string =>
+  token
+    ? `${urlPath}${urlPath.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`
+    : urlPath
 
 const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
@@ -396,6 +416,51 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   })
 })
 
+/**
+ * Mint a short-lived playback token for a pitch the authenticated user is
+ * allowed to watch. Company/recruiter pitches are public → returns
+ * { public: true } and the client uses the plain stream URL. Candidate pitches
+ * → returns { token } if authorized, else 403. Enables native-HLS/iOS playback
+ * where an Authorization header cannot be attached.
+ */
+export const getPitchPlaybackToken = catchAsync(
+  async (req: Request, res: Response) => {
+    const { pitchId } = req.params
+    const pitch = await ElevatorPitch.findById(pitchId).populate('userId', 'role')
+    if (!pitch) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    }
+
+    const ownerRole = (pitch.userId as any)?.role
+    if (PUBLIC_OWNER_ROLES.includes(ownerRole)) {
+      res.status(httpStatus.OK).json({ success: true, public: true })
+      return
+    }
+
+    const viewer = req.user as any
+    const allowed = await canViewCandidatePitch(pitch as any, viewer)
+    if (!allowed) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You do not have access to this video'
+      )
+    }
+
+    const token = createToken(
+      {
+        scope: PITCH_PLAYBACK_SCOPE,
+        pitchId: (pitch._id as any).toString(),
+        viewerId: viewer._id.toString(),
+        viewerRole: viewer.role,
+      },
+      PITCH_PLAYBACK_SECRET,
+      '2h'
+    )
+
+    res.status(httpStatus.OK).json({ success: true, public: false, token })
+  }
+)
+
 export const streamElevatorPitch = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const pitch = await ElevatorPitch.findById(id);
@@ -423,11 +488,18 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
     const playlistRes = await axios.get(signedUrl);
     let playlistContent = playlistRes.data as string;
 
+    // Carry the playback token (if any) into the rewritten variant URLs so
+    // gated (candidate) playback works through the proxy chain.
+    const playbackToken = getPlaybackTokenParam(req);
+
     const rewriteAssetLine = (line: string) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) return line;
       if (/\.(ts|m3u8)$/i.test(trimmed)) {
-        return `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`;
+        return appendPlaybackToken(
+          `/api/v1/elevator-pitch/stream/${pitch.userId.toString()}/${trimmed}`,
+          playbackToken
+        );
       }
       return line;
     };
@@ -477,9 +549,47 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const baseDirectory = baseS3Key.replace(/[^/]+$/, '')
   const segmentS3Key = `${baseDirectory}${sanitizedSegment}`
   const isPlaylist = sanitizedSegment.toLowerCase().endsWith('.m3u8')
+  const playbackToken = getPlaybackTokenParam(req)
 
   try {
     const signedSegmentUrl = await getSignedS3Url(segmentS3Key, 3600)
+
+    // When a playback token is in play and this is a variant playlist, rewrite
+    // its segment names and #EXT-X-KEY URI to carry the token so gated
+    // (candidate) playback flows all the way through. Public/no-token requests
+    // keep the original streaming behavior byte-for-byte.
+    if (isPlaylist && playbackToken) {
+      const playlistRes = await axios.get(signedSegmentUrl, {
+        responseType: 'text',
+      })
+      const rewritten = (playlistRes.data as string)
+        .split('\n')
+        .map((line) => {
+          const trimmed = line.trim()
+          if (!trimmed) return line
+          // Rewrite the encryption key URI (inside quotes)
+          if (trimmed.startsWith('#EXT-X-KEY')) {
+            return line.replace(/URI="([^"]+)"/, (_m, uri) => {
+              return `URI="${appendPlaybackToken(uri, playbackToken)}"`
+            })
+          }
+          if (trimmed.startsWith('#')) return line
+          // Rewrite relative segment / sub-playlist references
+          if (/\.(ts|m3u8)$/i.test(trimmed)) {
+            return appendPlaybackToken(trimmed, playbackToken)
+          }
+          return line
+        })
+        .join('\n')
+
+      res.set({
+        'Content-Type': 'application/vnd.apple.mpegurl',
+        'Cache-Control': 'no-cache',
+      })
+      res.send(rewritten)
+      return
+    }
+
     const response = await axios.get(signedSegmentUrl, {
       responseType: 'stream',
     })
@@ -561,10 +671,16 @@ export const getAllElevatorPitches = catchAsync(
     const users = await User.find({ role: type }, '_id name email')
     const userIds = users.map((u) => u._id)
 
+    // Do NOT leak storage URLs / keys — this endpoint is enumerable. Playback
+    // always goes through the gated /stream/:id proxy using the pitch _id.
     const pitches = await ElevatorPitch.find({
       userId: { $in: userIds },
       'processing.state': 'ready',
-    }).populate('userId', 'name email role')
+    })
+      .select(
+        '-video.rawKey -video.rawBucket -video.encryptionKeyUrl -video.hlsUrl -video.url -video.localPaths'
+      )
+      .populate('userId', 'name email role')
 
     res.status(httpStatus.OK).json({
       success: true,

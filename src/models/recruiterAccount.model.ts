@@ -43,6 +43,9 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
     { timestamps: true }
   )
 
+// Drives people-search $lookup and the many findOne({ userId }) calls
+recruiterAccountSchema.index({ userId: 1 }, { name: 'recruiter_user_idx' })
+
 export const RecruiterAccount = mongoose.model<
   IRecruiterAccount,
   RecruiterAccountModel

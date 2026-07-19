@@ -37,8 +37,10 @@ import {
   secureStream,
   getEncryptionKey,
   getAllElevatorPitches,
+  getPitchPlaybackToken,
 } from "../controllers/elevatorPitch.controller";
-import { protect } from "../middlewares/auth.middleware";
+import { optionalAuth, protect } from "../middlewares/auth.middleware";
+import { gatePitchAccess } from "../middlewares/checkVideoAccess.middleware";
 
 const router = express.Router();
 
@@ -47,11 +49,22 @@ router.post("/video/complete", protect, completeElevatorPitchUpload);
 router.get("/video", protect, getElevatorPitchForUser);
 router.delete("/video", protect, deleteResume);
 
-router.get("/stream/:userId/:segment", secureStream);
+// Mint a short-lived playback token for a pitch the viewer is allowed to watch
+router.get("/playback-token/:pitchId", protect, getPitchPlaybackToken);
 
-router.get("/stream/:id", streamElevatorPitch);
+// Media routes: public for company/recruiter pitches, gated for candidates.
+// optionalAuth populates req.user when a Bearer token is present without
+// rejecting anonymous requests; gatePitchAccess enforces the per-role policy.
+router.get(
+  "/stream/:userId/:segment",
+  optionalAuth,
+  gatePitchAccess,
+  secureStream
+);
 
-router.get("/key/:userId/:key", getEncryptionKey);
+router.get("/stream/:id", optionalAuth, gatePitchAccess, streamElevatorPitch);
+
+router.get("/key/:userId/:key", optionalAuth, gatePitchAccess, getEncryptionKey);
 
 router.get("/all/elevator-pitches", getAllElevatorPitches);
 
