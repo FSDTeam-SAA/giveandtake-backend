@@ -4,12 +4,21 @@ import catchAsync from "../utils/catchAsync";
 import { SubscriptionPlan } from "../models/subscriptionPlan.model";
 import { User } from "../models/user.model";
 import { createOrder, captureOrder, refundOrder } from "../services/paypal.service";
+import {
+  createPaymentIntent,
+  retrievePaymentIntent,
+  refundPaymentIntent,
+  fromMinorUnits,
+  constructWebhookEvent,
+} from "../services/stripe.service";
+import { isStripeConfigured, STRIPE_WEBHOOK_SECRET } from "../config/stripe";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { refundProcessedTemplate, sendEmail } from "../utils/sendEmail";
 import AppError from "../errors/AppError";
 import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
-import { computeExpiryFromStart } from "../utils/subscription";
+import { recordAndNotifyPayment } from "../utils/paymentReceipt";
+import type StripeTypes from "stripe";
 // import { refundOrder } from "../services/paypal.service"; // new service function
 // JSON validation middleware
 const validateJsonBody = (
@@ -80,18 +89,6 @@ const addDays = (date: Date, days: number) =>
 const normalizePlanValid = (valid?: string | null) =>
   (valid || "").trim().toLowerCase();
 
-const NO_REPLY_EMAIL = process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
-const AUDIENCE_FROM_EMAIL: Record<string, string> = {
-  candidate:
-    process.env.CANDIDATE_EMAIL_FROM || "noreplycandidate@evpitch.com",
-  recruiter:
-    process.env.RECRUITER_EMAIL_FROM || "noreplyrecruiter@evpitch.com",
-  company: process.env.COMPANY_EMAIL_FROM || "noreplycompany@evpitch.com",
-};
-
-const resolveSenderForAudience = (audience?: string | null) =>
-  AUDIENCE_FROM_EMAIL[(audience || "").toLowerCase()] || NO_REPLY_EMAIL;
-
 /***********************
  * REFUND CALC HELPERS *
  ***********************/
@@ -135,159 +132,15 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       throw new AppError(400, "Unable to determine payment amount");
     }
 
-    const audience = (plan.for || user.role || "").toLowerCase();
-    const planValidity = (plan.valid || "").toLowerCase();
-    const derivedDuration =
-      planValidity === "monthly"
-        ? "monthly"
-        : planValidity === "yearly"
-        ? "yearly"
-        : "payg";
-
-    const isYearlyPlan = derivedDuration === "yearly";
-    const expiresAt =
-      computeExpiryFromStart(new Date(), derivedDuration) ?? undefined;
-
-    const newPayment = await paymentInfo.create({
-      userId,
-      planId,
+    const newPayment = await recordAndNotifyPayment({
+      user,
+      plan,
       amount: numericAmount,
       paymentStatus: mapPaypalStatusToEnum(captureDetails.status),
       transactionId: captureDetails.id,
       paymentMethod: "PayPal",
       seasonId,
-      duration: derivedDuration,
-      expiresAt,
     });
-
-    const emailBody = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Receipt — Elevator Video Pitch</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,Helvetica,sans-serif;">
-  <!-- Outer container -->
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f4f6f8;">
-    <tr>
-      <td align="center" style="padding:20px;">
-        <!-- Inner container -->
-        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.08);">
-          <!-- Header -->
-          <tr>
-            <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="vertical-align:middle;">
-                    <h1 style="margin:0;font-size:20px;color:#111;">Elevator Video Pitch©</h1>
-                    <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Payment Receipt</p>
-                  </td>
-                  <td style="text-align:right;vertical-align:middle;">
-                    <!-- Company Logo -->
-                     <div style="width:120px !important; max-width:120px !important; height:48px !important; overflow:hidden !important; border-radius:6px; display:inline-block;">
-                      <img src="https://res.cloudinary.com/dftvlksve/image/upload/v1761363596/evp-logo_iuxk5w.jpg" 
-                           alt="EVP Logo" 
-                           class="logo-img"
-                           style="width:120px !important; height:48px !important; display:block; border:0; outline:none; text-decoration:none;" 
-                           width="120" 
-                           height="48" />
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Greeting & intro -->
-          <tr>
-            <td style="padding:24px;">
-              <p style="margin:0 0 12px;font-size:15px;color:#111;">
-                Dear <strong>${user.name}</strong>,
-              </p>
-              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch©</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
-              </p>
-
-              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                As you have paid for a subscription plan, you are now entitled to upload a 60-second elevator video pitch to your profile.
-              </p>
-              ${
-                isYearlyPlan
-                  ? `<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Because you selected our yearly plan, you are also entitled to a complimentary half-hour career-mentoring call with our partner, <strong>The Ladder Back Down&reg;</strong>. Please book your appointment at <a href="https://www.ladderbackdown.com/mentoring" style="color:#2B7FD0;text-decoration:none;">www.ladderbackdown.com/mentoring</a>. During this session you will receive live mentoring plus feedback on your Elevator Video Pitch.
-              </p>
-              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                After booking, look out for a confirmation email from <a href="mailto:info@ladderbackdown.com" style="color:#2B7FD0;text-decoration:none;">info@ladderbackdown.com</a> that contains the UK phone/WhatsApp number to call at your scheduled time. Please check your inbox and any other folders to ensure you receive this acknowledgement.
-              </p>`
-                  : ""
-              }
-
-              <!-- Receipt card -->
-              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e6eef6;border-radius:6px;">
-                <tr>
-                  <td style="padding:16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-bottom:8px;">Invoice #</td>
-                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${newPayment.transactionId}</strong></td>
-                      </tr>
-                      <tr>
-                        <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-bottom:8px;">Date</td>
-                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;">${newPayment.createdAt}</td>
-                      </tr>
-                      <tr>
-                        <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-bottom:8px;">Amount</td>
-                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${numericAmount.toFixed(2)}</strong></td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Support -->
-              <p style="margin:18px 0 6px;font-size:14px;color:#374151;">
-                Please reach out to <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a> if you have any queries.
-              </p>
-
-              <p style="margin:8px 0 0;font-size:14px;color:#374151;">
-                Best regards,<br>
-                <strong>Admin</strong><br>
-                Elevator Video Pitch©
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#9ca3af;">
-              <div style="max-width:520px;margin:0 auto;">
-                <p style="margin:0 0 8px;">Elevator Video Pitch©</p>
-                <p style="margin:0;">If you did not make this purchase or need help, reply to this email or contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a></p>
-              </div>
-            </td>
-          </tr>
-        </table>
-        <!-- end inner container -->
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-`;
-
-
-    console.log(captureDetails);
-
-    if (captureDetails.status === "COMPLETED") {
-      const sender = resolveSenderForAudience(audience);
-      console.log("ami hoisi");
-      await sendEmail(user.email, "Payment Complete", emailBody, {
-        from: sender,
-        includeLegalFooter: true,
-      });
-      console.log("email sent");
-    }
 
     res.status(200).json({
       message: "Payment captured successfully",
@@ -488,31 +341,66 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
 
   notes.push("10% admin fee applied.");
 
-  const refundResponse = await refundOrder(payment.transactionId, refundAmount);
-  if (!refundResponse || refundResponse.status !== "COMPLETED") {
-    throw new AppError(400, "Refund failed or was not completed");
+  // Route the refund back through whichever provider took the money.
+  const isStripePayment =
+    (payment.paymentMethod || "").toLowerCase() === "stripe";
+
+  let refundTransactionId: string;
+  let refundStatus: string;
+
+  if (isStripePayment) {
+    const stripeRefund = await refundPaymentIntent(
+      payment.transactionId,
+      refundAmount
+    );
+    // Stripe settles most refunds instantly ("succeeded") but some payment
+    // methods legitimately sit in "pending" — both mean the refund was accepted.
+    if (
+      !stripeRefund ||
+      (stripeRefund.status !== "succeeded" && stripeRefund.status !== "pending")
+    ) {
+      throw new AppError(400, "Refund failed or was not completed");
+    }
+    refundTransactionId = stripeRefund.id;
+    refundStatus = stripeRefund.status;
+  } else {
+    const refundResponse = await refundOrder(
+      payment.transactionId,
+      refundAmount
+    );
+    if (!refundResponse || refundResponse.status !== "COMPLETED") {
+      throw new AppError(400, "Refund failed or was not completed");
+    }
+    refundTransactionId = refundResponse.id;
+    refundStatus = refundResponse.status;
   }
 
   payment.paymentStatus = "refunded";
-  payment.refundTransactionId = refundResponse.id;
+  payment.refundTransactionId = refundTransactionId;
   payment.refundDate = new Date();
   payment.refundAdminFee = adminFee;
   payment.refundDeductions = deductions;
   payment.refundNotes = notes.join(" | ");
   await payment.save();
 
-  await sendEmail(
-    user.email,
-    "Refund Processed - Elevator Video Pitch©",
-    refundProcessedTemplate(user.name)
-  );
+  try {
+    await sendEmail(
+      user.email,
+      "Refund Processed - Elevator Video Pitch©",
+      refundProcessedTemplate(user.name)
+    );
+  } catch (emailError) {
+    // The refund is already settled and persisted — don't fail the request
+    // just because the notification email bounced.
+    console.error("[payment] Failed to send refund email:", emailError);
+  }
 
   res.status(200).json({
     success: true,
     message: "Refund processed successfully",
     data: {
-      refundTransactionId: refundResponse.id,
-      status: refundResponse.status,
+      refundTransactionId,
+      status: refundStatus,
       refundAmount,
       deductions,
       adminFee,
@@ -520,3 +408,226 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     },
   });
 });
+
+/* ============================================================
+ *                      STRIPE INTEGRATION
+ * ============================================================ */
+
+/**
+ * Records a succeeded Stripe PaymentIntent exactly once.
+ *
+ * Both the client-side confirm call and the webhook funnel through here, so
+ * whichever arrives first writes the row and the other becomes a no-op.
+ */
+const finalizeStripePayment = async (
+  paymentIntent: StripeTypes.PaymentIntent
+) => {
+  const existing = await paymentInfo.findOne({
+    transactionId: paymentIntent.id,
+  });
+  if (existing) return existing;
+
+  const { userId, planId, seasonId } = paymentIntent.metadata || {};
+
+  if (!userId || !planId) {
+    throw new AppError(
+      400,
+      "Payment is missing the user/plan metadata needed to activate a subscription"
+    );
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  const plan = await SubscriptionPlan.findById(planId);
+  if (!plan) {
+    throw new AppError(404, "Subscription plan not found");
+  }
+
+  // amount_received is the authoritative settled figure.
+  const amount = fromMinorUnits(
+    paymentIntent.amount_received || paymentIntent.amount
+  );
+
+  return recordAndNotifyPayment({
+    user,
+    plan,
+    amount,
+    paymentStatus: "complete",
+    transactionId: paymentIntent.id,
+    paymentMethod: "Stripe",
+    seasonId: seasonId || undefined,
+  });
+};
+
+/*******************************
+ * STRIPE: PUBLISHABLE KEY     *
+ *******************************/
+export const getStripeConfig = catchAsync(
+  async (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+        configured: isStripeConfigured(),
+      },
+    });
+  }
+);
+
+/**********************************
+ * STRIPE: CREATE PAYMENT INTENT  *
+ **********************************/
+export const createStripePaymentIntent = catchAsync(
+  async (req: Request, res: Response) => {
+    if (!isStripeConfigured()) {
+      throw new AppError(500, "Stripe is not configured on this server");
+    }
+
+    const { planId, userId, seasonId } = req.body;
+
+    if (!planId) {
+      throw new AppError(400, "Plan ID is required");
+    }
+    if (!userId) {
+      throw new AppError(400, "User ID is required");
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError(404, "User not found");
+    }
+
+    const plan = await SubscriptionPlan.findById(planId);
+    if (!plan) {
+      throw new AppError(404, "Subscription plan not found");
+    }
+
+    // The charge amount always comes from the plan record, never from the
+    // client, so a tampered request can't buy a plan at the wrong price.
+    const amount = Number(plan.price);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new AppError(400, "This plan does not require a payment");
+    }
+
+    const paymentIntent = await createPaymentIntent({
+      amount,
+      description: `${plan.title}${
+        plan.valid ? ` (${plan.valid})` : ""
+      } — Elevator Video Pitch`,
+      metadata: {
+        userId: String(user._id),
+        planId: String(plan._id),
+        planTitle: plan.title || "",
+        planValid: plan.valid || "",
+        audience: plan.for || "",
+        ...(seasonId ? { seasonId: String(seasonId) } : {}),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Stripe payment intent created",
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount,
+        currency: paymentIntent.currency,
+        planTitle: plan.title,
+        planValid: plan.valid,
+      },
+    });
+  }
+);
+
+/**********************************
+ * STRIPE: CONFIRM PAYMENT        *
+ **********************************/
+export const confirmStripePayment = catchAsync(
+  async (req: Request, res: Response) => {
+    if (!isStripeConfigured()) {
+      throw new AppError(500, "Stripe is not configured on this server");
+    }
+
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      throw new AppError(400, "Payment intent ID is required");
+    }
+
+    // Status is read straight from Stripe rather than trusted from the client.
+    const paymentIntent = await retrievePaymentIntent(paymentIntentId);
+
+    if (paymentIntent.status !== "succeeded") {
+      throw new AppError(
+        400,
+        `Payment has not completed (status: ${paymentIntent.status})`
+      );
+    }
+
+    const payment = await finalizeStripePayment(paymentIntent);
+
+    res.status(200).json({
+      success: true,
+      message: "Payment confirmed successfully",
+      payment,
+      data: { payment },
+    });
+  }
+);
+
+/**********************************
+ * STRIPE: WEBHOOK                *
+ **********************************/
+/**
+ * Safety net for the case where the browser dies between Stripe confirming the
+ * charge and our /stripe/confirm call landing. Mounted with a raw body parser
+ * in app.ts because signature verification needs the unparsed payload.
+ */
+export const stripeWebhook = async (req: Request, res: Response) => {
+  const signature = req.headers["stripe-signature"];
+
+  if (!STRIPE_WEBHOOK_SECRET) {
+    res.status(400).json({
+      received: false,
+      message: "STRIPE_WEBHOOK_SECRET is not configured",
+    });
+    return;
+  }
+
+  let event: StripeTypes.Event;
+  try {
+    event = constructWebhookEvent(req.body as Buffer, String(signature));
+  } catch (error) {
+    console.error("[stripe] Webhook signature verification failed:", error);
+    res
+      .status(400)
+      .json({ received: false, message: "Invalid webhook signature" });
+    return;
+  }
+
+  try {
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        await finalizeStripePayment(
+          event.data.object as StripeTypes.PaymentIntent
+        );
+        break;
+      case "payment_intent.payment_failed":
+        console.warn(
+          "[stripe] Payment failed:",
+          (event.data.object as StripeTypes.PaymentIntent).id
+        );
+        break;
+      default:
+        break;
+    }
+  } catch (error) {
+    // Acknowledge regardless so Stripe stops retrying a payload we can't use;
+    // the log is the signal for manual follow-up.
+    console.error(`[stripe] Failed handling webhook ${event.type}:`, error);
+  }
+
+  res.status(200).json({ received: true });
+};

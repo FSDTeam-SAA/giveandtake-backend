@@ -34,6 +34,7 @@ import contentRoutes from "./routes/contentRoutes";
 import faqRoutes from "./routes/faq.routes";
 import chatbotRoutes from "./routes/chatbot.routes";
 import countryRoutes from "./routes/country.routes";
+import { stripeWebhook } from "./controllers/payment.controller";
 
 
 const app = express();
@@ -44,6 +45,16 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
+);
+
+/**
+ * Stripe webhook must be registered BEFORE express.json(): signature
+ * verification hashes the raw request body, so it cannot be pre-parsed.
+ */
+app.post(
+  "/api/v1/payments/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
 );
 
 app.use(express.json());
