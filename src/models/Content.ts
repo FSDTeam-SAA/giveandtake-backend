@@ -1,18 +1,41 @@
 import { Schema, model, Document } from "mongoose";
 
+/**
+ * The original fixed set of pages. These are "system" pages that always exist
+ * and can be edited but never deleted from the admin dashboard. Dynamic pages
+ * created by an admin (e.g. "csae-standards", "mobile-app-policy") use their
+ * slug as the `type` and are marked `isSystem: false`.
+ */
+export const BUILT_IN_CONTENT_TYPES = [
+  "about",
+  "privacy",
+  "candidate",
+  "recruiter",
+  "company",
+  "terms",
+] as const;
+
 export interface IContent extends Document {
-  type: "about" | "privacy" | "candidate" | "recruiter" | "company" | "terms";
+  /** Slug-style unique key used in the public URL (`/pages/:type`). */
+  type: string;
   title: string;
   description: string; // stores HTML from rich text editor
+  /** Built-in pages cannot be deleted and their slug cannot change. */
+  isSystem: boolean;
+  /** Unpublished custom pages are hidden from the public site. */
+  published: boolean;
+  /** When true, the page is surfaced in the website footer links. */
+  showInFooter: boolean;
 }
 
 const ContentSchema = new Schema<IContent>(
   {
     type: {
       type: String,
-      enum: ["about", "privacy", "candidate", "recruiter", "company", "terms"],
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
     },
     title: {
       type: String,
@@ -21,6 +44,18 @@ const ContentSchema = new Schema<IContent>(
     description: {
       type: String,
       required: true,
+    },
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
+    published: {
+      type: Boolean,
+      default: true,
+    },
+    showInFooter: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
