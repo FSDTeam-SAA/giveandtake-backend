@@ -24,8 +24,6 @@ export interface IContent extends Document {
   isSystem: boolean;
   /** Unpublished custom pages are hidden from the public site. */
   published: boolean;
-  /** When true, the page is surfaced in the website footer links. */
-  showInFooter: boolean;
 }
 
 const ContentSchema = new Schema<IContent>(
@@ -52,10 +50,6 @@ const ContentSchema = new Schema<IContent>(
     published: {
       type: Boolean,
       default: true,
-    },
-    showInFooter: {
-      type: Boolean,
-      default: false,
     },
   },
   { timestamps: true }

@@ -13,7 +13,7 @@ const isBuiltIn = (type: string): boolean =>
  */
 export const upsertContent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { type, title, description, published, showInFooter } =
+    const { type, title, description, published } =
       req.body as Partial<IContent>;
 
     if (!type || !title) {
@@ -23,7 +23,6 @@ export const upsertContent = async (req: Request, res: Response): Promise<void> 
 
     const update: Partial<IContent> = { title, description: description ?? "" };
     if (typeof published === "boolean") update.published = published;
-    if (typeof showInFooter === "boolean") update.showInFooter = showInFooter;
     if (isBuiltIn(type)) update.isSystem = true;
 
     const content = await Content.findOneAndUpdate({ type }, update, {
@@ -52,12 +51,11 @@ export const upsertContent = async (req: Request, res: Response): Promise<void> 
  */
 export const createContent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, description, slug, published, showInFooter } = req.body as {
+    const { title, description, slug, published } = req.body as {
       title?: string;
       description?: string;
       slug?: string;
       published?: boolean;
-      showInFooter?: boolean;
     };
 
     if (!title || !description) {
@@ -81,7 +79,6 @@ export const createContent = async (req: Request, res: Response): Promise<void> 
       description,
       isSystem: false,
       published: typeof published === "boolean" ? published : true,
-      showInFooter: Boolean(showInFooter),
     });
 
     if (content?.id) {
@@ -105,12 +102,11 @@ export const createContent = async (req: Request, res: Response): Promise<void> 
 export const updateContent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, description, slug, published, showInFooter } = req.body as {
+    const { title, description, slug, published } = req.body as {
       title?: string;
       description?: string;
       slug?: string;
       published?: boolean;
-      showInFooter?: boolean;
     };
 
     const content = await Content.findById(id);
@@ -122,7 +118,6 @@ export const updateContent = async (req: Request, res: Response): Promise<void> 
     if (typeof title === "string") content.title = title;
     if (typeof description === "string") content.description = description;
     if (typeof published === "boolean") content.published = published;
-    if (typeof showInFooter === "boolean") content.showInFooter = showInFooter;
 
     // Allow re-slugging only for custom pages.
     if (slug && !content.isSystem) {
@@ -213,7 +208,7 @@ export const getPublishedContent = async (
 ): Promise<void> => {
   try {
     const content = await Content.find({ published: true })
-      .select("type title showInFooter isSystem createdAt updatedAt")
+      .select("type title isSystem createdAt updatedAt")
       .sort({ isSystem: -1, createdAt: 1 });
 
     res.status(200).json({
