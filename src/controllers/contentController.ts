@@ -213,7 +213,7 @@ export const getPublishedContent = async (
 ): Promise<void> => {
   try {
     const content = await Content.find({ published: true })
-      .select("type title showInFooter isSystem")
+      .select("type title showInFooter isSystem createdAt updatedAt")
       .sort({ isSystem: -1, createdAt: 1 });
 
     res.status(200).json({
