@@ -18,6 +18,7 @@ import {
 } from './jobs/deleteOldDeactivatedUsers'
 import path from 'path'
 import { initNotificationSocket } from './sockets/notification.service'
+import { ensureBuiltInContent } from './jobs/ensureBuiltInContent'
 
 dotenv.config()
 
@@ -57,7 +58,11 @@ cron.schedule('2 0 * * *', async () => {
 
 setupMessageSocket(io)
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  // Makes the six built-in content pages exist and be well-formed in whichever
+  // database this environment points at. Safe to run on every boot.
+  await ensureBuiltInContent()
+
   // app.listen(PORT, () => {
   //   console.log(`Server is running on port ${PORT}`)
   // })

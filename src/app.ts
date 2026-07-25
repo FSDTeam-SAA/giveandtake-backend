@@ -57,7 +57,14 @@ app.post(
   stripeWebhook
 );
 
-app.use(express.json());
+/**
+ * Rich-text pages (terms, policies) run to tens of KB, and pasting from Word or
+ * using the editor's image button inlines base64 data. Express' 100kb default
+ * silently turned those saves into a 413, so the limit is raised well past any
+ * realistic document.
+ */
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 const uploadsDir = path.resolve(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsDir));

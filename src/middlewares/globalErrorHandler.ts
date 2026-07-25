@@ -69,6 +69,20 @@ export const globalErrorHandler: ErrorRequestHandler = (
     // duplicate key error mongoose
     const simplifiedError = handleDuplicateError(err);
     ({ statusCode, message, errorSources } = setErrorDetails(simplifiedError));
+  } else if (err?.type === 'entity.too.large') {
+    // body-parser rejected an oversized payload — surface it as a 413 with a
+    // message an admin can act on instead of a generic 500.
+    statusCode = 413;
+    message =
+      'That content is too large to save. Please shorten it, or upload images instead of pasting them inline.';
+    errorSources = [{ path: '', message }];
+  } else if (
+    err?.type === 'entity.parse.failed' ||
+    err?.type === 'encoding.unsupported'
+  ) {
+    statusCode = 400;
+    message = 'The request body could not be read.';
+    errorSources = [{ path: '', message }];
   } else if (err instanceof AppError) {
     // APPError handle custom
     statusCode = err?.statusCode;
