@@ -41,11 +41,22 @@ const appendPlaybackToken = (urlPath: string, token: string): string =>
 
 const BUCKET = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
+// Turn any stored asset URL into a plain R2 object key. Handles every host the
+// pitches are stored behind (S3 API host, pub-*.r2.dev, custom CDN domain) and
+// strips a leading bucket segment when the URL is path-style.
 const extractR2Key = (url: string): string => {
-  const afterHost = url.replace(/^https:\/\/[^/]+\.r2\.cloudflarestorage\.com\//, "");
-  return BUCKET && afterHost.startsWith(`${BUCKET}/`)
-    ? afterHost.slice(BUCKET.length + 1)
-    : afterHost;
+  if (!url) return "";
+  let key: string;
+  try {
+    key = new URL(url).pathname;
+  } catch {
+    // Already a bare key, not an absolute URL.
+    key = url;
+  }
+  key = decodeURIComponent(key).replace(/^\/+/, "");
+  return BUCKET && key.startsWith(`${BUCKET}/`)
+    ? key.slice(BUCKET.length + 1)
+    : key;
 };
 
 

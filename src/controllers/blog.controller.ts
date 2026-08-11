@@ -58,9 +58,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
 
     imageUrl = uploadResult.secure_url
     imagePublicId = uploadResult.public_id
-
-    // Remove local file after upload
-    fs.unlinkSync(localPath)
+    // Local file is removed by uploadToCloudinary.
   }
 
   const blog = await Blog.create({
@@ -167,9 +165,7 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
     // Update with new image details
     blog.image = uploadResult.secure_url
     blog.imagePublicId = uploadResult.public_id
-
-    // Remove local file
-    fs.unlinkSync(localPath)
+    // Local file is removed by uploadToCloudinary.
   }
 
   // Update other fields if provided

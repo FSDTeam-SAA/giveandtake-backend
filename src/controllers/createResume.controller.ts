@@ -8,7 +8,7 @@ import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import sendResponse from '../utils/sendResponse'
-import { uploadToCloudinary } from '../utils/cloudinary'
+import { uploadMedia } from '../utils/mediaUpload'
 import path from 'path'
 import { User } from '../models/user.model'
 import fs from 'fs'
@@ -25,6 +25,7 @@ const catchAsync = (fn: AsyncRequestHandler): RequestHandler => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
+
 
 // helper to move resume file to uploads/resumes
 const moveFileToUploads = async (tempPath: string, destRelative: string): Promise<string> => {
@@ -59,21 +60,18 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
 
   // handle photo
   if (files?.photo && files.photo[0]) {
-    const logoRes = await uploadToCloudinary(files.photo[0].path);
-    if (logoRes?.secure_url) {
-      photoUrl = logoRes.secure_url;
+    const logoRes = await uploadMedia(files.photo[0].path, "profiles");
+    if (logoRes?.url) {
+      photoUrl = logoRes.url;
       if (!user.avatar) user.avatar = { url: "" };
       user.avatar.url = photoUrl;
-      
     }
-    fs.unlinkSync(files.photo[0].path); // cleanup
   }
 
   // handle banner
   if (files?.banner && files.banner[0]) {
-    const certRes = await uploadToCloudinary(files.banner[0].path);
-    if (certRes?.secure_url) bannerUrl = certRes.secure_url;
-    fs.unlinkSync(files.banner[0].path);
+    const certRes = await uploadMedia(files.banner[0].path, "profiles");
+    if (certRes?.url) bannerUrl = certRes.url;
   }
 
   // handle resume file (local storage)
@@ -232,14 +230,13 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   const files = req.files as Record<string, Express.Multer.File[]>;
 
   if (files?.photo) {
-    const logoRes = await uploadToCloudinary(files.photo[0].path);
-    if (logoRes?.secure_url) {
-      resume.photo = logoRes.secure_url;
+    const logoRes = await uploadMedia(files.photo[0].path, "profiles");
+    if (logoRes?.url) {
+      resume.photo = logoRes.url;
       if (!user.avatar) {
         user.avatar = { url: "" }; // initialize if missing
       }
-      user.avatar.url = logoRes.secure_url || "";
-      
+      user.avatar.url = logoRes.url;
     }
   }
     if(resume.firstName){
@@ -248,9 +245,9 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   await user?.save()
 
   if (files?.banner) {
-    const certRes = await uploadToCloudinary(files.banner[0].path);
-    if (certRes?.secure_url) {
-      resume.banner = certRes.secure_url;
+    const certRes = await uploadMedia(files.banner[0].path, "profiles");
+    if (certRes?.url) {
+      resume.banner = certRes.url;
     }
   }
 

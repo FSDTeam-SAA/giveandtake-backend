@@ -138,8 +138,68 @@ const getContentType = (filename: string): string => {
     ".key": "application/octet-stream", // AES-128 key file
     ".mp4": "video/mp4",
     ".m4s": "video/iso.segment",
+    // Images — must be typed correctly or browsers download instead of render.
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    // Video / audio
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+    ".ogv": "video/ogg",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    // Documents
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".csv": "text/csv",
+    ".txt": "text/plain",
+    ".json": "application/json",
+    ".zip": "application/zip",
   };
   return contentTypes[ext] || "application/octet-stream";
+};
+
+/**
+ * Turn any stored asset URL into a plain R2 object key. Accepts the S3 API
+ * host, the public pub-*.r2.dev domain, a custom CDN domain, or a bare key,
+ * and strips a leading bucket segment from path-style URLs.
+ */
+export const extractR2Key = (url?: string | null): string => {
+  if (!url) return "";
+  let key: string;
+  try {
+    key = new URL(url).pathname;
+  } catch {
+    key = url; // already a bare key
+  }
+  key = decodeURIComponent(key).replace(/^\/+/, "");
+  return bucketName && key.startsWith(`${bucketName}/`)
+    ? key.slice(bucketName.length + 1)
+    : key;
+};
+
+/** Remove a local temp file, tolerating one that is already gone. */
+export const removeLocalFile = (localFilePath?: string | null) => {
+  if (!localFilePath) return;
+  try {
+    fs.unlinkSync(localFilePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`Failed to remove local file "${localFilePath}":`, error);
+    }
+  }
 };
 
 export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
@@ -147,13 +207,16 @@ export const uploadFileToS3 = async (localFilePath: string, folder: string) => {
   const key = `${folder}/${Date.now()}-${fileName}`;
   const body = fs.createReadStream(localFilePath);
 
-  await multipartUpload({
-    Key: key,
-    Body: body,
-    ContentType: getContentType(fileName),
-  });
-
-  fs.unlinkSync(localFilePath);
+  try {
+    await multipartUpload({
+      Key: key,
+      Body: body,
+      ContentType: getContentType(fileName),
+    });
+  } finally {
+    // Always drop the multer temp file, success or failure.
+    removeLocalFile(localFilePath);
+  }
 
   // Signed URL (private)
   const signedUrl = await getSignedUrl(

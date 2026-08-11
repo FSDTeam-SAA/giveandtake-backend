@@ -1027,9 +1027,7 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       }
     }
     console.log(photo.path)
-
-    // Delete local file
-    fs.unlinkSync(photo.path);
+    // Local file is removed by uploadToCloudinary.
   }
   console.log(filteredData)
 
