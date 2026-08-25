@@ -11,7 +11,7 @@ import { AppliedJob } from '../models/appliedJob.model'
 import { Resume } from '../models/resume.model'
 import { deleteFromS3, deleteS3Keys, listS3KeysByPrefix } from '../services/s3.service'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
-import { sendEmail } from '../utils/sendEmail'
+import { jobNotificationEmailTemplate, sendEmail } from '../utils/sendEmail'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -189,6 +189,7 @@ export const notifyJobExpiryToRecruiters = async () => {
   const jobsExpiringSoon = await Job.find({
     deadline: { $gte: now, $lte: next24h },
     status: "active",
+    expiryReminderSentAt: null,
   }).populate("recruiterId companyId");
 
   for (const job of jobsExpiringSoon) {
@@ -204,6 +205,25 @@ export const notifyJobExpiryToRecruiters = async () => {
       type: "job_expiry_warning",
       id: job._id as mongoose.Types.ObjectId,
     });
+
+    const ownerUser = await User.findById(ownerUserId).select("name email");
+    if (ownerUser?.email) {
+      await sendEmail(
+        ownerUser.email,
+        "Job expiry notice",
+        jobNotificationEmailTemplate({
+          recipientName: ownerUser.name,
+          heading: "Job expiry notice",
+          message: JOB_EXPIRY_NOTICE,
+          jobTitle: job.title,
+        })
+      );
+    }
+
+    await Job.updateOne(
+      { _id: job._id },
+      { $set: { expiryReminderSentAt: now } }
+    );
   }
 
   console.log(`${jobsExpiringSoon.length} recruiters notified of job expiry.`);

@@ -32,6 +32,10 @@ import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 import { capQuery, escapeRegex, wordStartRegex } from "../utils/regex";
 import { SkillModel } from "../models/skill.model";
 import { JobCategory } from "../models/jobCategory.model";
+import {
+  jobNotificationEmailTemplate,
+  sendEmail,
+} from "../utils/sendEmail";
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
   console.warn(
@@ -406,16 +410,22 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   // 🔹 Find followers
   let followers: any[] = [];
   if (companyId) {
-    followers = await Following.find({ companyId });
+    followers = await Following.find({ companyId }).populate(
+      "userId",
+      "name email"
+    );
   } else if (recruiterId) {
-    followers = await Following.find({ recruiterId });
+    followers = await Following.find({ recruiterId }).populate(
+      "userId",
+      "name email"
+    );
   }
 
   if (followers.length > 0) {
     const notifications = followers.map((f) => ({
-      userId: f.userId,
+      to: f.userId?._id ?? f.userId,
       message: `New job posted: ${title}`,
-      jobId: job._id,
+      id: job._id,
       type: "job_post",
     }));
 
@@ -424,14 +434,32 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     // 🔹 Emit via socket
     saved.forEach(async (n) => {
       const count = await Notification.countDocuments({
-        to: n.userId,
+        to: n.to,
         isViewed: false,
       });
-      io.to(n.userId.toString()).emit("newNotification", {
+      io.to(n.to.toString()).emit("newNotification", {
         n,
         compileFunction,
       });
     });
+
+    await Promise.all(
+      followers.map(async (f) => {
+        const follower = f.userId as any;
+        if (!follower?.email) return;
+
+        await sendEmail(
+          follower.email,
+          "New job posted",
+          jobNotificationEmailTemplate({
+            recipientName: follower.name,
+            heading: "New job posted",
+            message: `New job posted: ${title}`,
+            jobTitle: title,
+          })
+        );
+      })
+    );
   }
 
   sendResponse(res, {
@@ -633,6 +661,9 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   const prevStatus = job.status;
   const prevPublishDate = job.publishDate;
   const prevArchivedState = job.arcrivedJob;
+  const prevDeadlineTime = job.deadline
+    ? new Date(job.deadline).getTime()
+    : undefined;
 
   // ---- Apply updates safely ----
   for (const field of updatableFields) {
@@ -640,6 +671,13 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
       // @ts-ignore
       job[field] = safeBody[field];
     }
+  }
+
+  if (
+    job.deadline &&
+    new Date(job.deadline).getTime() !== prevDeadlineTime
+  ) {
+    job.expiryReminderSentAt = null;
   }
 
   job.adminApprove = false;
@@ -678,16 +716,22 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   if (justActivated || justPublishedNow) {
     let followers: any[] = [];
     if (job.companyId) {
-      followers = await Following.find({ companyId: job.companyId });
+      followers = await Following.find({ companyId: job.companyId }).populate(
+        "userId",
+        "name email"
+      );
     } else if (job.recruiterId) {
-      followers = await Following.find({ recruiterId: job.recruiterId });
+      followers = await Following.find({ recruiterId: job.recruiterId }).populate(
+        "userId",
+        "name email"
+      );
     }
 
     if (followers.length > 0) {
       const notifications = followers.map((f) => ({
-        userId: f.userId,
+        to: f.userId?._id ?? f.userId,
         message: `Updated job: ${job.title}`,
-        jobId: job._id,
+        id: job._id,
         type: "job_update",
       }));
 
@@ -695,15 +739,33 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
 
       saved.forEach(async (n) => {
         const count = await Notification.countDocuments({
-          to: n.userId,
+          to: n.to,
           isViewed: false,
         });
         // emit without leaking server internals
-        io.to(n.userId.toString()).emit("newNotification", {
+        io.to(n.to.toString()).emit("newNotification", {
           n,
           unseenCount: count,
         });
       });
+
+      await Promise.all(
+        followers.map(async (f) => {
+          const follower = f.userId as any;
+          if (!follower?.email) return;
+
+          await sendEmail(
+            follower.email,
+            "Job updated",
+            jobNotificationEmailTemplate({
+              recipientName: follower.name,
+              heading: "Job updated",
+              message: `Updated job: ${job.title}`,
+              jobTitle: job.title,
+            })
+          );
+        })
+      );
     }
   }
 
@@ -1113,9 +1175,9 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   if (!job) {
     throw new AppError(400, "job not found");
   }
+  const jobOwner = job.userId as any;
 
   if (req.body.adminApprove) {
-    // Email notifications for job approvals are temporarily disabled.
     const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: "Job Post Updated By Admin",
@@ -1132,8 +1194,20 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       notification,
       count,
     });
+
+    if (jobOwner?.email) {
+      await sendEmail(
+        jobOwner.email,
+        "Job post approved",
+        jobNotificationEmailTemplate({
+          recipientName: jobOwner.name,
+          heading: "Job post approved",
+          message: "Job Post Updated By Admin",
+          jobTitle: job.title,
+        })
+      );
+    }
   } else {
-    // Email notifications for job denials are temporarily disabled.
     const notification = await createNotification({
       to: job.userId._id as mongoose.Types.ObjectId,
       message: "Job Post Denied By Admin",
@@ -1150,6 +1224,19 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       notification,
       count,
     });
+
+    if (jobOwner?.email) {
+      await sendEmail(
+        jobOwner.email,
+        "Job post denied",
+        jobNotificationEmailTemplate({
+          recipientName: jobOwner.name,
+          heading: "Job post denied",
+          message: "Job Post Denied By Admin",
+          jobTitle: job.title,
+        })
+      );
+    }
   }
 
   const incomingPublishDate = coerceDate(req.body?.publishDate);
@@ -1177,6 +1264,15 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
       nextBody.deadline = fallbackDeadline;
       nextBody.expiryDate = fallbackDeadline;
     }
+  }
+
+  const nextDeadline = nextBody.deadline as Date | undefined;
+  if (
+    nextDeadline &&
+    (!job.deadline ||
+      new Date(nextDeadline).getTime() !== new Date(job.deadline).getTime())
+  ) {
+    nextBody.expiryReminderSentAt = null;
   }
 
   const updated = await Job.findByIdAndUpdate(id, nextBody, { new: true });

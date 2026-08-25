@@ -76,7 +76,7 @@ export const buildReceiptEmailHtml = ({
                 Dear <strong>${userName}</strong>,
               </p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch©</strong>! Below is a copy of your receipt. You can also download this from your Account panel.
+                Thanks for choosing to upgrade your plan with <strong>Elevator Video Pitch©</strong>! Below is a copy of your receipt. You can also download this from your personal account panel.
               </p>
 
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
@@ -85,10 +85,16 @@ export const buildReceiptEmailHtml = ({
               ${
                 isYearlyPlan
                   ? `<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                Because you selected our yearly plan, you are also entitled to a complimentary half-hour career-mentoring call with our partner, <strong>The Ladder Back Down&reg;</strong>. Please book your appointment at <a href="https://www.ladderbackdown.com/mentoring" style="color:#2B7FD0;text-decoration:none;">www.ladderbackdown.com/mentoring</a>. During this session you will receive live mentoring plus feedback on your Elevator Video Pitch.
+                Because you have purchased our yearly plan, you are also entitled to a full Elevator Video Pitch review and full Resume/CV review and redraft.
               </p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                After booking, look out for a confirmation email from <a href="mailto:info@ladderbackdown.com" style="color:#2B7FD0;text-decoration:none;">info@ladderbackdown.com</a> that contains the UK phone/WhatsApp number to call at your scheduled time. Please check your inbox and any other folders to ensure you receive this acknowledgement.
+                Please send your CV/Resume to <a href="mailto:admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">Admin@evpitch.com</a> and we will revert with a polished new CV within 5 working days.
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                Please remove your personal contact information including your phone number (and address if you have this on your CV) before sending us your CV. We look forward to hearing good news about your new role!
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
+                Please bookmark <a href="mailto:admin@evpitch.com" style="color:#2B7FD0;text-decoration:none;">admin@evpitch.com</a> to ensure you receive your redrafted CV.
               </p>`
                   : ''
               }

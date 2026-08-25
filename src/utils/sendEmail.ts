@@ -63,6 +63,69 @@ export const sendEmail = async (
   }
 };
 
+const escapeEmailHtml = (value?: string) =>
+  (value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+export const jobNotificationEmailTemplate = ({
+  recipientName,
+  heading,
+  message,
+  jobTitle,
+}: {
+  recipientName?: string;
+  heading: string;
+  message: string;
+  jobTitle?: string;
+}) => {
+  const safeName = escapeEmailHtml(getFirstName(recipientName));
+  const safeHeading = escapeEmailHtml(heading);
+  const safeMessage = escapeEmailHtml(message);
+  const safeJobTitle = escapeEmailHtml(jobTitle);
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${safeHeading} — Elevator Video Pitch</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f6f8;">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08);">
+          <tr>
+            <td style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+              <h1 style="margin:0;font-size:20px;">Elevator Video Pitch©</h1>
+              <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${safeHeading}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="margin:0 0 14px;font-size:15px;">Dear <strong>${safeName}</strong>,</p>
+              ${safeJobTitle ? `<p style="margin:0 0 12px;font-size:14px;"><strong>Job:</strong> ${safeJobTitle}</p>` : ""}
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#374151;">${safeMessage}</p>
+              <p style="margin:18px 0 0;font-size:14px;color:#374151;">Best regards,<br><strong>EVP Admin</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #eef0f2;text-align:center;font-size:12px;color:#6b7280;">
+              Questions? Contact <a href="mailto:clientsupport@evpitch.com" style="color:#2563eb;text-decoration:none;">clientsupport@evpitch.com</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+};
+
 // Optional helper (reuse if already defined elsewhere)
 function getFirstName(fullName?: string): string {
   if (!fullName) return "User";

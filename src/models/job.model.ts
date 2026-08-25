@@ -88,6 +88,7 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     paygStartedAt: { type: Date },
     paygExpiresAt: { type: Date },
     deactivatedAt: { type: Date, default: null },
+    expiryReminderSentAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

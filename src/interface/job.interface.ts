@@ -53,6 +53,7 @@ export interface IJob extends Document {
   paygStartedAt?: Date;
   paygExpiresAt?: Date;
   deactivatedAt?: Date | null;
+  expiryReminderSentAt?: Date | null;
 }
 
 export interface JobModel extends Model<IJob> {}
