@@ -148,7 +148,7 @@ export const register = catchAsync(async (req, res) => {
   try {
     await sendEmail(
       user.email,
-      "OTP - Elevator Video PitchAc",
+      "OTP - Elevator Video Pitch©",
       accountCreationOtpTemplate(user.name, otp),
       { from: DEFAULT_NO_REPLY_EMAIL }
     );
@@ -243,7 +243,7 @@ export const login = catchAsync(async (req, res) => {
     await user.save();
     await sendEmail(
       user.email,
-      "OTP - Elevator Video PitchAc",
+      "OTP - Elevator Video Pitch©",
       accountCreationOtpTemplate(user.name, otp),
       { from: DEFAULT_NO_REPLY_EMAIL }
     );
