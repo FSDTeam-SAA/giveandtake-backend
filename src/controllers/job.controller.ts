@@ -64,6 +64,13 @@ const refreshEmbeddingAfterDirectUpdate = async (jobDoc: any) => {
   }
 };
 
+const withoutJobEmbedding = (job: any) => {
+  const responseJob =
+    typeof job?.toObject === "function" ? job.toObject() : { ...job };
+  delete responseJob.embedding;
+  return responseJob;
+};
+
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const PAYG_DURATION_DAYS = 30;
 const PAYG_EDIT_ERROR =
@@ -1312,7 +1319,9 @@ export const deleteJob = catchAsync(async (req: Request, res: Response) => {
  ***************************/
 export const getSingleJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const job = await Job.findById(id).populate("companyId recruiterId userId");
+  const job = await Job.findById(id)
+    .select("-embedding")
+    .populate("companyId recruiterId userId");
 
   if (!job) {
     throw new AppError(httpStatus.NOT_FOUND, "Job not found");
@@ -1467,9 +1476,19 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
 
     const adjustedScore = score + matchPercentage / 25;
 
+    const responseJob = withoutJobEmbedding(job);
     if (adjustedScore >= 5)
-      exactMatches.push({ job, score: adjustedScore, matchPercentage });
-    else partialMatches.push({ job, score: adjustedScore, matchPercentage });
+      exactMatches.push({
+        job: responseJob,
+        score: adjustedScore,
+        matchPercentage,
+      });
+    else
+      partialMatches.push({
+        job: responseJob,
+        score: adjustedScore,
+        matchPercentage,
+      });
   }
 
   exactMatches.sort((a, b) => b.score - a.score);
@@ -1506,7 +1525,11 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       const adjustedScore =
         Math.min(4.5, Math.max(1, similarity * 10)) + matchPercentage / 25;
 
-      partialMatches.push({ job, score: adjustedScore, matchPercentage });
+      partialMatches.push({
+        job: withoutJobEmbedding(job),
+        score: adjustedScore,
+        matchPercentage,
+      });
     }
   }
 
@@ -1520,6 +1543,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       ...dateFilter,
       ...deadlineFilter, // 🆕 exclude expired
     })
+      .select("-embedding")
       .populate("companyId recruiterId")
       .limit(5);
 
@@ -1593,9 +1617,11 @@ const findEmbeddingRecommendedJobs = async (
 export const getArchivedJobs = catchAsync(async (req, res) => {
   const userId = req.user?._id;
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, "User not found");
-  const archivedJobs = await Job.find({ userId, arcrivedJob: true }).sort({
-    createAt: -1,
-  });
+  const archivedJobs = await Job.find({ userId, arcrivedJob: true })
+    .select("-embedding")
+    .sort({
+      createAt: -1,
+    });
 
   if (!archivedJobs)
     throw new AppError(httpStatus.NOT_FOUND, "No archived jobs found");
@@ -1662,7 +1688,9 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
       { companyId: userId },
       ...(company ? [{ companyId: company._id }] : []),
     ],
-  }).sort({ createdAt: -1 });
+  })
+    .select("-embedding")
+    .sort({ createdAt: -1 });
 
   if (!Jobs.length) {
     return sendResponse(res, {
@@ -1762,6 +1790,7 @@ export const getRicruitercompanyJobs3 = catchAsync(async (req, res) => {
   const Jobs = await Job.find({
     recruiterId: userId,
   })
+    .select("-embedding")
     .sort({
       createdAt: -1,
     })
@@ -1782,6 +1811,7 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
   const Jobs = await Job.find({
     companyId: userId,
   })
+    .select("-embedding")
     .sort({
       createdAt: -1,
     })
@@ -1878,6 +1908,7 @@ export const getPendingJobsForCompany = catchAsync(
     const pendingJobs = await Job.find({
       userId: { $in: recruiterUserIds },
     })
+      .select("-embedding")
       .sort({ createdAt: -1 })
       .populate("userId", "name role avatar")
       .populate("jobCategoryId")
@@ -1898,6 +1929,7 @@ export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
 
   const jobs = await Job.find({ jobApprove: "pending" })
+    .select("-embedding")
     .populate("companyId recruiterId")
     .sort({ updatedAt: -1 })
     .skip(skip)
