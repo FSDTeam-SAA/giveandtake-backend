@@ -18,6 +18,8 @@ import { createNotification } from "../sockets/notification.service";
 import mongoose from "mongoose";
 import { Notification } from "../models/notification.model";
 import { Following } from "../models/following.model";
+import { AppliedJob } from "../models/appliedJob.model";
+import { Bookmark } from "../models/bookmark.model";
 import { compileFunction } from "vm";
 import { paymentInfo } from "../models/paymentInfo.model";
 import {
@@ -1308,7 +1310,40 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const deleted = await Job.findByIdAndDelete(id);
+  if (!mongoose.isValidObjectId(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
+  }
+
+  const session = await mongoose.startSession();
+  let deleted: any = null;
+
+  try {
+    await session.withTransaction(async () => {
+      const job = await Job.findById(id).session(session);
+      if (!job) {
+        throw new AppError(httpStatus.NOT_FOUND, "Job not found");
+      }
+
+      const applications = await AppliedJob.find({ jobId: job._id })
+        .select("_id")
+        .session(session)
+        .lean();
+      const relatedNotificationIds = [
+        job._id,
+        ...applications.map((application) => application._id),
+      ];
+
+      await AppliedJob.deleteMany({ jobId: job._id }).session(session);
+      await Bookmark.deleteMany({ jobId: job._id }).session(session);
+      await Notification.deleteMany({
+        id: { $in: relatedNotificationIds },
+      }).session(session);
+
+      deleted = await Job.findByIdAndDelete(job._id, { session });
+    });
+  } finally {
+    await session.endSession();
+  }
 
   if (!deleted) throw new AppError(httpStatus.NOT_FOUND, "Job not found");
 
@@ -1931,26 +1966,119 @@ export const getPendingJobsForCompany = catchAsync(
   }
 );
 
-// Api for fetch jobs that need to be admin approvals
+const ADMIN_JOB_VIEWS = [
+  "all",
+  "pending",
+  "published",
+  "scheduled",
+  "denied",
+  "expired",
+  "archived",
+] as const;
+
+type AdminJobView = (typeof ADMIN_JOB_VIEWS)[number];
+
+const buildAdminJobViewFilters = (now: Date): Record<AdminJobView, any> => {
+  const notArchived = { arcrivedJob: { $ne: true } };
+  const notExpired = {
+    $or: [
+      { deadline: { $exists: false } },
+      { deadline: null },
+      { deadline: { $gte: now } },
+    ],
+  };
+  const fullyApproved = {
+    adminApprove: true,
+    jobApprove: "approved",
+  };
+
+  return {
+    all: {},
+    pending: {
+      $and: [
+        notArchived,
+        notExpired,
+        { jobApprove: { $ne: "denied" } },
+        {
+          $or: [
+            { adminApprove: { $ne: true } },
+            { jobApprove: { $ne: "approved" } },
+          ],
+        },
+      ],
+    },
+    published: {
+      $and: [
+        notArchived,
+        notExpired,
+        fullyApproved,
+        {
+          $or: [
+            { publishDate: { $exists: false } },
+            { publishDate: null },
+            { publishDate: { $lte: now } },
+          ],
+        },
+      ],
+    },
+    scheduled: {
+      $and: [
+        notArchived,
+        notExpired,
+        fullyApproved,
+        { publishDate: { $gt: now } },
+      ],
+    },
+    denied: {
+      $and: [notArchived, notExpired, { jobApprove: "denied" }],
+    },
+    expired: {
+      $and: [notArchived, { deadline: { $lt: now } }],
+    },
+    archived: { arcrivedJob: true },
+  };
+};
+
+// Admin job inventory and approval queue.
 export const adminApproveJobs = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
+  const requestedView =
+    typeof req.query.view === "string" ? req.query.view.toLowerCase() : "all";
+  const view: AdminJobView = ADMIN_JOB_VIEWS.includes(
+    requestedView as AdminJobView
+  )
+    ? (requestedView as AdminJobView)
+    : "all";
+  const filters = buildAdminJobViewFilters(new Date());
+  const filter = filters[view];
 
-  const jobs = await Job.find({ jobApprove: "pending" })
-    .select("-embedding")
-    .populate("companyId recruiterId")
-    .sort({ updatedAt: -1 })
-    .skip(skip)
-    .limit(limit);
-
-  const total = await Job.countDocuments({ jobApprove: "pending" });
+  const [jobs, total, countValues] = await Promise.all([
+    Job.find(filter)
+      .select("-embedding")
+      .populate("companyId recruiterId")
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Job.countDocuments(filter),
+    Promise.all(
+      ADMIN_JOB_VIEWS.map((status) => Job.countDocuments(filters[status]))
+    ),
+  ]);
 
   const meta = buildMetaPagination(total, page, limit);
+  const counts = ADMIN_JOB_VIEWS.reduce(
+    (result, status, index) => {
+      result[status] = countValues[index];
+      return result;
+    },
+    {} as Record<AdminJobView, number>
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Pending jobs fetched successfully",
-    data: { jobs, meta },
+    message: "Jobs fetched successfully",
+    data: { jobs, meta, counts, view },
   });
 });
 
