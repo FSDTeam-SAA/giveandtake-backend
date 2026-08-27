@@ -19,6 +19,7 @@ import {
 import path from 'path'
 import { initNotificationSocket } from './sockets/notification.service'
 import { ensureBuiltInContent } from './jobs/ensureBuiltInContent'
+import { ensureJobApprovalConsistency } from './jobs/ensureJobApprovalConsistency'
 
 dotenv.config()
 
@@ -62,6 +63,8 @@ connectDB().then(async () => {
   // Makes the six built-in content pages exist and be well-formed in whichever
   // database this environment points at. Safe to run on every boot.
   await ensureBuiltInContent()
+  // Preserve compatibility while jobApprove/adminApprove are both exposed.
+  await ensureJobApprovalConsistency()
 
   // app.listen(PORT, () => {
   //   console.log(`Server is running on port ${PORT}`)

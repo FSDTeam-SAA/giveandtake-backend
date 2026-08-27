@@ -1183,66 +1183,70 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(400, "job not found");
   }
   const jobOwner = job.userId as any;
+  const hasAdminApprovalDecision =
+    typeof req.body?.adminApprove === "boolean";
 
-  if (req.body.adminApprove) {
-    const notification = await createNotification({
-      to: job.userId._id as mongoose.Types.ObjectId,
-      message: "Job Post Updated By Admin",
-      type: "job_application_status",
-      id: job._id as mongoose.Types.ObjectId,
-    });
+  if (hasAdminApprovalDecision) {
+    if (req.body.adminApprove) {
+      const notification = await createNotification({
+        to: job.userId._id as mongoose.Types.ObjectId,
+        message: "Job Post Updated By Admin",
+        type: "job_application_status",
+        id: job._id as mongoose.Types.ObjectId,
+      });
 
-    const count = await Notification.countDocuments({
-      to: job.userId._id,
-      isViewed: false,
-    });
+      const count = await Notification.countDocuments({
+        to: job.userId._id,
+        isViewed: false,
+      });
 
-    io.to(job.userId._id.toString()).emit("newNotification", {
-      notification,
-      count,
-    });
+      io.to(job.userId._id.toString()).emit("newNotification", {
+        notification,
+        count,
+      });
 
-    if (jobOwner?.email) {
-      await sendEmail(
-        jobOwner.email,
-        "Job post approved",
-        jobNotificationEmailTemplate({
-          recipientName: jobOwner.name,
-          heading: "Job post approved",
-          message: "Job Post Updated By Admin",
-          jobTitle: job.title,
-        })
-      );
-    }
-  } else {
-    const notification = await createNotification({
-      to: job.userId._id as mongoose.Types.ObjectId,
-      message: "Job Post Denied By Admin",
-      type: "job_application_status",
-      id: job._id as mongoose.Types.ObjectId,
-    });
+      if (jobOwner?.email) {
+        await sendEmail(
+          jobOwner.email,
+          "Job post approved",
+          jobNotificationEmailTemplate({
+            recipientName: jobOwner.name,
+            heading: "Job post approved",
+            message: "Job Post Updated By Admin",
+            jobTitle: job.title,
+          })
+        );
+      }
+    } else {
+      const notification = await createNotification({
+        to: job.userId._id as mongoose.Types.ObjectId,
+        message: "Job Post Denied By Admin",
+        type: "job_application_status",
+        id: job._id as mongoose.Types.ObjectId,
+      });
 
-    const count = await Notification.countDocuments({
-      to: job.userId._id,
-      isViewed: false,
-    });
+      const count = await Notification.countDocuments({
+        to: job.userId._id,
+        isViewed: false,
+      });
 
-    io.to(job.userId._id.toString()).emit("newNotification", {
-      notification,
-      count,
-    });
+      io.to(job.userId._id.toString()).emit("newNotification", {
+        notification,
+        count,
+      });
 
-    if (jobOwner?.email) {
-      await sendEmail(
-        jobOwner.email,
-        "Job post denied",
-        jobNotificationEmailTemplate({
-          recipientName: jobOwner.name,
-          heading: "Job post denied",
-          message: "Job Post Denied By Admin",
-          jobTitle: job.title,
-        })
-      );
+      if (jobOwner?.email) {
+        await sendEmail(
+          jobOwner.email,
+          "Job post denied",
+          jobNotificationEmailTemplate({
+            recipientName: jobOwner.name,
+            heading: "Job post denied",
+            message: "Job Post Denied By Admin",
+            jobTitle: job.title,
+          })
+        );
+      }
     }
   }
 
@@ -1259,6 +1263,9 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   );
 
   const nextBody: Record<string, unknown> = { ...req.body };
+  if (hasAdminApprovalDecision) {
+    nextBody.jobApprove = req.body.adminApprove ? "approved" : "denied";
+  }
   if (incomingPublishDate) {
     nextBody.publishDate = incomingPublishDate;
   }
