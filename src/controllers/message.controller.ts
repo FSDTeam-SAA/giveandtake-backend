@@ -52,35 +52,113 @@ import { MessageRoom } from '../models/messageRoom.model'
 // })
 
 
-export const getUnreadRoomCount = async (userId : any) => {
-  const unreadRooms = await Message.aggregate([
-    {
-      $match: {
-        userId: { $ne: new mongoose.Types.ObjectId(userId) }, // not sent by this user
-        readBy: { $ne: new mongoose.Types.ObjectId(userId) } // not yet read
-      }
-    },
-    {
-      $group: {
-        _id: "$roomId", // group by room
-      }
-    },
-    {
-      $count: "roomCount" // count number of rooms with unread messages
-    }
-  ]);
+const getUserRoomIds = async (userId: mongoose.Types.ObjectId) =>
+  MessageRoom.find({
+    $or: [{ userId }, { recruiterId: userId }, { companyId: userId }],
+  }).distinct('_id')
 
-  return unreadRooms.length ? unreadRooms[0].roomCount : 0;
-};
+export const getUnreadMessageCount = async (userId: string) => {
+  if (!mongoose.Types.ObjectId.isValid(userId)) return 0
+
+  const objectId = new mongoose.Types.ObjectId(userId)
+  const roomIds = await getUserRoomIds(objectId)
+
+  if (roomIds.length === 0) return 0
+
+  return Message.countDocuments({
+    roomId: { $in: roomIds },
+    userId: { $ne: objectId },
+    readBy: { $ne: objectId },
+  })
+}
+
+export const getMyUnreadMessageCount = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user?._id?.toString()
+    if (!userId) {
+      throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated')
+    }
+
+    const count = await getUnreadMessageCount(userId)
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Unread message count fetched',
+      data: { count },
+    })
+  }
+)
+
+export const markRoomMessagesAsRead = catchAsync(
+  async (req: Request, res: Response) => {
+    const { roomId } = req.params
+    const userId = req.user?._id?.toString()
+
+    if (!userId) {
+      throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated')
+    }
+    if (!mongoose.Types.ObjectId.isValid(roomId)) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
+    }
+
+    const objectId = new mongoose.Types.ObjectId(userId)
+    const room = await MessageRoom.findOne({
+      _id: roomId,
+      $or: [
+        { userId: objectId },
+        { recruiterId: objectId },
+        { companyId: objectId },
+      ],
+    })
+
+    if (!room) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Message room not found')
+    }
+
+    const result = await Message.updateMany(
+      {
+        roomId: room._id,
+        userId: { $ne: objectId },
+        readBy: { $ne: objectId },
+      },
+      { $addToSet: { readBy: objectId } }
+    )
+    const count = await getUnreadMessageCount(userId)
+
+    io.to(userId).emit('msg_count', count)
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Messages marked as read',
+      data: { count, markedRead: result.modifiedCount },
+    })
+  }
+)
 
 export const createMessage = catchAsync(async (req: Request, res: Response) => {
-  const { message, roomId, userId } = req.body
-  const files = req.files as Express.Multer.File[]
-
-  const room = await MessageRoom.findById(roomId);
+  const { message, roomId } = req.body
+  const files = (req.files as Express.Multer.File[]) || []
+  const senderId = req.user?._id?.toString()
 
   if (!mongoose.Types.ObjectId.isValid(roomId)) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid room ID')
+  }
+  if (!senderId) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated')
+  }
+
+  const senderObjectId = new mongoose.Types.ObjectId(senderId)
+  const room = await MessageRoom.findOne({
+    _id: roomId,
+    $or: [
+      { userId: senderObjectId },
+      { recruiterId: senderObjectId },
+      { companyId: senderObjectId },
+    ],
+  })
+
+  if (!room) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Message room not found')
   }
 
   // Upload all files to Cloudinary
@@ -102,7 +180,8 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
   const newMessage = await Message.create({
     message,
     roomId,
-    userId,
+    userId: senderObjectId,
+    readBy: [senderObjectId],
     file: fileData.filter(Boolean), // remove nulls
   })
 
@@ -111,7 +190,7 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     roomId,
     {
       lastMessage: message || (fileData.length ? '📎 Attachment' : ''),
-      lastMessageSender: userId,
+      lastMessageSender: senderObjectId,
     },
     { new: true }
   )
@@ -120,16 +199,20 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     'userId',
     'name email avatar'
   )
-  let uid = '';
-  if(req?.user?.role === 'candidate'){
-    uid = (room?.companyId ?? room?.recruiterId)?.toString() ?? '';
-  }else{
-    uid = room?.userId?.toString() || '';
-  }
-  // Emit socket event
+  const recipientIds = [room.userId, room.recruiterId, room.companyId]
+    .filter(Boolean)
+    .map((id) => id.toString())
+    .filter((id) => id !== senderId)
+
+  // Send each recipient their own total before publishing the room event. An
+  // open chat can then mark the message read and publish the final count.
+  await Promise.all(
+    recipientIds.map(async (recipientId) => {
+      const count = await getUnreadMessageCount(recipientId)
+      io.to(recipientId).emit('msg_count', count)
+    })
+  )
   io.to(roomId).emit('newMessage', message1)
-  const count = await getUnreadRoomCount(userId);
-  io.to(uid.toString()).emit('msg_count', count)
 
   res.status(httpStatus.CREATED).json({
     success: true,

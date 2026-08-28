@@ -21,9 +21,17 @@ const messageSchema: Schema<IMessage> = new Schema<IMessage>(
       ref: 'MessageRoom',
       required: true,
     },
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   { timestamps: true }
 )
+
+messageSchema.index({ roomId: 1, userId: 1, readBy: 1 })
 
 export const Message = mongoose.model<IMessage, MessageModel>(
   'Message',

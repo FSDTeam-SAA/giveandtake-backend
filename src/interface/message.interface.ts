@@ -11,6 +11,7 @@ export interface IMessage extends Document {
   message: string
   file: IMessageFile[]
   roomId: Types.ObjectId
+  readBy: Types.ObjectId[]
 }
 
 export interface MessageModel extends Model<IMessage> {}

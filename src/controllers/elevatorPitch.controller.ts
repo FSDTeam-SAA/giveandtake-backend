@@ -82,6 +82,31 @@ const resolveUserId = (req: Request): string => {
   throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 }
 
+const resolveDeleteUserId = (req: Request): string => {
+  // @ts-ignore - added by auth middleware
+  const authenticatedUserId = req.user?._id?.toString()
+  if (!authenticatedUserId) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Authenticated user is required')
+  }
+
+  const requestedUserId =
+    typeof req.query.userId === 'string' && req.query.userId.trim()
+      ? req.query.userId.trim()
+      : authenticatedUserId
+  // @ts-ignore - added by auth middleware
+  const role = req.user?.role
+  const isAdmin = role === 'admin' || role === 'super-admin'
+
+  if (requestedUserId !== authenticatedUserId && !isAdmin) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      'You can only delete your own elevator pitch'
+    )
+  }
+
+  return requestedUserId
+}
+
 const resolveUploadUserId = (req: Request): string => {
   // @ts-ignore - added by auth middleware
   if (req.user?._id) {
@@ -396,11 +421,18 @@ export const getElevatorPitchForUser = catchAsync(
 )
 
 export const deleteResume = catchAsync(async (req: Request, res: Response) => {
-  const userId = resolveUserId(req)
+  const userId = resolveDeleteUserId(req)
 
   const pitch = await ElevatorPitch.findOne({ userId })
   if (!pitch) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    // DELETE is idempotent: the requested end state has already been reached.
+    // Keep a JSON 200 response for compatibility with clients that parse the
+    // standard API response envelope (notably the Flutter application).
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: 'Elevator pitch deleted successfully',
+    })
+    return
   }
 
   await removeElevatorPitchArtifacts({
@@ -411,7 +443,7 @@ export const deleteResume = catchAsync(async (req: Request, res: Response) => {
   await ElevatorPitch.deleteOne({ _id: pitch._id })
 
   // @ts-ignore - admin roles set by auth middleware
-  if (req.user?.role === 'admin') {
+  if (req.user?.role === 'admin' || req.user?.role === 'super-admin') {
     await createNotification({
       to: userId as any,
       message:

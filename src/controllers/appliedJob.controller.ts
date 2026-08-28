@@ -135,6 +135,30 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET the authenticated candidate's applied job IDs.
+ *
+ * This intentionally returns only IDs so job listings can show an "Applied"
+ * state without loading every application and its populated profile data.
+ */
+export const getMyAppliedJobIds = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
+    }
+
+    const jobIds = await AppliedJob.distinct("jobId", { userId });
+
+    res.status(httpStatus.OK).json({
+      success: true,
+      message: "Applied job IDs fetched successfully",
+      data: { jobIds: jobIds.map(String) },
+    });
+  }
+);
+
 /****************************
  * GET Applications by Job ID
  ***************/
