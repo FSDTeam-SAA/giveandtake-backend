@@ -22,12 +22,15 @@ const s3Client = new S3Client({
   },
 });
 
-const bucketName = process.env.R2_BUCKET_NAME!;
+const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
 // If you enable Public Buckets or map a Custom Domain, set R2_PUBLIC_BASE to that origin.
 // Recommended format: https://<bucket>.<account_id>.r2.cloudflarestorage.com OR https://cdn.yourdomain.com
 const bucketUrl = (key: string) => {
-  const base = (process.env.R2_PUBLIC_BASE || `https://${bucketName}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`).replace(/\/$/, "");
+  const base = (
+    process.env.R2_PRIVATE_BASE ||
+    `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}`
+  ).replace(/\/$/, "");
   return `${base}/${key.replace(/^\/+/, "")}`;
 };
 

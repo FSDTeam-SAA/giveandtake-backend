@@ -28,7 +28,9 @@ const s3Client = new S3Client({
   },
 });
 
-const bucketName = process.env.R2_BUCKET_NAME!;
+// AWS_BUCKET_NAME is retained for deployments created before the R2 variable
+// names were standardized.
+const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "";
 
 /**
  * ✅ FIX #2:
@@ -37,9 +39,8 @@ const bucketName = process.env.R2_BUCKET_NAME!;
  */
 const bucketUrl = (key: string) => {
   const base =
-    process.env.R2_PUBLIC_BASE?.replace(/\/$/, "") ||
-    // Keep this fallback for *public* buckets only
-    `https://${bucketName}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    process.env.R2_PRIVATE_BASE?.replace(/\/$/, "") ||
+    `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}`;
   return `${base}/${key.replace(/^\/+/, "")}`;
 };
 

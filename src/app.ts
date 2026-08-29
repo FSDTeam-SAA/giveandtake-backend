@@ -1,3 +1,7 @@
+// Environment variables must be loaded before route/controller imports. Some
+// storage clients read their configuration at module initialization time.
+import "dotenv/config";
+
 import express from "express";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler";
 import { notFound } from "./middlewares/notFound";
