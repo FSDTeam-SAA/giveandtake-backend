@@ -30,9 +30,31 @@ const PUBLIC_OWNER_ROLES = ['recruiter', 'company']
 
 // Read the `?t=` playback token off a stream request so it can be propagated
 // into rewritten playlist URLs (segments + key). Empty string when absent.
-const getPlaybackTokenParam = (req: Request): string => {
+const getPlaybackTokenParam = (req: Request, pitchId?: string): string => {
   const raw = Array.isArray(req.query.t) ? req.query.t[0] : req.query.t
-  return typeof raw === 'string' && raw ? raw : ''
+  if (typeof raw === 'string' && raw) return raw
+
+  // Older Flutter builds put the access JWT in `?token=` on the initial
+  // master-playlist request. optionalAuth has already verified that token and
+  // populated req.user. Mint the proper scoped token for every child URL.
+  const legacy = Array.isArray(req.query.token)
+    ? req.query.token[0]
+    : req.query.token
+  const viewer = req.user as any
+  if (typeof legacy === 'string' && legacy && pitchId && viewer?._id) {
+    return createToken(
+      {
+        scope: PITCH_PLAYBACK_SCOPE,
+        pitchId,
+        viewerId: viewer._id.toString(),
+        viewerRole: viewer.role,
+      },
+      PITCH_PLAYBACK_SECRET,
+      '2h'
+    )
+  }
+
+  return ''
 }
 
 const appendPlaybackToken = (urlPath: string, token: string): string =>
@@ -548,7 +570,10 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
 
     // Carry the playback token (if any) into the rewritten variant URLs so
     // gated (candidate) playback works through the proxy chain.
-    const playbackToken = getPlaybackTokenParam(req);
+    const playbackToken = getPlaybackTokenParam(
+      req,
+      (pitch._id as any).toString()
+    );
 
     const rewriteAssetLine = (line: string) => {
       const trimmed = line.trim();

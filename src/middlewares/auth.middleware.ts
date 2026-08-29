@@ -41,7 +41,19 @@ export const optionalAuth = async (
   _res: Response,
   next: NextFunction
 ) => {
-  const token = req.headers.authorization?.split(" ")[1];
+  const bearerToken = req.headers.authorization?.split(" ")[1];
+  // Backward compatibility for older Flutter builds. Only the master stream
+  // route may authenticate its initial request with `?token=`. The controller
+  // exchanges it for a short-lived playback token before returning child HLS
+  // URLs, so the login JWT is never propagated to playlists or segments.
+  const legacyQueryToken = req.params.id
+    ? Array.isArray(req.query.token)
+      ? req.query.token[0]
+      : req.query.token
+    : undefined;
+  const token =
+    bearerToken ||
+    (typeof legacyQueryToken === "string" ? legacyQueryToken : undefined);
   if (!token) return next();
 
   try {
