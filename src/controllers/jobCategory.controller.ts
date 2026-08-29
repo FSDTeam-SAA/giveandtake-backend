@@ -3,7 +3,8 @@ import catchAsync from "../utils/catchAsync";
 import { JobCategory } from "../models/jobCategory.model";
 import sendResponse from "../utils/sendResponse";
 import httpStatus from "http-status";
-import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary";
+import { deleteFromCloudinary } from "../utils/cloudinary";
+import { deleteMedia, uploadMedia } from "../utils/mediaUpload";
 import AppError from "../errors/AppError";
 import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 
@@ -16,8 +17,9 @@ export const createJobCategory = catchAsync(
     }
 
     let categoryIcon = "";
+    let categoryIconKey = "";
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path);
+      const result = await uploadMedia(req.file.path, "job-categories");
 
       if (!result) {
         throw new AppError(
@@ -26,12 +28,14 @@ export const createJobCategory = catchAsync(
         );
       }
 
-      categoryIcon = result.secure_url;
+      categoryIcon = result.url;
+      categoryIconKey = result.key;
     }
 
     const category = await JobCategory.create({
       name,
       categoryIcon,
+      categoryIconKey,
       role: JSON.parse(role || "{}"),
     });
 
@@ -107,22 +111,24 @@ export const updateJobCategory = catchAsync(
     }
 
     let newIcon = category.categoryIcon;
+    let newIconKey = category.categoryIconKey;
 
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.path);
+      const result = await uploadMedia(req.file.path, "job-categories");
       if (!result) {
         throw new AppError(
           httpStatus.INTERNAL_SERVER_ERROR,
           "Failed to upload image"
         );
       }
-      await deleteFromCloudinary(category.categoryIcon);
-
-      newIcon = result.secure_url;
+      // Keep any legacy Cloudinary asset available; only the new upload uses R2.
+      newIcon = result.url;
+      newIconKey = result.key;
     }
 
     category.name = name;
     category.categoryIcon = newIcon;
+    category.categoryIconKey = newIconKey;
     category.role = JSON.parse(role);
     await category.save();
 
@@ -145,10 +151,14 @@ export const deleteJobCategory = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, "Category not found");
     }
 
-    // Delete icon from Cloudinary
-    const publicId = category.categoryIcon?.split("/").pop()?.split(".")[0];
-    if (publicId) {
-      await deleteFromCloudinary(publicId);
+    if (category.categoryIconKey) {
+      await deleteMedia(category.categoryIconKey);
+    } else {
+      // Legacy categories may still reference Cloudinary.
+      const publicId = category.categoryIcon?.split("/").pop()?.split(".")[0];
+      if (publicId) {
+        await deleteFromCloudinary(publicId);
+      }
     }
 
     await category.deleteOne();

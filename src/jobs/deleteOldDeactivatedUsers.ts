@@ -12,6 +12,8 @@ import { Resume } from '../models/resume.model'
 import { deleteFromS3, deleteS3Keys, listS3KeysByPrefix } from '../services/s3.service'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
 import { jobNotificationEmailTemplate, sendEmail } from '../utils/sendEmail'
+import { deleteUserAndRelatedData } from '../services/userDeletion.service'
+import { isCandidatePitchAvailable } from '../services/candidatePitchEntitlement.service'
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const JOB_EXPIRY_NOTICE =
@@ -19,7 +21,7 @@ const JOB_EXPIRY_NOTICE =
 const SUBSCRIPTION_EXPIRY_NOTICE =
   'Your subscription has expired, please renew or upload a free 30-second elevator pitch video today.';
 const PITCH_REMOVAL_NOTICE =
-  'Renew your plan to upload a new 60-seconds video or upload a free 30-seconds video.';
+  'Renew your plan to upload a new 60-second video, or upload a free 30-second elevator video pitch.';
 const PITCH_EXPIRED_EMAIL_SUBJECT = 'Your EVPitch has expired';
 
 const buildExpiredPitchEmail = (name?: string) =>
@@ -33,7 +35,7 @@ const buildExpiredPitchEmail = (name?: string) =>
         Your EVPitch has expired and is no longer available on your profile.
       </p>
       <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
-        Please upload a new EVPitch Video before applying for roles.
+        Please upload a free 30-second Elevator Video Pitch before applying for roles.
       </p>
     `,
   });
@@ -41,13 +43,30 @@ const buildExpiredPitchEmail = (name?: string) =>
 export const deleteOldDeactivatedUsers = async () => {
   const THIRTY_DAYS = 30 * MILLIS_PER_DAY
   const now = new Date()
+  const cutoff = new Date(now.getTime() - THIRTY_DAYS)
 
-  const result = await User.deleteMany({
+  const users = await User.find({
     deactivate: true,
-    dateOfdeactivate: { $lte: new Date(now.getTime() - THIRTY_DAYS) },
-  })
+    dateOfdeactivate: { $lte: cutoff },
+  }).select('_id')
 
-  console.log(`${result.deletedCount} deactivated users deleted`)
+  let deletedCount = 0
+  let failedCount = 0
+  for (const user of users) {
+    try {
+      const result = await deleteUserAndRelatedData(String(user._id), {
+        scheduledCutoff: cutoff,
+      })
+      if (result) deletedCount += 1
+    } catch (error) {
+      failedCount += 1
+      console.error(`Failed to purge deactivated user "${user._id}":`, error)
+    }
+  }
+
+  console.log(
+    `${deletedCount} deactivated users deleted; ${failedCount} purge(s) will retry.`
+  )
 }
 
 export const updateExpiredPlans = async () => {
@@ -344,25 +363,32 @@ export const removeExpiredElevatorPitches = async () => {
   const expiredPlans = await paymentInfo
     .find({
       planStatus: "deactivate",
-      paymentStatus: "complete",
+      paymentStatus: { $in: ["complete", "refunded"] },
       pitchRemovedAt: { $exists: false },
     })
-    .sort({ updatedAt: -1 });
+    .sort({ updatedAt: -1 })
+    .populate('planId', 'valid');
 
   for (const plan of expiredPlans) {
-    const duration = (plan.duration || "").toLowerCase();
+    const duration = String(
+      plan.duration || (plan.planId as any)?.valid || ''
+    ).toLowerCase();
     if (duration !== "monthly" && duration !== "yearly") {
       continue;
     }
 
+    const refunded = plan.paymentStatus === 'refunded';
     const expiryDate = resolvePaymentExpiry(plan);
-    if (!expiryDate) continue;
+    if (!expiryDate && !refunded) continue;
 
-    if (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime()) {
+    if (
+      expiryDate &&
+      (!plan.expiresAt || plan.expiresAt.getTime() !== expiryDate.getTime())
+    ) {
       plan.expiresAt = expiryDate;
     }
 
-    const expired = isPaymentExpired(plan, now);
+    const expired = refunded || isPaymentExpired(plan, now);
 
     if (!expired) {
       if (plan.isModified("expiresAt")) {
@@ -371,12 +397,21 @@ export const removeExpiredElevatorPitches = async () => {
       continue;
     }
 
-    const activePlan = await paymentInfo.findOne({
+    const otherActivePlans = await paymentInfo.find({
       userId: plan.userId,
       planStatus: "active",
       paymentStatus: "complete",
+    }).populate('planId', 'valid');
+    const hasOtherCurrentSubscription = otherActivePlans.some((activePlan) => {
+      const validity = String(
+        activePlan.duration || (activePlan.planId as any)?.valid || ''
+      ).toLowerCase();
+      return (
+        (validity === 'monthly' || validity === 'yearly') &&
+        !isPaymentExpired(activePlan, now)
+      );
     });
-    if (activePlan && !isPaymentExpired(activePlan, now)) {
+    if (hasOtherCurrentSubscription) {
       if (plan.isModified("expiresAt")) {
         await plan.save();
       }
@@ -392,6 +427,17 @@ export const removeExpiredElevatorPitches = async () => {
 
     const user = await User.findById(plan.userId).select('name email');
 
+    // A candidate's free pitch—or a paid-length pitch covered by another
+    // current plan—remains available.
+    if (
+      user?.role === 'candidate' &&
+      (await isCandidatePitchAvailable(pitch, plan.userId))
+    ) {
+      plan.pitchRemovedAt = new Date();
+      await plan.save();
+      continue;
+    }
+
     await removeElevatorPitchArtifacts({
       userId: String(plan.userId),
       rawKey: pitch.video?.rawKey ?? pitch.video?.url ?? undefined,
@@ -401,19 +447,22 @@ export const removeExpiredElevatorPitches = async () => {
     plan.pitchRemovedAt = new Date();
     await plan.save();
 
-    await createNotification({
-      to: plan.userId as mongoose.Types.ObjectId,
-      message: PITCH_REMOVAL_NOTICE,
-      type: "elevator_pitch_removed",
-      id: pitch._id as mongoose.Types.ObjectId,
-    });
+    // Refunds already produce their own combined refund/30-second reminder.
+    if (plan.paymentStatus !== 'refunded') {
+      await createNotification({
+        to: plan.userId as mongoose.Types.ObjectId,
+        message: PITCH_REMOVAL_NOTICE,
+        type: "elevator_pitch_removed",
+        id: pitch._id as mongoose.Types.ObjectId,
+      });
 
-    if (user?.email) {
-      await sendEmail(
-        user.email,
-        PITCH_EXPIRED_EMAIL_SUBJECT,
-        buildExpiredPitchEmail(user.name)
-      );
+      if (user?.email) {
+        await sendEmail(
+          user.email,
+          PITCH_EXPIRED_EMAIL_SUBJECT,
+          buildExpiredPitchEmail(user.name)
+        );
+      }
     }
   }
 

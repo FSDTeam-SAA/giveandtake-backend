@@ -24,6 +24,7 @@ import {
   PITCH_PLAYBACK_SCOPE,
   PITCH_PLAYBACK_SECRET,
 } from '../middlewares/checkVideoAccess.middleware'
+import { isCandidatePitchAvailable } from '../services/candidatePitchEntitlement.service'
 
 const PUBLIC_OWNER_ROLES = ['recruiter', 'company']
 
@@ -413,6 +414,15 @@ export const getElevatorPitchForUser = catchAsync(
       return
     }
 
+    const owner = await User.findById(userId).select('role')
+    if (
+      owner?.role === 'candidate' &&
+      !(await isCandidatePitchAvailable(pitch, owner._id as any))
+    ) {
+      res.status(httpStatus.OK).json({ success: true, data: null })
+      return
+    }
+
     res.status(httpStatus.OK).json({
       success: true,
       data: pitch,
@@ -480,6 +490,11 @@ export const getPitchPlaybackToken = catchAsync(
       return
     }
 
+    const ownerId = (pitch.userId as any)?._id ?? pitch.userId
+    if (!(await isCandidatePitchAvailable(pitch, ownerId))) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    }
+
     const viewer = req.user as any
     const allowed = await canViewCandidatePitch(pitch as any, viewer)
     if (!allowed) {
@@ -508,7 +523,7 @@ export const streamElevatorPitch = catchAsync(async (req: Request, res: Response
   const { id } = req.params;
   const pitch = await ElevatorPitch.findById(id);
 
-  if (!pitch || !pitch.video?.hlsUrl) {
+  if (!pitch || pitch.status !== 'active' || !pitch.video?.hlsUrl) {
     throw new AppError(httpStatus.NOT_FOUND, "Elevator pitch not found");
   }
 
@@ -571,7 +586,7 @@ export const secureStream = catchAsync(async (req: Request, res: Response) => {
   const { userId, segment } = req.params
 
   const pitch = await ElevatorPitch.findOne({ userId })
-  if (!pitch || !pitch.video?.hlsUrl) {
+  if (!pitch || pitch.status !== 'active' || !pitch.video?.hlsUrl) {
     throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
   }
 
@@ -655,7 +670,7 @@ export const getEncryptionKey = catchAsync(
     const { userId, key } = req.params
 
     const pitch = await ElevatorPitch.findOne({ userId })
-    if (!pitch || !pitch.video?.encryptionKeyUrl) {
+    if (!pitch || pitch.status !== 'active' || !pitch.video?.encryptionKeyUrl) {
       throw new AppError(httpStatus.NOT_FOUND, 'Encryption key not found')
     }
 
@@ -718,6 +733,7 @@ export const getAllElevatorPitches = catchAsync(
     // always goes through the gated /stream/:id proxy using the pitch _id.
     const pitches = await ElevatorPitch.find({
       userId: { $in: userIds },
+      status: 'active',
       'processing.state': 'ready',
     })
       .select(
@@ -725,10 +741,24 @@ export const getAllElevatorPitches = catchAsync(
       )
       .populate('userId', 'name email role')
 
+    const availablePitches =
+      type === 'candidate'
+        ? (
+            await Promise.all(
+              pitches.map(async (pitch) => {
+                const ownerId = (pitch.userId as any)?._id ?? pitch.userId
+                return (await isCandidatePitchAvailable(pitch, ownerId))
+                  ? pitch
+                  : null
+              })
+            )
+          ).filter(Boolean)
+        : pitches
+
     res.status(httpStatus.OK).json({
       success: true,
-      total: pitches.length,
-      data: pitches,
+      total: availablePitches.length,
+      data: availablePitches,
     })
   }
 )

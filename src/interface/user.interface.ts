@@ -17,10 +17,11 @@ export interface IUser {
 
   avatar?: {
     url: string
+    key?: string | null
   }
 
   dateOfbirth?: Date
-  role: 'admin' | 'candidate' | 'recruiter' | 'company'
+  role: 'admin' | 'super-admin' | 'candidate' | 'recruiter' | 'company'
   verificationInfo: {
     verified: boolean
     token: string
@@ -29,6 +30,7 @@ export interface IUser {
   password_reset_token: string
   deactivate: boolean
   dateOfdeactivate: Date | undefined
+  deletionInProgress?: boolean
   refresh_token: string
 }
 

@@ -365,7 +365,7 @@ export const refundProcessedTemplate = (name: string) => `<!doctype html>
                 Your refund has been processed in accordance with our Refund Policy and is on its way to you.
               </p>
               <p style="margin:0 0 18px;font-size:14px;color:#374151;line-height:1.6;">
-                Kindly remember to upload a free 30 second Elevator Video Pitch© if you haven't done so already. If you have any questions please contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a>.
+                Please upload a free 30-second Elevator Video Pitch© if you haven't done so already. If you have any questions, please contact <a href="mailto:clientsupport@evpitch.com" style="color:#2B7FD0;text-decoration:none;">clientsupport@evpitch.com</a>.
               </p>
 
               <p style="margin:18px 0 0;font-size:14px;color:#374151;">

@@ -17,6 +17,7 @@ const userSchema: Schema = new Schema<IUser>(
     },
     avatar: {
       url: { type: String, default: '' },
+      key: { type: String, default: null },
     },
     address: {
       type: String,
@@ -37,6 +38,7 @@ const userSchema: Schema = new Schema<IUser>(
     password_reset_token: { type: String, default: '' },
     deactivate: { type: Boolean, default: false },
     dateOfdeactivate: { type: Date },
+    deletionInProgress: { type: Boolean, default: false },
     refresh_token: { type: String },
   },
   { timestamps: true }

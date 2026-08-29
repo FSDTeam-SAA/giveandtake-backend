@@ -2,9 +2,7 @@ import { Types } from 'mongoose'
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
-import { paymentInfo } from '../models/paymentInfo.model'
-import { isPaymentExpired } from '../utils/subscription'
-import { ELEVATOR_PITCH_LIMITS } from './validateElevatorPitchAccess'
+import { isCandidatePitchAvailable } from '../services/candidatePitchEntitlement.service'
 
 export const EV_PITCH_REQUIRED_TO_APPLY_MESSAGE =
   'Please upload an EVPitch Video to apply for this role'
@@ -33,28 +31,7 @@ export const assertUserCanApplyWithElevatorPitch = async (
     )
   }
 
-  const duration = Number(pitch.metadata?.duration ?? 0)
-  const isPaidLengthPitch =
-    duration >
-    ELEVATOR_PITCH_LIMITS.candidateFreeSeconds +
-      ELEVATOR_PITCH_LIMITS.durationToleranceSeconds
+  if (await isCandidatePitchAvailable(pitch, toObjectId(userId))) return
 
-  if (!isPaidLengthPitch) return
-
-  const activePaidPlan = await paymentInfo.findOne({
-    userId: toObjectId(userId),
-    paymentStatus: 'complete',
-    planStatus: 'active',
-    duration: { $in: ['monthly', 'yearly'] },
-  })
-
-  if (activePaidPlan && !isPaymentExpired(activePaidPlan)) return
-
-  pitch.status = 'deactivate'
-  await pitch.save()
-
-  throw new AppError(
-    httpStatus.BAD_REQUEST,
-    EV_PITCH_REQUIRED_TO_APPLY_MESSAGE
-  )
+  throw new AppError(httpStatus.BAD_REQUEST, EV_PITCH_REQUIRED_TO_APPLY_MESSAGE)
 }

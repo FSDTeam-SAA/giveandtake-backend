@@ -11,7 +11,9 @@ export interface ICreateResume extends Document {
   userId: Types.ObjectId
   type: ResumeType
   banner: string
+  bannerKey?: string
   photo: string
+  photoKey?: string
   aboutUs: string
   title: string
   firstName: string

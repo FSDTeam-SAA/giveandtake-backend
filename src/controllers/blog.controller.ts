@@ -4,8 +4,7 @@ import { Blog } from '../models/Blog.model'
 import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import sendResponse from '../utils/sendResponse'
-import { deleteFromCloudinary, uploadToCloudinary } from '../utils/cloudinary'
-import fs from 'fs'
+import { uploadMedia } from '../utils/mediaUpload'
 import { buildMetaPagination, getPaginationParams } from '../utils/pagination'
 import chatbotService from '../services/chatbot.service'
 import slugify from 'slugify'
@@ -41,24 +40,24 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
   }
 
   let imageUrl: string | null = null
+  let imageKey: string | null = null
   let imagePublicId: string | null = null
 
   if (req.file) {
     const localPath = req.file.path
 
-    // Upload image to Cloudinary
-    const uploadResult = await uploadToCloudinary(localPath, 'blogs')
+    const uploadResult = await uploadMedia(localPath, 'blogs')
 
-    if (!uploadResult?.secure_url) {
+    if (!uploadResult?.url) {
       throw new AppError(
         httpStatus.INTERNAL_SERVER_ERROR,
         'Image upload failed'
       )
     }
 
-    imageUrl = uploadResult.secure_url
-    imagePublicId = uploadResult.public_id
-    // Local file is removed by uploadToCloudinary.
+    imageUrl = uploadResult.url
+    imageKey = uploadResult.key
+    // Local file is removed by uploadMedia.
   }
 
   const blog = await Blog.create({
@@ -68,6 +67,7 @@ export const createBlog = catchAsync(async (req: Request, res: Response) => {
     userId,
     authorName,
     image: imageUrl,
+    imageKey,
     imagePublicId,
   })
 
@@ -147,25 +147,20 @@ export const updateBlog = catchAsync(async (req: Request, res: Response) => {
   if (req.file) {
     const localPath = req.file.path
 
-    // Upload new image to Cloudinary
-    const uploadResult = await uploadToCloudinary(localPath, 'blogs')
+    const uploadResult = await uploadMedia(localPath, 'blogs')
 
-    if (!uploadResult?.secure_url) {
+    if (!uploadResult?.url) {
       throw new AppError(
         httpStatus.INTERNAL_SERVER_ERROR,
         'Image upload failed'
       )
     }
 
-    // Delete old image from Cloudinary if exists
-    if (blog.imagePublicId) {
-      await deleteFromCloudinary(blog.imagePublicId)
-    }
-
-    // Update with new image details
-    blog.image = uploadResult.secure_url
-    blog.imagePublicId = uploadResult.public_id
-    // Local file is removed by uploadToCloudinary.
+    // Existing Cloudinary files are intentionally left untouched.
+    blog.image = uploadResult.url
+    blog.imageKey = uploadResult.key
+    blog.imagePublicId = null
+    // Local file is removed by uploadMedia.
   }
 
   // Update other fields if provided

@@ -16,6 +16,9 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     if (!user) {
       throw new AppError(401, "Invalid token");
     }
+    if (user.deactivate) {
+      throw new AppError(401, "Account is deactivated");
+    }
     const verified = await User.isOTPVerified(user._id.toString());
     if (!verified) {
       throw new AppError(httpStatus.FORBIDDEN, "Email not verified");
@@ -47,7 +50,11 @@ export const optionalAuth = async (
       process.env.JWT_ACCESS_SECRET!
     )) as JwtPayload;
     const user = await User.findById(decoded._id);
-    if (user && (await User.isOTPVerified(user._id.toString()))) {
+    if (
+      user &&
+      !user.deactivate &&
+      (await User.isOTPVerified(user._id.toString()))
+    ) {
       req.user = user;
     }
   } catch {

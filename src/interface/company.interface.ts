@@ -4,7 +4,9 @@ import { IResumeLink } from './createResume.interface'
 export interface ICompany extends Document {
   userId?: number
   clogo?: string
+  clogoKey?: string
   banner: string
+  bannerKey?: string
   aboutUs?: string
   cname: string
   country: string

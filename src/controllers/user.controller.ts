@@ -1,6 +1,3 @@
-import path from "path";
-import fs from "fs";
-
 import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
 import httpStatus from "http-status";
@@ -16,9 +13,10 @@ import sendResponse from "../utils/sendResponse";
 import { defaultSecurityQuestions } from "../constants/defaultSecurityQuestions";
 import { JwtPayload } from "jsonwebtoken";
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
-import { deleteFromCloudinary, uploadToCloudinary } from "../utils/cloudinary";
+import { uploadMedia } from "../utils/mediaUpload";
 import { CreateResume } from "../models/createResume.model";
 import { RecruiterAccount } from "../models/recruiterAccount.model";
 import { Company } from "../models/company.model";
@@ -27,6 +25,7 @@ import { Experience } from "../models/experience.model";
 import { Job } from "../models/job.model";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
 import { capQuery, escapeRegex } from "../utils/regex";
+import { deleteUserAndRelatedData } from "../services/userDeletion.service";
 
 const DEFAULT_NO_REPLY_EMAIL =
   process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
@@ -226,6 +225,12 @@ export const login = catchAsync(async (req, res) => {
   ) {
     throw new AppError(httpStatus.FORBIDDEN, "Incorrect password");
   }
+  if (user.deletionInProgress) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "Account deletion is already in progress"
+    );
+  }
   if (!user.verificationInfo?.verified) {
     const needsSecurityQuestions =
       !user.securityQuestions || user.securityQuestions.length < 2;
@@ -263,8 +268,23 @@ export const login = catchAsync(async (req, res) => {
 
   // REACTIVATE ACCOUNT IF ACCOUNT IS DEACTIVATE
   if (user.deactivate) {
-    user.deactivate = false;
-    user.dateOfdeactivate = undefined;
+    const reactivated = await User.updateOne(
+      {
+        _id: user._id,
+        deactivate: true,
+        deletionInProgress: { $ne: true },
+      },
+      {
+        $set: { deactivate: false, deletionInProgress: false },
+        $unset: { dateOfdeactivate: "" },
+      }
+    );
+    if (reactivated.modifiedCount !== 1) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        "Account deletion is already in progress"
+      );
+    }
   }
 
   const jwtPayload = {
@@ -692,6 +712,7 @@ export const deactivateUser = catchAsync(async (req, res) => {
 
   user.deactivate = true;
   user.dateOfdeactivate = new Date();
+  user.deletionInProgress = false;
   await user.save();
 
   sendResponse(res, {
@@ -711,6 +732,7 @@ export const softDeactivateUser = catchAsync(async (req, res) => {
 
   user.deactivate = true;
   user.dateOfdeactivate = undefined; // no scheduled deletion
+  user.deletionInProgress = false;
   await user.save();
 
   sendResponse(res, {
@@ -883,9 +905,6 @@ export const getAllCompanies = catchAsync(
 // });
 
 import { Following } from "../models/following.model"; // adjust path if needed
-import { AwardsAndHonor } from "../models/awardsAndHonor.model";
-import { ElevatorPitch } from "../models/elevatorPitch.model";
-import { AppliedJob } from "../models/appliedJob.model";
 
 export const getUserById = catchAsync(async (req: Request, res: Response) => {
   const id = req.user?._id;
@@ -982,17 +1001,20 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
   // Handle avatar upload
   if (req.files && (req.files as any).photo) {
     const photo = (req.files as any).photo[0];
-    const uploadResult = await uploadToCloudinary(photo.path, "avatars");
-
-    // Remove old avatar from Cloudinary if needed (optional)
-    const existingUser = await User.findById(id).select("avatar role");
-    if (existingUser?.avatar?.url) {
-      const publicId = path.basename(existingUser.avatar.url).split(".")[0];
-      await deleteFromCloudinary(publicId);
+    const uploadResult = await uploadMedia(photo.path, "avatars");
+    if (!uploadResult) {
+      throw new AppError(
+        httpStatus.INTERNAL_SERVER_ERROR,
+        "Avatar upload failed"
+      );
     }
 
+    // Keep legacy Cloudinary URLs/files untouched. Only this new upload uses R2.
+    const existingUser = await User.findById(id).select("avatar role");
+
     filteredData.avatar = {
-      url: uploadResult?.secure_url,
+      url: uploadResult.url,
+      key: uploadResult.key,
     };
     console.log(existingUser)
     if (existingUser?.role === 'candidate') {
@@ -1000,7 +1022,8 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       const resume = await CreateResume.findOne({ userId: id })
       console.log(resume)
       if (resume) {
-        resume.photo = uploadResult?.secure_url!
+        resume.photo = uploadResult.url
+        resume.photoKey = uploadResult.key
         if (updateData.name) {
           resume.firstName = updateData.name.split(" ")[0]
           resume.lastName = updateData.name.split(" ")[1]
@@ -1011,7 +1034,8 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       const resume = await RecruiterAccount.findOne({ userId: id })
       console.log(resume)
       if (resume) {
-        resume.photo = uploadResult?.secure_url!
+        resume.photo = uploadResult.url
+        resume.photoKey = uploadResult.key
         if (updateData.name) {
           resume.firstName = updateData.name.split(" ")[0]
           resume.lastName = updateData.name.split(" ")[1]
@@ -1022,12 +1046,13 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
       const resume = await Company.findOne({ userId: id })
       console.log(resume)
       if (resume) {
-        resume.clogo = uploadResult?.secure_url!
+        resume.clogo = uploadResult.url
+        resume.clogoKey = uploadResult.key
         await resume.save()
       }
     }
     console.log(photo.path)
-    // Local file is removed by uploadToCloudinary.
+    // Local file is removed by uploadMedia.
   }
   console.log(filteredData)
 
@@ -1062,6 +1087,9 @@ export const refreshToken = catchAsync(async (req, res) => {
   const user = await User.findById(decoded._id);
   if (!user) {
     throw new AppError(401, "Invalid refresh token");
+  }
+  if (user.deactivate) {
+    throw new AppError(401, "Account is deactivated");
   }
   const jwtPayload = {
     _id: user._id,
@@ -1628,73 +1656,47 @@ export const getAllUser = catchAsync(async (req, res) => {
   })
 })
 
-const decrementJobCountersForFilter = async (filter: Record<string, any>) => {
-  const jobCounts = await AppliedJob.aggregate([
-    { $match: filter },
-    { $group: { _id: "$jobId", count: { $sum: 1 } } },
-  ]);
-
-  const updates = jobCounts.filter((group) => group._id);
-
-  await Promise.all(
-    updates.map(({ _id, count }) =>
-      Job.findByIdAndUpdate(_id, { $inc: { counter: -count } })
-    )
-  );
-};
-
 export const deleteUser = catchAsync(async (req, res) => {
   const id = req.params.id
-
-  const user = await User.findById(id)
-
-  if (!user) {
-    throw new AppError(400, "User not found")
+  if (!mongoose.isValidObjectId(id)) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid user ID")
   }
-  if (user.role === "candidate") {
-    await CreateResume.findOneAndDelete({ userId: user._id })
-    await Experience.deleteMany({ userId: user._id })
-    await AwardsAndHonor.deleteMany({ userId: user._id })
-    await ElevatorPitch.findOneAndDelete({ userId: user._id })
-    await decrementJobCountersForFilter({ userId: user._id });
-    await AppliedJob.deleteMany({ userId: user._id })
-  } else if (user.role === "recruiter") {
-    const jobs = await Job.find({ userId: user._id });
-    const jobIds = jobs.map((j) => j._id);
-    if (jobIds.length) {
-      await decrementJobCountersForFilter({ jobId: { $in: jobIds } });
-      await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
-    }
-    await Job.deleteMany({ userId: user._id });
-    await Job.findOneAndDelete({ userId: user._id })
-    await RecruiterAccount.findOneAndDelete({ userId: user._id })
-    await Experience.deleteMany({ userId: user._id })
-    await AwardsAndHonor.deleteMany({ userId: user._id })
-    await ElevatorPitch.findOneAndDelete({ userId: user._id })
-    await Company.findOneAndUpdate({ employeesId: user._id }, { $pull: { employeesId: user._id } })
-  } else if (user.role === "company") {
-    const jobs = await Job.find({ userId: user._id });
-    const jobIds = jobs.map((j) => j._id);
-    if (jobIds.length) {
-      await decrementJobCountersForFilter({ jobId: { $in: jobIds } });
-      await AppliedJob.deleteMany({ jobId: { $in: jobIds } });
-    }
-    await Job.deleteMany({ userId: user._id });
-    await Job.findOneAndDelete({ userId: user._id })
-    await RecruiterAccount.findOneAndDelete({ userId: user._id })
-    await Experience.deleteMany({ userId: user._id })
-    await AwardsAndHonor.deleteMany({ userId: user._id })
-    await ElevatorPitch.findOneAndDelete({ userId: user._id })
-    await Company.findOneAndDelete({ userId: user._id })
+  const target = await User.findById(id).select('role')
+  if (!target) throw new AppError(httpStatus.NOT_FOUND, "User not found")
+
+  if (String(req.user?._id) === id) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "Administrators cannot delete their own account from this endpoint"
+    )
+  }
+  if (
+    (target.role === 'admin' || target.role === 'super-admin') &&
+    req.user?.role !== 'super-admin'
+  ) {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "Only a super-admin can delete staff accounts"
+    )
+  }
+  if (
+    target.role === 'super-admin' &&
+    (await User.countDocuments({ role: 'super-admin' })) <= 1
+  ) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "The last super-admin account cannot be deleted"
+    )
   }
 
+  const summary = await deleteUserAndRelatedData(id)
+  if (!summary) throw new AppError(httpStatus.NOT_FOUND, "User not found")
 
-  const delet = await User.findByIdAndDelete(id)
   sendResponse(res, {
     statusCode: 200,
     success: true,
     message: "User deleted successfully",
-    data: ''
+    data: summary
   })
 })
 

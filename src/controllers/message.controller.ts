@@ -5,7 +5,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import mongoose from 'mongoose'
 import { io } from '../server'
-import { uploadToCloudinary } from '../utils/cloudinary' // Adjust path
+import { uploadMedia } from '../utils/mediaUpload'
 import { MessageRoom } from '../models/messageRoom.model'
 
 /***************
@@ -161,15 +161,15 @@ export const createMessage = catchAsync(async (req: Request, res: Response) => {
     throw new AppError(httpStatus.NOT_FOUND, 'Message room not found')
   }
 
-  // Upload all files to Cloudinary
+  // New attachments use public R2. Existing Cloudinary URLs remain readable.
   const fileData = await Promise.all(
     files.map(async (file) => {
-      const result = await uploadToCloudinary(file.path)
+      const result = await uploadMedia(file.path, 'messages')
       if (result) {
         return {
           filename: file.originalname,
-          url: result.secure_url,
-          public_id: result.public_id,
+          url: result.url,
+          key: result.key,
           uploadedAt: new Date(),
         }
       }

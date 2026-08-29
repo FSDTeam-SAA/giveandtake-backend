@@ -9,6 +9,7 @@ const jobCategorySchema: Schema<IJobCategory> = new Schema<IJobCategory>(
     name: { type: String, required: true },
     role: [{type: String}],
     categoryIcon: { type: String },
+    categoryIconKey: { type: String },
   },
   { timestamps: true }
 )

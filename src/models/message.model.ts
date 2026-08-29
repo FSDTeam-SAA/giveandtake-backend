@@ -13,6 +13,7 @@ const messageSchema: Schema<IMessage> = new Schema<IMessage>(
       {
         filename: { type: String },
         url: { type: String },
+        key: { type: String },
         uploadedAt: { type: Date, default: Date.now },
       },
     ],

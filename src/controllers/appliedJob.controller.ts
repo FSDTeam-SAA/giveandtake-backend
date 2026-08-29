@@ -8,7 +8,7 @@ import { buildMetaPagination, getPaginationParams } from "../utils/pagination";
 import { CreateResume } from "../models/createResume.model";
 import { Education } from "../models/education.model";
 import { Experience } from "../models/experience.model";
-import { ElevatorPitch } from "../models/elevatorPitch.model";
+import { getAvailableCandidatePitch } from "../services/candidatePitchEntitlement.service";
 import { AwardsAndHonor } from "../models/awardsAndHonor.model";
 import { createNotification } from "../sockets/notification.service";
 import { Job } from "../models/job.model";
@@ -249,7 +249,7 @@ export const getApplicationsByUser = catchAsync(
 
     const awardsAndHonor = await AwardsAndHonor.find({ userId });
 
-    const elevatorPitch = await ElevatorPitch.findOne({ userId });
+    const elevatorPitch = await getAvailableCandidatePitch(userId);
 
     const meta = buildMetaPagination(totalItems, page, limit);
 

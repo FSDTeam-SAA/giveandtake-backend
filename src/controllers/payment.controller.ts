@@ -19,6 +19,13 @@ import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
 import { recordAndNotifyPayment } from "../utils/paymentReceipt";
 import type StripeTypes from "stripe";
+import { createNotification } from "../sockets/notification.service";
+import { ElevatorPitch } from "../models/elevatorPitch.model";
+import { removeElevatorPitchArtifacts } from "../services/videoProcessing.queue";
+import {
+  isCandidatePitchAvailable,
+  isPaidLengthCandidatePitch,
+} from "../services/candidatePitchEntitlement.service";
 // import { refundOrder } from "../services/paypal.service"; // new service function
 // JSON validation middleware
 const validateJsonBody = (
@@ -376,12 +383,63 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
   }
 
   payment.paymentStatus = "refunded";
+  payment.planStatus = "deactivate";
   payment.refundTransactionId = refundTransactionId;
   payment.refundDate = new Date();
   payment.refundAdminFee = adminFee;
   payment.refundDeductions = deductions;
   payment.refundNotes = notes.join(" | ");
   await payment.save();
+
+  if (audience === "candidate") {
+    const pitch = await ElevatorPitch.findOne({ userId: payment.userId });
+    const pitchStillAvailable = pitch
+      ? await isCandidatePitchAvailable(pitch, payment.userId)
+      : false;
+    if (
+      pitch &&
+      isPaidLengthCandidatePitch(pitch) &&
+      !pitchStillAvailable
+    ) {
+      // Hide the paid-length pitch before touching storage. Even if R2 is
+      // temporarily unavailable, the candidate immediately sees the normal
+      // free upload screen and playback remains blocked.
+      pitch.status = "deactivate";
+      await pitch.save();
+
+      try {
+        await removeElevatorPitchArtifacts({
+          userId: String(payment.userId),
+          rawKey: pitch.video?.rawKey ?? pitch.video?.url ?? undefined,
+        });
+        await ElevatorPitch.deleteOne({ _id: pitch._id });
+        payment.pitchRemovedAt = new Date();
+        await payment.save();
+      } catch (pitchCleanupError) {
+        // The nightly targeted expiry/refund cleanup will retry this record.
+        console.error(
+          "[payment] Failed to remove refunded candidate pitch assets:",
+          pitchCleanupError
+        );
+      }
+    }
+  }
+
+  try {
+    await createNotification({
+      to: user._id as any,
+      message:
+        audience === "candidate"
+          ? "Your refund has been issued. Please upload a free 30-second elevator video pitch if you have not already done so."
+          : "Your refund has been issued.",
+      type: "Refund processed",
+      id: payment._id as any,
+    });
+  } catch (notificationError) {
+    // The provider refund is already complete; notification delivery must not
+    // make the refund endpoint report a false failure.
+    console.error("[payment] Failed to create refund notification:", notificationError);
+  }
 
   try {
     await sendEmail(

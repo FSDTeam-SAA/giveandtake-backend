@@ -5,9 +5,11 @@ export interface IBlog extends Document {
   slug: string
   description: string
   image?: string
-  userId: Types.ObjectId
-  imagePublicId: string
+  imageKey?: string
+  userId?: Types.ObjectId
+  imagePublicId?: string | null
   authorName: string
+  authorDeleted?: boolean
 }
 
 export type BlogModel = Model<IBlog>

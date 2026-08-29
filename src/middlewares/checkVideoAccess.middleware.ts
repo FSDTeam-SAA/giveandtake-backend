@@ -6,6 +6,7 @@ import httpStatus from 'http-status'
 import { AppliedJob } from '../models/appliedJob.model'
 import { Job } from '../models/job.model'
 import { verifyToken } from '../utils/authToken'
+import { isCandidatePitchAvailable } from '../services/candidatePitchEntitlement.service'
 
 export const PITCH_PLAYBACK_SECRET =
   process.env.PITCH_PLAYBACK_SECRET || process.env.JWT_ACCESS_SECRET || ''
@@ -93,6 +94,23 @@ export const gatePitchAccess = catchAsync(
 
     // Public: company & recruiter pitches
     if (PUBLIC_OWNER_ROLES.includes(ownerRole)) return next()
+
+    const ownerId = (pitch.userId as any)?._id ?? pitch.userId
+    const isPlaybackEntryPoint =
+      Boolean(id) ||
+      (typeof req.params.segment === 'string' &&
+        req.params.segment.toLowerCase().endsWith('.m3u8'))
+    const candidatePitchAvailable =
+      pitch.status === 'active' &&
+      (!isPlaybackEntryPoint ||
+        (await isCandidatePitchAvailable(pitch, ownerId)))
+
+    // Entitlement is revalidated for the master/variant playlists. Segment and
+    // key requests only check the persisted active flag, avoiding a payment
+    // lookup for every few seconds of HLS playback.
+    if (!candidatePitchAvailable) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
+    }
 
     // Candidate (or unknown role): must be an authorized viewer
     const pitchId = (pitch._id as any).toString()

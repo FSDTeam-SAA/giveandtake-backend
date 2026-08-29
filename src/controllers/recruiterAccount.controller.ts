@@ -4,7 +4,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
-import { uploadToCloudinary } from '../utils/cloudinary'
+import { uploadMedia } from '../utils/mediaUpload'
 import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
 import mongoose, { Schema } from 'mongoose'
@@ -31,26 +31,34 @@ export const createRecruiterAccount = catchAsync(
     }
 
     let videoUrl = ''
+    let videoKey = ''
     let photoUrl = ''
+    let photoKey = ''
     let banner = ''
+    let bannerKey = ''
 
     // @ts-ignore
     const files = req.files as { [fieldname: string]: Express.Multer.File[] }
 
     if (files?.videoFile?.[0]) {
-      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
-      if (uploaded) videoUrl = uploaded.secure_url
+      const uploaded = await uploadMedia(files.videoFile[0].path, 'recruiters')
+      if (uploaded) {
+        videoUrl = uploaded.url
+        videoKey = uploaded.key
+      }
     }
 
     if (files?.photo?.[0]) {
-      const uploaded = await uploadToCloudinary(files.photo[0].path)
+      const uploaded = await uploadMedia(files.photo[0].path, 'recruiters')
       if (uploaded) {
-        photoUrl = uploaded.secure_url
+        photoUrl = uploaded.url
+        photoKey = uploaded.key
 
         if (!user.avatar) {
           user.avatar = { url: "" }; // initialize if missing
         }
-        user.avatar.url = uploaded.secure_url || "";
+        user.avatar.url = uploaded.url;
+        user.avatar.key = uploaded.key;
         await user?.save()
 
 
@@ -58,9 +66,10 @@ export const createRecruiterAccount = catchAsync(
     }
 
     if (files?.banner?.[0]?.path) {
-      const certRes = await uploadToCloudinary(files.banner[0].path);
-      if (certRes?.secure_url) {
-        banner = certRes.secure_url;
+      const certRes = await uploadMedia(files.banner[0].path, 'recruiters');
+      if (certRes?.url) {
+        banner = certRes.url;
+        bannerKey = certRes.key;
       }
     }
     const { companyId, ...saferest } = rest;
@@ -79,8 +88,11 @@ export const createRecruiterAccount = catchAsync(
       slug: user.slug,
       userId,
       videoFile: videoUrl,
+      videoFileKey: videoKey,
       photo: photoUrl,
+      photoKey,
       banner,
+      bannerKey,
       ...saferest,
     })
 
@@ -192,29 +204,33 @@ export const updateRecruiterAccount = catchAsync(
     }
 
     if (files?.videoFile) {
-      const uploaded = await uploadToCloudinary(files.videoFile[0].path)
-      if (uploaded) updates.videoFile = uploaded.secure_url
+      const uploaded = await uploadMedia(files.videoFile[0].path, 'recruiters')
+      if (uploaded) {
+        updates.videoFile = uploaded.url
+        updates.videoFileKey = uploaded.key
+      }
     }
 
     // // Handle new video upload
     if (files?.banner) {
-      const uploadedVideo = await uploadToCloudinary(files?.banner[0]?.path)
-      if (uploadedVideo?.secure_url) {
-        updates.banner = uploadedVideo.secure_url
-        // Optional: delete old video from Cloudinary if storing public_id
+      const uploadedVideo = await uploadMedia(files.banner[0].path, 'recruiters')
+      if (uploadedVideo?.url) {
+        updates.banner = uploadedVideo.url
+        updates.bannerKey = uploadedVideo.key
       }
     }
 
     // Handle new photo upload
     if (files?.photo) {
-      const uploadedPhoto = await uploadToCloudinary(files?.photo[0]?.path)
-      if (uploadedPhoto?.secure_url) {
-        updates.photo = uploadedPhoto.secure_url
-        // Optional: delete old photo from Cloudinary if storing public_id
+      const uploadedPhoto = await uploadMedia(files.photo[0].path, 'recruiters')
+      if (uploadedPhoto?.url) {
+        updates.photo = uploadedPhoto.url
+        updates.photoKey = uploadedPhoto.key
         if (!user.avatar) {
           user.avatar = { url: "" }; // initialize if missing
         }
-        user.avatar.url = uploadedPhoto.secure_url || "";
+        user.avatar.url = uploadedPhoto.url;
+        user.avatar.key = uploadedPhoto.key;
       }
     }
       if(updates.name){

@@ -5,7 +5,9 @@ const companySchema: Schema<ICompany> = new Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     clogo: { type: String },
+    clogoKey: { type: String },
     banner: { type: String },
+    bannerKey: { type: String },
     aboutUs: { type: String },  
     slug: { type: String, unique: true },
     cname: { type: String, required: true },

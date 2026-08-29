@@ -7,7 +7,11 @@ export interface IRecruiterAccount extends Document {
   bio: string
   aboutUs: string
   banner: string
+  bannerKey?: string
   photo: string
+  photoKey?: string
+  videoFile?: string
+  videoFileKey?: string
   title: string
   firstName: string
   lastName: string

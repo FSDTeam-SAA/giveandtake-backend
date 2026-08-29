@@ -12,6 +12,7 @@ import { uploadMedia } from '../utils/mediaUpload'
 import path from 'path'
 import { User } from '../models/user.model'
 import fs from 'fs'
+import { getAvailableCandidatePitch } from '../services/candidatePitchEntitlement.service'
 
 
 type AsyncRequestHandler = (
@@ -55,7 +56,9 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
 
   let photoUrl: string | null = null;
+  let photoKey: string | null = null;
   let bannerUrl: string | null = null;
+  let bannerKey: string | null = null;
   let resumeFileRelative: string | null = null;
 
   // handle photo
@@ -63,15 +66,20 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     const logoRes = await uploadMedia(files.photo[0].path, "profiles");
     if (logoRes?.url) {
       photoUrl = logoRes.url;
+      photoKey = logoRes.key;
       if (!user.avatar) user.avatar = { url: "" };
       user.avatar.url = photoUrl;
+      user.avatar.key = logoRes.key;
     }
   }
 
   // handle banner
   if (files?.banner && files.banner[0]) {
     const certRes = await uploadMedia(files.banner[0].path, "profiles");
-    if (certRes?.url) bannerUrl = certRes.url;
+    if (certRes?.url) {
+      bannerUrl = certRes.url;
+      bannerKey = certRes.key;
+    }
   }
 
   // handle resume file (local storage)
@@ -91,7 +99,9 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     ...resume,
     userId,
     photo: photoUrl,
+    photoKey,
     banner: bannerUrl,
+    bannerKey,
     file: resumeFileRelative
       ? [{ filename: path.basename(resumeFileRelative), url: resumeFileRelative, uploadedAt: new Date() }]
       : [],
@@ -133,7 +143,8 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
   const experiences = await Experience.find({ userId })
   const education = await Education.find({ userId })
   const awardsAndHonors = await AwardsAndHonor.find({ userId })
-  const elevatorPitch = await ElevatorPitch.find({ userId })
+  const availablePitch = await getAvailableCandidatePitch(userId)
+  const elevatorPitch = availablePitch ? [availablePitch] : []
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -169,13 +180,14 @@ export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => 
   const userId = user._id
 
   // Step 2: Fetch related resources using userId
-  const [resume, experiences, education, awardsAndHonors, elevatorPitch] = await Promise.all([
+  const [resume, experiences, education, awardsAndHonors, availablePitch] = await Promise.all([
     CreateResume.findOne({ userId }),
     Experience.find({ userId }),
     Education.find({ userId }),
     AwardsAndHonor.find({ userId }),
-    ElevatorPitch.find({ userId }),
+    getAvailableCandidatePitch(userId as any),
   ])
+  const elevatorPitch = availablePitch ? [availablePitch] : []
 
   // Step 3: Send unified response
   sendResponse(res, {
@@ -233,10 +245,12 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     const logoRes = await uploadMedia(files.photo[0].path, "profiles");
     if (logoRes?.url) {
       resume.photo = logoRes.url;
+      resume.photoKey = logoRes.key;
       if (!user.avatar) {
         user.avatar = { url: "" }; // initialize if missing
       }
       user.avatar.url = logoRes.url;
+      user.avatar.key = logoRes.key;
     }
   }
     if(resume.firstName){
@@ -248,6 +262,7 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     const certRes = await uploadMedia(files.banner[0].path, "profiles");
     if (certRes?.url) {
       resume.banner = certRes.url;
+      resume.bannerKey = certRes.key;
     }
   }
 

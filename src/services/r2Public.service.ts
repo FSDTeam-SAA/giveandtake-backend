@@ -44,7 +44,21 @@ export const extractPublicKey = (url?: string | null): string => {
   if (!url) return "";
   let key: string;
   try {
-    key = new URL(url).pathname;
+    const parsed = new URL(url);
+    key = parsed.pathname;
+    try {
+      const configuredBase = new URL(publicBase);
+      const basePath = configuredBase.pathname
+        .replace(/^\/+/, "")
+        .replace(/\/+$/, "");
+      const normalizedPath = key.replace(/^\/+/, "");
+      key =
+        basePath && normalizedPath.startsWith(`${basePath}/`)
+          ? normalizedPath.slice(basePath.length + 1)
+          : normalizedPath;
+    } catch {
+      // The outer URL was valid; ignore an invalid public-base configuration.
+    }
   } catch {
     key = url;
   }
@@ -65,8 +79,11 @@ const CONTENT_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
+  ".avi": "video/x-msvideo",
   ".webm": "video/webm",
   ".pdf": "application/pdf",
+  ".xlsx":
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 const contentTypeFor = (fileName: string) =>
@@ -108,7 +125,8 @@ export const uploadPublicFile = async (
       new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
-        Body: fs.readFileSync(localFilePath),
+        Body: fs.createReadStream(localFilePath),
+        ContentLength: fs.statSync(localFilePath).size,
         ContentType: contentTypeFor(fileName),
         CacheControl: "public, max-age=31536000, immutable",
       })

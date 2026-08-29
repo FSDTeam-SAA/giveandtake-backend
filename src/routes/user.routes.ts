@@ -30,7 +30,7 @@ import {
   deleteUser,
   emailChange,
 } from "../controllers/user.controller";
-import { protect } from "../middlewares/auth.middleware";
+import { isAdmin, protect } from "../middlewares/auth.middleware";
 import { resumeUpload } from "../middlewares/multer.middleware";
 
 const router = express.Router();
@@ -57,8 +57,8 @@ router.post("/security-answers/reset-password", securityResetPassword);
 
 router.get("/all/user", getAllUserEmails);
 router.post("/change-email",protect, emailChange);
-router.get("/all/all-user", getAllUser);
-router.delete("/delete/user/:id", deleteUser);
+router.get("/all/all-user", protect, isAdmin, getAllUser);
+router.delete("/delete/user/:id", protect, isAdmin, deleteUser);
 router.get("/all/companies", getAllCompanies);
 
 router.get("/user/single", protect, getUserById);

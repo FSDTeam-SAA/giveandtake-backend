@@ -90,6 +90,61 @@ export const deleteFromCloudinary = async (publicId: string) => {
   }
 }
 
+type CloudinaryResourceType = 'image' | 'video' | 'raw'
+
+/**
+ * Delete a legacy Cloudinary upload from its stored delivery URL. New uploads
+ * use R2, but this remains necessary while old database records still point at
+ * Cloudinary. Direct upload URLs are expected (the shape returned by
+ * `uploadToCloudinary`).
+ */
+export const deleteCloudinaryAssetFromUrl = async (assetUrl?: string | null) => {
+  if (!assetUrl) return false
+
+  let parsed: URL
+  try {
+    parsed = new URL(assetUrl)
+  } catch {
+    return false
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+  if (hostname !== 'cloudinary.com' && !hostname.endsWith('.cloudinary.com')) {
+    return false
+  }
+
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  const uploadIndex = segments.indexOf('upload')
+  if (uploadIndex < 1 || uploadIndex >= segments.length - 1) return false
+
+  const resourceTypeRaw = segments[uploadIndex - 1]
+  const resourceType: CloudinaryResourceType =
+    resourceTypeRaw === 'video' || resourceTypeRaw === 'raw'
+      ? resourceTypeRaw
+      : 'image'
+
+  const publicIdParts = segments.slice(uploadIndex + 1)
+  if (/^v\d+$/.test(publicIdParts[0] || '')) publicIdParts.shift()
+  if (!publicIdParts.length) return false
+
+  let publicId = decodeURIComponent(publicIdParts.join('/'))
+  if (resourceType !== 'raw') {
+    publicId = publicId.replace(/\.[^/.]+$/, '')
+  }
+
+  const result = await cloudinary.uploader.destroy(publicId, {
+    resource_type: resourceType,
+    invalidate: true,
+  })
+  if (result?.result !== 'ok' && result?.result !== 'not found') {
+    throw new Error(
+      `Cloudinary deletion failed for "${publicId}": ${String(result?.result)}`
+    )
+  }
+
+  return true
+}
+
 // export const uploadHLS = async (localDir: string, cloudinaryFolder: string) => {
 //   try {
 //     // Upload all files in the directory
