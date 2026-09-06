@@ -10,6 +10,8 @@ export interface ISubscriptionPlan extends Document {
   features: string[]
   for: SubscriptionTarget
   valid: string
+  jobPostCredits?: number | null
+  archived?: boolean
   maxJobPostsPerYear?: number
   maxJobPostsPerMonth?: number
 }

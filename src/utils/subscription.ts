@@ -34,6 +34,7 @@ export const computeExpiryFromStart = (
 export const resolvePaymentExpiry = (
   payment: Partial<IPaymentInfo>
 ): Date | null => {
+  if (payment.duration === 'credits') return null;
   if (payment.expiresAt) {
     return new Date(payment.expiresAt);
   }

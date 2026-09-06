@@ -1,0 +1,113 @@
+EVPITCH - CLIENT REQUIREMENTS IMPLEMENTATION SUMMARY
+Date: 6 September 2026
+
+STATUS
+The requested changes have been implemented locally in the public website,
+admin website and supporting backend. They have not yet been deployed, and
+the database migration has only been previewed, not applied.
+Flutter was excluded and has no changes from this work.
+
+1. JOB POST CREDITS WITHOUT AN EXPIRY DATE
+- Company and recruiter packages use one-time purchased job post credits.
+- Purchased credits have no monthly or yearly usage deadline.
+- A buyer can use one credit today and another six months later.
+- Buying another package adds to the remaining credit balance.
+- Usage is recorded against the purchase. Deleting a job does not restore
+  the credit or remove its refund deduction for posts recorded after rollout.
+- Unlimited packages use a true unlimited allocation.
+
+2. SINGLE PRICE-LIST CARD FOR COMPANIES AND RECRUITERS
+- Both website pricing pages use the same single-card price-list design.
+- The migration configures the following packages for both audiences:
+
+  Package                        One-time price     Job posts
+  Basic Plan                     $195.99            2
+  Premium Basic Plan             $2,155.99          24
+  Bronze Plan                    $270.99            3
+  Premium Bronze Plan            $2,980.99          36
+  Silver Plan                    $350.99            4
+  Premium Silver Plan            $3,915.99          48
+  Gold Plan                      $430.99            5
+  Premium Gold Plan              $4,839.99          60
+  Platinum Plan                  $1,199.99          14
+  Premium Platinum Plan          $12,319.99         Unlimited
+
+- Purchase buttons connect to the existing payment flow.
+- Pricing and checkout explain that job credits never expire.
+- The migration creates missing packages and archives duplicate catalogue
+  entries while retaining historical payment references.
+
+3. REFUND RESTRICTIONS
+- Company and recruiter refund requests are rejected after 30 days from
+  the original payment timestamp.
+- Each job posted from the purchase is deducted at exactly $99.99.
+- The existing administration fee is retained: 10% of the remaining
+  balance AFTER job-post deductions, rounded to cents.
+- No refund is issued when no positive refundable balance remains.
+- Refunded purchases cannot provide further job credits.
+- Concurrent refund requests and credit spending are guarded by a payment
+  lock; credit consumption and job creation share a database transaction.
+
+  Example: Basic Plan purchased for $195.99, with one job used:
+  Job deduction: $99.99
+  Remaining balance: $96.00
+  Administration fee: $9.60
+  Refund: $86.40, provided the request is within 30 days.
+
+4. ADMIN AND CUSTOMER VISIBILITY
+- Admin plan management supports non-expiring credit allocations and
+  unlimited posts, and displays company/recruiter package prices together.
+- Admin Payment Details shows credits used/remaining, refund eligibility,
+  refund deadline, job deductions, administration fee and refund estimate.
+- Company and recruiter dashboards show credit usage and remaining balance.
+- Customer payment history shows the refund breakdown for credit packages;
+  receipts label those packages as having no expiry.
+- Candidate subscription and refund rules are retained.
+
+5. VALIDATION COMPLETED
+- All 11 automated tests passed.
+- Backend and admin TypeScript checks passed.
+- Company and recruiter pricing routes compiled and returned HTTP 200 locally.
+- No TypeScript errors were reported in the changed public website files.
+- The full public website type check still reports unrelated existing errors.
+- The migration preview completed successfully against the configured database.
+- No real payment, refund or production data migration was performed.
+
+6. REQUIRED VPS DEPLOYMENT STEPS
+Push changes from evpitch-backend, evpitch-frontend and evpitch-admin,
+including new source files, tests and the migration script.
+Do not commit the backend .env file; set the environment value on the VPS.
+
+During a maintenance window:
+1. Back up the subscription-plan and payment collections. Pause purchases,
+   job creation and scheduled expiry tasks.
+2. Pull the updated code and install dependencies using the existing
+   deployment process. Build the backend and both websites. Check for
+   build failures before switching traffic to the new versions.
+3. Set JOB_POST_PAYWALL_ENABLED=true in the VPS backend environment.
+   This setting was enabled locally but must also be enabled on the VPS.
+4. From the backend directory, run:
+     npm run migrate-job-packages
+   Review the preview, then apply it:
+     npm run migrate-job-packages -- --apply
+   If only compiled production files are installed, after npm run build use:
+     node dist/scripts/migrate-job-packages.js
+     node dist/scripts/migrate-job-packages.js --apply
+5. Restart the backend and both websites with the updated environment using
+   the existing VPS process manager. Keep the backend, websites and database
+   migration coordinated, then resume scheduled tasks and traffic.
+6. Check both pricing pages, admin Plan management and Payment Details.
+   Complete a staging checkout, credit-spending and refund smoke test.
+
+MongoDB must support transactions, such as Atlas or a replica set.
+
+EXISTING DATA CONSIDERATIONS
+- Existing purchase amounts and timestamps are preserved by the migration.
+- Already-deactivated purchases are not automatically reactivated because
+  the existing data does not distinguish expiry from manual deactivation.
+- Historical usage can only be reconstructed from remaining jobs linked to
+  a purchase. Previously deleted or unlinked jobs need reconciliation from
+  an audit source or backup. The new durable counter prevents this loss
+  for future posts.
+
+For additional rollout details, see JOB-PACKAGES-ROLLOUT.md.

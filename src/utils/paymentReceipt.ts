@@ -24,12 +24,14 @@ export const buildReceiptEmailHtml = ({
   createdAt,
   amount,
   isYearlyPlan,
+  isJobPackage = false,
 }: {
   userName: string
   transactionId: string
   createdAt: Date | string | undefined
   amount: number
   isYearlyPlan: boolean
+  isJobPackage?: boolean
 }) => `<!doctype html>
 <html lang="en">
 <head>
@@ -80,7 +82,7 @@ export const buildReceiptEmailHtml = ({
               </p>
 
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.5;">
-                As you have paid for a subscription plan, you are now entitled to upload a 60-second elevator video pitch to your profile.
+                ${isJobPackage ? 'Your job post credits never expire. Use them whenever you need, with no monthly or yearly posting limits. Refunds are available within 30 days of payment, less $99.99 per job posted and a 10% administration fee on the remaining balance.' : 'As you have paid for a subscription plan, you are now entitled to upload a 60-second elevator video pitch to your profile.'}
               </p>
               ${
                 isYearlyPlan
@@ -169,17 +171,22 @@ export const recordAndNotifyPayment = async ({
   seasonId,
 }: {
   user: { _id: unknown; name: string; email: string; role?: string }
-  plan: { _id: unknown; for?: string; valid?: string }
+  plan: { _id: unknown; for?: string; valid?: string; jobPostCredits?: number | null }
   amount: number
   paymentStatus: PaymentStatus
   transactionId: string
   paymentMethod: string
   seasonId?: string
 }): Promise<IPaymentInfo> => {
+  const existing = await paymentInfo.findOne({ transactionId })
+  if (existing) return existing
   const audience = (plan.for || user.role || '').toLowerCase()
+  if (plan.valid === 'credits' && plan.jobPostCredits !== null && (!Number.isSafeInteger(plan.jobPostCredits) || (plan.jobPostCredits ?? 0) <= 0)) {
+    throw new Error('The purchased job package has no valid credit allocation')
+  }
   const planValidity = (plan.valid || '').toLowerCase()
   const derivedDuration =
-    planValidity === 'monthly'
+    planValidity === 'credits' ? 'credits' : planValidity === 'monthly'
       ? 'monthly'
       : planValidity === 'yearly'
       ? 'yearly'
@@ -189,7 +196,9 @@ export const recordAndNotifyPayment = async ({
   const expiresAt =
     computeExpiryFromStart(new Date(), derivedDuration) ?? undefined
 
-  const newPayment = await paymentInfo.create({
+  let newPayment: IPaymentInfo
+  try {
+  newPayment = await paymentInfo.create({
     userId: user._id,
     planId: plan._id,
     amount,
@@ -198,8 +207,15 @@ export const recordAndNotifyPayment = async ({
     paymentMethod,
     seasonId,
     duration: derivedDuration,
+    ...(derivedDuration === 'credits' ? { jobPostCredits: plan.jobPostCredits, jobPostsUsed: 0 } : {}),
     expiresAt,
   })
+  } catch (error: any) {
+    if (error?.code !== 11000) throw error
+    const duplicate = await paymentInfo.findOne({ transactionId })
+    if (!duplicate) throw error
+    return duplicate
+  }
 
   if (paymentStatus === 'complete') {
     const emailBody = buildReceiptEmailHtml({
@@ -208,6 +224,7 @@ export const recordAndNotifyPayment = async ({
       createdAt: newPayment.createdAt,
       amount,
       isYearlyPlan,
+      isJobPackage: derivedDuration === 'credits',
     })
 
     try {

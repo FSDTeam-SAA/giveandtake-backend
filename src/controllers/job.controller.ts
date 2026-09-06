@@ -31,6 +31,7 @@ import {
 } from "../services/embedding.service";
 import { jobFitService } from "../services/jobFit.service";
 import { isPaymentExpired, resolvePaymentExpiry } from "../utils/subscription";
+import { consumeJobCredit } from '../services/jobCredits.service';
 import { capQuery, escapeRegex, wordStartRegex } from "../utils/regex";
 import { SkillModel } from "../models/skill.model";
 import { JobCategory } from "../models/jobCategory.model";
@@ -357,9 +358,9 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  await assertJobPostingAllowance(new mongoose.Types.ObjectId(userId));
+  const postingAllowance = await assertJobPostingAllowance(new mongoose.Types.ObjectId(userId));
 
-  const billingContext = await determineJobBillingContext(
+  const billingContext = postingAllowance.creditPackage ? { billingPlanType: 'subscription', billingPlanId: undefined, paygStartedAt: undefined, paygExpiresAt: undefined } : await determineJobBillingContext(
     new mongoose.Types.ObjectId(userId),
     publishDateValue ?? new Date()
   );
@@ -410,7 +411,23 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
   });
 
   await attachEmbeddingBeforeSave(job);
-  await job.save();
+  if (postingAllowance.creditPackage && postingAllowance.paywallEnabled) {
+    const creditSession = await mongoose.startSession();
+    try {
+      await creditSession.withTransaction(async () => {
+        const purchase = await consumeJobCredit(new mongoose.Types.ObjectId(userId), creditSession);
+        job.billingPlanId = purchase._id as mongoose.Types.ObjectId;
+        // withTransaction may retry after a write conflict; the aborted insert
+        // must be inserted again, even if Mongoose marked the document saved.
+        job.isNew = true;
+        await job.save({ session: creditSession });
+      });
+    } finally {
+      await creditSession.endSession();
+    }
+  } else {
+    await job.save();
+  }
   const refreshedPostingAllowance = await evaluateJobPostingAllowance(
     new mongoose.Types.ObjectId(userId),
     { suppressErrors: true }

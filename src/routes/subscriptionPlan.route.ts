@@ -7,15 +7,15 @@ import {
   getSingleSubscriptionPlans,
   unSubscribePlan,
 } from '../controllers/subscriptionPlan.controller'
-import { protect } from '../middlewares/auth.middleware'
+import { protect, isAdmin } from '../middlewares/auth.middleware'
 
 const router = express.Router()
 
-router.post('/plans', protect, createSubscriptionPlan)
+router.post('/plans', protect, isAdmin, createSubscriptionPlan)
 router.get('/plans', getAllSubscriptionPlans)
-router.patch('/plans/:id', protect, updateSubscriptionPlan)
+router.patch('/plans/:id', protect, isAdmin, updateSubscriptionPlan)
 router.get('/plans/:id', protect, getSingleSubscriptionPlans)
-router.delete('/plans/:id', protect, deleteSubscriptionPlan)
+router.delete('/plans/:id', protect, isAdmin, deleteSubscriptionPlan)
 router.post('/plans/unsubscribe', protect, unSubscribePlan)
 
 export default router

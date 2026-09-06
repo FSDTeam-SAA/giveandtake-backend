@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { paymentInfo } from "../models/paymentInfo.model";
+import { calculateJobRefund, JOB_REFUND_ADMIN_RATE } from '../utils/jobPackagePolicy';
 import catchAsync from "../utils/catchAsync";
 import { SubscriptionPlan } from "../models/subscriptionPlan.model";
 import { User } from "../models/user.model";
@@ -88,7 +89,7 @@ const mapPaypalStatusToEnum = (
 };
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
-const PAYG_FALLBACK_RATE = Number(process.env.PAYG_DEDUCTION_FALLBACK ?? 99);
+
 
 const addDays = (date: Date, days: number) =>
   new Date(date.getTime() + days * MILLIS_PER_DAY);
@@ -100,18 +101,6 @@ const normalizePlanValid = (valid?: string | null) =>
  * REFUND CALC HELPERS *
  ***********************/
 const formatCurrency = (value: number) => Number(value.toFixed(2));
-
-const resolvePaygRate = async (audience: string) => {
-  const paygPlan = await SubscriptionPlan.findOne({
-    for: audience,
-    valid: "PayAsYouGo",
-  }).sort({ price: 1 });
-
-  if (paygPlan?.price && paygPlan.price > 0) {
-    return paygPlan.price;
-  }
-  return PAYG_FALLBACK_RATE;
-};
 
 /****************************
  * PAYPAL CAPTUREPAYPALPAYMENT *
@@ -137,6 +126,9 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     const numericAmount = Number(captureDetails.amount.value);
     if (Number.isNaN(numericAmount)) {
       throw new AppError(400, "Unable to determine payment amount");
+    }
+    if (captureDetails.amount.currency_code !== 'USD' || Math.round(numericAmount * 100) !== Math.round(plan.price * 100)) {
+      throw new AppError(400, 'Captured amount does not match the selected package. Contact support for payment reconciliation.');
     }
 
     const newPayment = await recordAndNotifyPayment({
@@ -184,7 +176,12 @@ export const getAllPayments = catchAsync(
 
     res.status(200).json({
       success: true,
-      data: payments,
+      data: payments.map(payment => ({ ...payment.toObject(),
+        ...(payment.duration === 'credits' && payment.createdAt ? { refundQuote: {
+          ...calculateJobRefund(payment.amount, payment.jobPostsUsed ?? 0, payment.createdAt),
+          eligible: payment.paymentStatus === 'complete' && !payment.refundProcessing && calculateJobRefund(payment.amount, payment.jobPostsUsed ?? 0, payment.createdAt).eligible,
+        } } : {}),
+      })),
       meta,
     });
   }
@@ -212,7 +209,12 @@ export const getPaymentsByUserId = catchAsync(
 
     res.status(200).json({
       success: true,
-      data: payments,
+      data: payments.map(payment => ({ ...payment.toObject(),
+        ...(payment.duration === 'credits' && payment.createdAt ? { refundQuote: {
+          ...calculateJobRefund(payment.amount, payment.jobPostsUsed ?? 0, payment.createdAt),
+          eligible: payment.paymentStatus === 'complete' && !payment.refundProcessing && calculateJobRefund(payment.amount, payment.jobPostsUsed ?? 0, payment.createdAt).eligible,
+        } } : {}),
+      })),
       meta,
     });
   }
@@ -238,11 +240,23 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     throw new AppError(400, "Payment already refunded");
   }
 
+  if (payment.paymentStatus !== 'complete') throw new AppError(400, 'Only completed payments can be refunded');
+  if (!req.user || (!['admin', 'super-admin'].includes(req.user.role) && String(req.user._id) !== String(payment.userId))) {
+    throw new AppError(403, 'You cannot refund this payment');
+  }
   const user = await User.findById(payment.userId);
   if (!user) {
     throw new AppError(404, "User not found");
   }
 
+  const locked = await paymentInfo.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'complete', refundProcessing: { $ne: true } },
+    { $set: { refundProcessing: true } }, { new: true },
+  );
+  if (!locked) throw new AppError(409, 'This payment already has a refund in progress');
+  payment.jobPostsUsed = locked.jobPostsUsed;
+  let providerAttempted = false;
+  try {
   const plan: any = payment.planId;
   if (!plan) {
     throw new AppError(400, "Subscription plan metadata is missing for this payment");
@@ -292,42 +306,16 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
       );
     }
   } else if (audience === "company" || audience === "recruiter") {
-    if (planValidity === "monthly") {
-      refundWindowDays = 7;
-    } else if (planValidity === "yearly") {
-      refundWindowDays = 30;
-    } else {
-      throw new AppError(
-        400,
-        "Refunds are only available for monthly or yearly subscriptions."
-      );
-    }
-
+    refundWindowDays = 30;
     const cutoff = addDays(paymentStart, refundWindowDays);
-    if (now > cutoff) {
-      throw new AppError(
-        400,
-        `This ${planValidity} ${audience} subscription is nonrefundable after ${refundWindowDays} days.`
-      );
-    }
-
-    const jobPostsDuringWindow = await Job.countDocuments({
-      userId: payment.userId,
-      createdAt: {
-        $gte: paymentStart,
-        $lte: cutoff,
-      },
+    if (now > cutoff) throw new AppError(400, 'Job packages are non-refundable after 30 days from payment.');
+    const jobPostsDuringWindow = payment.jobPostsUsed ?? await Job.countDocuments({
+      billingPlanId: payment._id,
+      createdAt: { $gte: paymentStart, $lte: now },
     });
+    deductions = calculateJobRefund(payment.amount, jobPostsDuringWindow, paymentStart, now).deductions;
+    notes.push(`${jobPostsDuringWindow} job posts charged at $99.99 each.`);
 
-    if (jobPostsDuringWindow > 0) {
-      const paygRate = await resolvePaygRate(audience);
-      deductions = formatCurrency(jobPostsDuringWindow * paygRate);
-      notes.push(
-        `Deducted ${jobPostsDuringWindow} � PAYG rate ($${paygRate.toFixed(
-          2
-        )}) for job posts made during the refund window.`
-      );
-    }
   } else {
     throw new AppError(
       400,
@@ -335,9 +323,10 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     );
   }
 
-  const grossRefund = Math.max(payment.amount - deductions, 0);
-  const adminFee = formatCurrency(grossRefund * 0.1);
-  const refundAmount = formatCurrency(grossRefund - adminFee);
+  const grossCents = Math.max(Math.round(payment.amount * 100) - Math.round(deductions * 100), 0);
+  const adminCents = Math.round(grossCents * JOB_REFUND_ADMIN_RATE);
+  const adminFee = adminCents / 100;
+  const refundAmount = (grossCents - adminCents) / 100;
 
   if (refundAmount <= 0) {
     throw new AppError(
@@ -355,6 +344,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
   let refundTransactionId: string;
   let refundStatus: string;
 
+  providerAttempted = true;
   if (isStripePayment) {
     const stripeRefund = await refundPaymentIntent(
       payment.transactionId,
@@ -382,6 +372,7 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     refundStatus = refundResponse.status;
   }
 
+  payment.refundProcessing = false;
   payment.paymentStatus = "refunded";
   payment.planStatus = "deactivate";
   payment.refundTransactionId = refundTransactionId;
@@ -465,6 +456,12 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
       payment,
     },
   });
+  } catch (error) {
+    // An ambiguous provider failure remains locked for reconciliation; retrying
+    // blindly could send a second refund. Validation failures are safe to retry.
+    if (!providerAttempted) await paymentInfo.updateOne({ _id: payment._id }, { $set: { refundProcessing: false } });
+    throw error;
+  }
 });
 
 /* ============================================================
@@ -511,7 +508,10 @@ const finalizeStripePayment = async (
 
   return recordAndNotifyPayment({
     user,
-    plan,
+    plan: paymentIntent.metadata.planValid === 'credits' ? {
+      _id: plan._id, for: paymentIntent.metadata.audience, valid: 'credits',
+      jobPostCredits: paymentIntent.metadata.jobPostCredits === 'unlimited' ? null : Number(paymentIntent.metadata.jobPostCredits),
+    } : plan,
     amount,
     paymentStatus: "complete",
     transactionId: paymentIntent.id,
@@ -566,6 +566,7 @@ export const createStripePaymentIntent = catchAsync(
     // The charge amount always comes from the plan record, never from the
     // client, so a tampered request can't buy a plan at the wrong price.
     const amount = Number(plan.price);
+    if (plan.archived) throw new AppError(400, 'This package is no longer available for purchase');
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new AppError(400, "This plan does not require a payment");
     }
@@ -581,6 +582,7 @@ export const createStripePaymentIntent = catchAsync(
         planTitle: plan.title || "",
         planValid: plan.valid || "",
         audience: plan.for || "",
+        ...(plan.valid === 'credits' ? { jobPostCredits: plan.jobPostCredits === null ? 'unlimited' : String(plan.jobPostCredits) } : {}),
         ...(seasonId ? { seasonId: String(seasonId) } : {}),
       },
     });

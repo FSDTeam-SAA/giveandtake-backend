@@ -7,6 +7,13 @@ import AppError from '../errors/AppError'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 
+const validateCredits = (body: any) => {
+  if (body.valid !== 'credits') throw new AppError(400, 'Company and recruiter packages must use non-expiring credits')
+  if (body.jobPostCredits !== null && (!Number.isSafeInteger(body.jobPostCredits) || body.jobPostCredits <= 0)) {
+    throw new AppError(400, 'Job post credits must be a positive whole number, or null for unlimited')
+  }
+}
+
 // CREATE
 export const createSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
@@ -38,7 +45,7 @@ export const createSubscriptionPlan = catchAsync(
       (planFor as string)?.toLowerCase()
     )
 
-    if (isJobPostingPlan && annualLimit === undefined) {
+    if (isJobPostingPlan && valid !== 'credits' && annualLimit === undefined) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'maxJobPostsPerYear is required for recruiter and company plans'
@@ -51,6 +58,7 @@ export const createSubscriptionPlan = catchAsync(
         ? Math.max(1, Math.ceil(annualLimit / 12))
         : undefined)
 
+    if (isJobPostingPlan) validateCredits(req.body)
     const plan = await SubscriptionPlan.create({
       title,
       description,
@@ -59,6 +67,7 @@ export const createSubscriptionPlan = catchAsync(
       features,
       for: planFor,
       valid,
+      ...(isJobPostingPlan ? { jobPostCredits: req.body.jobPostCredits } : {}),
       maxJobPostsPerYear: annualLimit,
       maxJobPostsPerMonth: resolvedMonthlyLimit,
     })
@@ -75,7 +84,7 @@ export const createSubscriptionPlan = catchAsync(
 // GET ALL
 export const getAllSubscriptionPlans = catchAsync(
   async (req: Request, res: Response) => {
-    const plans = await SubscriptionPlan.find().sort({ price: 1 })
+    const plans = await SubscriptionPlan.find({ archived: { $ne: true } }).sort({ price: 1 })
 
     sendResponse(res, {
       statusCode: httpStatus.OK,
@@ -138,6 +147,16 @@ export const updateSubscriptionPlan = catchAsync(
       partialUpdate.maxJobPostsPerMonth = nextMonthlyLimit
     }
 
+    const existing = await SubscriptionPlan.findById(id)
+    if (!existing) throw new AppError(404, 'Subscription plan not found')
+    if (['company', 'recruiter'].includes(existing.for) || ['company', 'recruiter'].includes(req.body.for)) {
+      const merged = { ...existing.toObject(), ...partialUpdate }
+      validateCredits(merged)
+      partialUpdate.valid = 'credits'
+      partialUpdate.jobPostCredits = merged.jobPostCredits
+      delete partialUpdate.maxJobPostsPerYear
+      delete partialUpdate.maxJobPostsPerMonth
+    }
     const updated = await SubscriptionPlan.findByIdAndUpdate(id, partialUpdate, {
       new: true,
       runValidators: true,
@@ -160,7 +179,8 @@ export const updateSubscriptionPlan = catchAsync(
 export const deleteSubscriptionPlan = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
-    const deleted = await SubscriptionPlan.findByIdAndDelete(id)
+    // Retain plan metadata referenced by historical purchases and refunds.
+    const deleted = await SubscriptionPlan.findByIdAndUpdate(id, { archived: true }, { new: true })
 
     if (!deleted) {
       throw new AppError(httpStatus.NOT_FOUND, 'Subscription plan not found')
@@ -180,7 +200,7 @@ export const deleteSubscriptionPlan = catchAsync(
 export const unSubscribePlan = catchAsync(async(req,res)=>{
   const userId = req.user?._id
 
-  const deletePayment = await paymentInfo.deleteMany({userId})
+  await paymentInfo.updateMany({ userId, duration: { $ne: 'credits' } }, { $set: { planStatus: 'deactivate' } })
   const deleteElevatorPitch = await ElevatorPitch.deleteMany({userId})
 
   sendResponse(res,{

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.cjs",
+    "migrate-job-packages": "ts-node --transpile-only src/scripts/migrate-job-packages.ts",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "sync-indexes": "ts-node --transpile-only src/scripts/sync-search-indexes.ts",
     "lint": "eslint . --ext .ts",

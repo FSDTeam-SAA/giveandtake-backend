@@ -12,6 +12,9 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       required: true,
     },
     amount: { type: Number, required: true },
+    jobPostCredits: { type: Number, min: 0 },
+    jobPostsUsed: { type: Number, min: 0 },
+    refundProcessing: { type: Boolean, default: false },
     planId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SubscriptionPlan',
@@ -25,7 +28,7 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       enum: ['complete', 'pending', 'failed', 'refunded'],
       default: 'pending',
     },
-    duration: { type: String, enum: ['monthly', 'yearly', 'payg'] },
+    duration: { type: String, enum: ['monthly', 'yearly', 'payg', 'credits'] },
     seasonId: { type: String },
     transactionId: { type: String, required: true },
     paymentMethod: { type: String },
@@ -50,6 +53,9 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
   },
   { timestamps: true }
 )
+
+// Both the webhook and checkout confirmation can fulfil the same payment.
+paymentInfoSchema.index({ transactionId: 1 }, { unique: true, partialFilterExpression: { duration: 'credits' } })
 
 export const paymentInfo = mongoose.model<IPaymentInfo, PaymentInfoModel>(
   'PaymentInfo',

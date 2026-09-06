@@ -5,12 +5,14 @@ import { paymentInfo } from '../models/paymentInfo.model'
 import { Job } from '../models/job.model'
 import { User } from '../models/user.model'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
+import { availableCreditFilter } from '../services/jobCredits.service'
 
 export type JobPostingUsage = {
   paywallEnabled: boolean
   allowed: boolean
   message?: string
   role?: string
+  creditPackage?: boolean
   plan?: {
     id?: Types.ObjectId
     title?: string
@@ -28,6 +30,9 @@ export type JobPostingUsage = {
     annualEnd?: Date | null
   }
   usage?: {
+    creditsTotal?: number | null
+    creditsUsed?: number
+    creditsRemaining?: number | null
     monthlyLimit?: number
     monthlyUsed?: number
     monthlyRemaining?: number
@@ -115,6 +120,24 @@ export const evaluateJobPostingAllowance = async (
 
   // Candidates are not restricted by the job-post paywall
   if (user.role === 'candidate') {
+    return allowance
+  }
+
+  const packages = await paymentInfo.find({ userId, duration: 'credits', paymentStatus: 'complete', planStatus: 'active' })
+  if (packages.length) {
+    const available = await paymentInfo.exists(availableCreditFilter(userId))
+    const unlimited = packages.some(p => p.jobPostCredits === null)
+    const total = packages.reduce((sum, p) => sum + (p.jobPostCredits ?? 0), 0)
+    const used = packages.reduce((sum, p) => sum + (p.jobPostsUsed ?? 0), 0)
+    allowance.creditPackage = true
+    allowance.billing = { duration: 'credits', expiresAt: null }
+    allowance.usage = { creditsTotal: unlimited ? null : total, creditsUsed: used,
+      creditsRemaining: unlimited ? null : packages.reduce((sum, p) => sum + Math.max((p.jobPostCredits ?? 0) - (p.jobPostsUsed ?? 0), 0), 0) }
+    allowance.allowed = !!available || !allowance.paywallEnabled
+    if (!allowance.allowed) {
+      allowance.message = 'No job post credits are available. Please purchase a job package.'
+      if (!suppressErrors) throw new AppError(httpStatus.FORBIDDEN, allowance.message)
+    }
     return allowance
   }
 
