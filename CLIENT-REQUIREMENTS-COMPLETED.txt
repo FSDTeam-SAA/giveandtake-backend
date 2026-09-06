@@ -2,9 +2,10 @@ EVPITCH - CLIENT REQUIREMENTS IMPLEMENTATION SUMMARY
 Date: 6 September 2026
 
 STATUS
-The requested changes have been implemented locally in the public website,
-admin website and supporting backend. They have not yet been deployed, and
-the database migration has only been previewed, not applied.
+The requested changes have been implemented and deployed to the public
+website, admin website and supporting backend on 6 September 2026.
+The production database migration has been applied and live pages verified.
+See DEPLOYMENT-2026-09-06.txt for deployment checks and backup locations.
 Flutter was excluded and has no changes from this work.
 
 1. JOB POST CREDITS WITHOUT AN EXPIRY DATE
@@ -71,7 +72,9 @@ Flutter was excluded and has no changes from this work.
 - No TypeScript errors were reported in the changed public website files.
 - The full public website type check still reports unrelated existing errors.
 - The migration preview completed successfully against the configured database.
-- No real payment, refund or production data migration was performed.
+- The production data migration was subsequently applied during deployment.
+- Live public pricing and authenticated admin checks passed after deployment.
+- No real payment or refund was performed during verification.
 
 6. REQUIRED VPS DEPLOYMENT STEPS
 Push changes from evpitch-backend, evpitch-frontend and evpitch-admin,

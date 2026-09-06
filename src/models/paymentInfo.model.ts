@@ -55,7 +55,7 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
 )
 
 // Both the webhook and checkout confirmation can fulfil the same payment.
-paymentInfoSchema.index({ transactionId: 1 }, { unique: true, partialFilterExpression: { duration: 'credits' } })
+paymentInfoSchema.index({ transactionId: 1 }, { name: 'unique_credit_transaction', unique: true, partialFilterExpression: { duration: 'credits' } })
 
 export const paymentInfo = mongoose.model<IPaymentInfo, PaymentInfoModel>(
   'PaymentInfo',

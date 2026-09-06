@@ -1,0 +1,64 @@
+EVPITCH JOB PACKAGES - DEPLOYMENT COMPLETED
+Date: 6 September 2026
+
+LIVE APPLICATIONS
+Backend: https://api.evpitch.com
+Admin: https://admin.evpitch.com
+Website: https://evpitch.com
+
+Backend/admin VPS: 82.29.190.125
+Website VPS: 72.61.144.61
+Process manager: PM2 (api, admin, client)
+Application directories: /var/www/api, /var/www/admin, /var/www/client
+
+COMPLETED
+- Built and deployed the backend, admin website and public website.
+- Applied the job-package migration to the production database.
+- Verified exactly ten active packages for each audience, with all requested
+  prices, credit quantities, non-expiring validity and unlimited allocation.
+- Enabled JOB_POST_PAYWALL_ENABLED=true in the backend environment and PM2.
+- Preserved the server-specific dependency versions and existing runtime files.
+- Saved the updated PM2 process state for automatic restart.
+- Flutter was not changed.
+
+VERIFICATION
+- All 11 backend tests passed on the VPS; backend compilation passed.
+- Both website production builds succeeded with the existing server versions.
+- Live browser checks verified all ten packages and prices on both public
+  pricing pages, mobile viewport layout and the anonymous purchase login flow.
+- Authenticated admin checks verified the ten package comparison rows and
+  the credit/refund information on Payment Details.
+- API, admin and client processes were online without unexpected restarts.
+- No real purchase or refund was made during these checks.
+
+DEPLOYMENT COMPATIBILITY FIX
+Production already had a unique transactionId index. The new partial credit
+index initially used the same generated name, causing an index-name conflict.
+The first cutover automatically restored the original database records and
+services. The index was then explicitly named unique_credit_transaction,
+verified alongside the existing index, and the second cutover succeeded.
+The correction is included in src/models/paymentInfo.model.ts.
+
+BACKUPS
+On the backend/admin server:
+  /var/www/backups/job-packages-20260906/api
+  /var/www/backups/job-packages-20260906/admin
+  /var/www/backups/job-packages-20260906/database
+  /var/www/backups/job-packages-20260906/migration-applied.log
+  /var/www/backups/job-packages-20260906/pm2-before.json
+
+On the website server:
+  /var/www/backups/job-packages-20260906/client
+  /var/www/backups/job-packages-20260906/pm2-before.json
+
+The verified pre-migration database snapshot contains 25 subscription-plan
+records, 9 payment records and 22 job records, saved as BSON Extended JSON.
+Backups are retained on the servers with restricted directory permissions.
+
+OPERATIONAL NOTES
+Existing deactivated purchases were not automatically reactivated. Historical
+deleted/unlinked job usage still requires reconciliation from an audit source.
+The durable credit counter protects future post usage from deletion/reset.
+
+Do not restore the entire pre-deployment payment snapshot after new purchases
+or postings have occurred without reconciling those new transactions first.
