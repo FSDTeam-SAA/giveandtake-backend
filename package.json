@@ -44,7 +44,7 @@
     "mongoose": "^8.13.2",
     "multer": "^2.0.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.3",
+    "nodemailer": "^9.1.1",
     "parser": "^0.1.4",
     "slugify": "^1.6.6",
     "socket.io": "^4.8.1",
