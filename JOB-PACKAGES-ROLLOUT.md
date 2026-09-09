@@ -12,7 +12,7 @@ Deployment
 
 1. Use a maintenance window to pause purchases, job creation and expiry jobs. Back up the subscription plans and payment collections. MongoDB must support transactions (replica set or Atlas).
 2. Build/deploy the backend with `JOB_POST_PAYWALL_ENABLED=true` (the local `.env` has been updated). Run `npm run migrate-job-packages` to preview the configured database. It does not create indexes or write data in preview mode.
-3. Review the preview, then run `npm run migrate-job-packages -- --apply`. This converts existing purchased allocations before updating prices, creates missing packages, archives duplicate catalogue rows, and replaces PAYG catalogue entries with the requested packages. Existing PAYG purchases become one non-expiring credit. Run again safely if an interrupted migration needs completing.
+3. For an initial rollout, review the preview, then run `npm run migrate-job-packages -- --apply`. This converts existing purchased allocations before updating prices, creates missing packages, archives duplicate catalogue rows, and restores PAYG as one non-expiring credit. Existing PAYG purchases become one non-expiring credit. The full migration reapplies the ten original package prices: do not rerun it after admin has customised the catalogue.
 4. Deploy the public and admin websites together with the backend/data change. Verify `/company-pricing`, `/recruiter-pricing`, admin `/plan`, and `/payment-details`, then resume traffic and scheduled jobs.
 
 Existing purchases retain their recorded amount, original purchase timestamp and active/deactivated status. Monthly purchases retain the recorded monthly allowance; annual purchases retain the annual allocation. Plans advertised as unlimited become truly unlimited. Deactivated purchases are not automatically reactivated, since the old data does not distinguish expiry from manual deactivation.
@@ -20,6 +20,15 @@ Existing purchases retain their recorded amount, original purchase timestamp and
 Historical limitation: usage can only be reconstructed from remaining jobs with a `billingPlanId`. Jobs deleted before this rollout or older jobs without a purchase reference need reconciliation from a backup/audit source. The new durable counter prevents this loss for future posts. Do not assume a zero reconstructed count proves an old purchase was unused.
 
 Refunds use a per-payment lock to prevent concurrent posts/refunds. If a payment provider times out after a refund attempt, its lock remains in place and admin shows “awaiting reconciliation”. Check the provider's transaction before clearing the lock; do not blindly retry a potentially completed refund.
+
+Admin pricing and PAYG follow-up (9 September 2026)
+--------------------------------------------------
+
+Admin > Plan now has an Edit price button beside each company's and recruiter's price in the top table. The dialog edits the price and job credit allocation, including unlimited posts. Save changes updates the catalogue used by the public website. Company and recruiter entries are edited separately. Existing purchases retain their recorded price, credits and usage. The list below still supports editing full plan details; its search now covers all plans before pagination.
+
+The original rollout archived the two existing PAYG catalogue entries. To restore just these entries on an already migrated database, back up subscriptionplans, run `npm run restore-job-payg` to preview, then `npm run restore-job-payg -- --apply`. This reuses their IDs and existing prices ($99.99 on this deployment), makes each worth one non-expiring credit, and does not touch payment history. Repeating this focused command preserves an active credit-based PAYG plan's admin-edited price and allocation. Do not use the full package migration for this follow-up.
+
+The $99.99 per-post refund deduction remains a separate refund policy; changing a PAYG sale price does not change it.
 
 Validation
 ----------
