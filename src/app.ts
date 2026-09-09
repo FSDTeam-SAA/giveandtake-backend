@@ -38,6 +38,7 @@ import contentRoutes from "./routes/contentRoutes";
 import faqRoutes from "./routes/faq.routes";
 import chatbotRoutes from "./routes/chatbot.routes";
 import countryRoutes from "./routes/country.routes";
+import scrollingInfoRoutes from "./routes/scrollingInfo.routes";
 import { stripeWebhook } from "./controllers/payment.controller";
 
 
@@ -190,6 +191,7 @@ app.use("/api/v1/countries", countryRoutes);
 
 app.use("/api/v1/faqs", faqRoutes);
 app.use("/api/v1/chatbot", chatbotRoutes);
+app.use("/api/v1/scrolling-info", scrollingInfoRoutes);
 
 app.use(notFound as never);
 app.use(globalErrorHandler);
