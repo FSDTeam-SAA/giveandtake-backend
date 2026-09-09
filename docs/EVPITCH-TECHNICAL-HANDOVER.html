@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EVPitch Technical Handover</title>
+  <style>
+    :root { --blue: #1769aa; --navy: #17324d; --ink: #263442; --muted: #64748b; --line: #dbe4ec; --soft: #f3f7fa; }
+    * { box-sizing: border-box; }
+    html { background: #eaf0f5; }
+    body { width: 210mm; margin: 18px auto; padding: 19mm 18mm 20mm; background: white; color: var(--ink); font: 10.4pt/1.55 Arial, Helvetica, sans-serif; box-shadow: 0 5px 24px rgba(15, 40, 65, .14); }
+    h1 { margin: 0 0 7mm; padding: 27mm 13mm 23mm; color: white; background: linear-gradient(135deg, var(--navy), var(--blue)); border-radius: 4mm; font-size: 30pt; line-height: 1.12; letter-spacing: -.4px; }
+    h1 + p { margin: -1mm 0 9mm; padding: 5mm 7mm; background: var(--soft); border-left: 1.2mm solid var(--blue); }
+    h2 { margin: 9mm 0 3mm; padding-bottom: 1.5mm; color: var(--navy); border-bottom: .5mm solid var(--blue); font-size: 17pt; line-height: 1.2; break-after: avoid; }
+    h3 { margin: 6mm 0 2mm; color: var(--blue); font-size: 12.5pt; break-after: avoid; }
+    p { margin: 0 0 3.2mm; }
+    ul, ol { margin: 1.5mm 0 4mm 6mm; padding-left: 4.5mm; }
+    li { margin: 0 0 1.1mm; }
+    table { width: 100%; margin: 3mm 0 5mm; border-collapse: collapse; font-size: 9.2pt; break-inside: avoid; }
+    th { color: white; background: var(--navy); text-align: left; }
+    th, td { padding: 2.3mm 2.5mm; border: .25mm solid var(--line); vertical-align: top; }
+    tbody tr:nth-child(even) { background: var(--soft); }
+    code { padding: .3mm 1mm; border-radius: 1mm; background: #eef3f7; color: #163b5c; font: 9pt Consolas, monospace; }
+    pre { margin: 3mm 0 5mm; padding: 4mm; overflow-wrap: anywhere; white-space: pre-wrap; color: #e9f2f9; background: #142b40; border-radius: 2mm; break-inside: avoid; }
+    pre code { padding: 0; color: inherit; background: transparent; }
+    strong { color: var(--navy); }
+    hr { margin: 10mm 0 5mm; border: 0; border-top: .4mm solid var(--line); }
+    a { color: var(--blue); text-decoration: none; }
+    @page { size: A4; margin: 14mm 13mm 16mm; }
+    @media print {
+      html { background: white; }
+      body { width: auto; margin: 0; padding: 0; box-shadow: none; font-size: 9.6pt; }
+      h1 { min-height: 90mm; padding-top: 30mm; break-after: avoid; }
+      h2 { break-before: auto; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+<h1>EVPitch Technical Handover</h1>
+<p><strong>System:</strong> EVPitch recruitment platform<br>
+<strong>Document version:</strong> 1.0<br>
+<strong>Prepared:</strong> 9 September 2026<br>
+<strong>Status:</strong> Current production handover</p>
+<h2>1. Purpose of this document</h2>
+<p>This document explains how the EVPitch platform is structured, how its main services work together, and how the system should be operated and maintained. It is intended for the client, future developers, system administrators, and support staff.</p>
+<p>The handover covers the public website, administration portal, backend API, mobile application, database, payments, job-post credits, video storage, email, real-time messaging, deployment, testing, and routine support.</p>
+<p>No passwords, API secrets, private keys, or customer data are included. Those items must remain in the relevant server environment or approved password manager.</p>
+<h2>2. System overview</h2>
+<p>EVPitch is a recruitment platform for four user groups:</p>
+<ul>
+<li>Candidates create profiles, resumes, and elevator video pitches, search for jobs, and submit applications.</li>
+<li>Recruiters maintain recruiter profiles, work independently or in association with a company, post jobs, and manage applicants.</li>
+<li>Companies maintain company profiles, manage recruiters, publish jobs, and review applicants.</li>
+<li>Administrators manage users, jobs, plans, payments, content, FAQs, blogs, skills, newsletters, chatbot material, and scrolling messages.</li>
+</ul>
+<p>The platform is divided into four codebases.</p>
+<table>
+<thead>
+<tr>
+<th>Application</th>
+<th>Directory</th>
+<th>Technology</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Public website</td>
+<td><code>evpitch-frontend</code></td>
+<td>Next.js 15, React 18, TypeScript</td>
+<td>Public pages, user accounts, profiles, jobs, checkout, messaging, and dashboards</td>
+</tr>
+<tr>
+<td>Admin portal</td>
+<td><code>evpitch-admin</code></td>
+<td>Next.js 15, React 18, TypeScript</td>
+<td>Operational and content administration</td>
+</tr>
+<tr>
+<td>Backend API</td>
+<td><code>evpitch-backend</code></td>
+<td>Node.js, Express 5, TypeScript, Mongoose</td>
+<td>Business rules, authentication, persistence, payments, media, email, scheduled work, and sockets</td>
+</tr>
+<tr>
+<td>Mobile app</td>
+<td><code>flutter_giveandtake_getx</code></td>
+<td>Flutter 3 / Dart, GetX</td>
+<td>Candidate, recruiter, and company mobile workflows</td>
+</tr>
+</tbody>
+</table>
+<p>The production API is served under <code>/api/v1</code>. The backend also exposes <code>/</code> and <code>/health</code> for service checks.</p>
+<h2>3. High-level architecture</h2>
+<pre><code class="language-text">Public website -------+
+                      |
+Admin portal ---------+---- HTTPS / JSON ---- Backend API ---- MongoDB
+                      |                         |   |   |
+Flutter app ----------+                         |   |   +---- SMTP email
+                                                |   +-------- Stripe / PayPal
+                                                +------------ Cloudflare R2
+
+Website and mobile clients ---- WebSocket / Socket.IO ---- Backend API
+</code></pre>
+<p>The public website and admin portal use NextAuth credential sessions. Login credentials are sent to the EVPitch API, which returns a JWT access token. Protected API requests then send that token as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+<p>The Flutter application calls the same API and stores authentication material using secure local storage. Both web and mobile clients connect to <a href="http://Socket.IO">Socket.IO</a> for message and notification updates.</p>
+<h2>4. Repository layout</h2>
+<h3>Backend</h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/app.ts</code></td>
+<td>Express application, middleware, health routes, and API route registration</td>
+</tr>
+<tr>
+<td><code>src/server.ts</code></td>
+<td>Database startup, HTTP/Socket.IO server, boot tasks, and cron schedules</td>
+</tr>
+<tr>
+<td><code>src/routes</code></td>
+<td>HTTP route declarations</td>
+</tr>
+<tr>
+<td><code>src/controllers</code></td>
+<td>Request handling and business workflows</td>
+</tr>
+<tr>
+<td><code>src/models</code></td>
+<td>Mongoose schemas and indexes</td>
+</tr>
+<tr>
+<td><code>src/services</code></td>
+<td>Payments, credits, storage, video, chatbot, embeddings, and deletion services</td>
+</tr>
+<tr>
+<td><code>src/middlewares</code></td>
+<td>JWT authentication, role checks, uploads, access gates, errors, and 404 handling</td>
+</tr>
+<tr>
+<td><code>src/jobs</code></td>
+<td>Startup consistency checks and scheduled maintenance</td>
+</tr>
+<tr>
+<td><code>src/scripts</code></td>
+<td>Operational migrations and search-index utilities</td>
+</tr>
+<tr>
+<td><code>src/utils</code></td>
+<td>Shared policy, response, email, token, pagination, and media helpers</td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td>Node test runner suites</td>
+</tr>
+</tbody>
+</table>
+<h3>Public website</h3>
+<p>The website uses the Next.js App Router. Route groups under <code>app/(auth)</code> contain sign-in and recovery journeys. User-facing routes are under <code>app/(website)</code>. Shared controls are under <code>components</code>, API access is under <code>lib</code>, and authentication-aware reusable behaviour is under <code>hooks</code>.</p>
+<h3>Admin portal</h3>
+<p>The admin portal also uses the App Router. Administrative pages are under <code>src/app/(admin-dashboard)</code>, sign-in and account recovery are under <code>src/app/(auth)</code>, and shared components and utilities are under <code>src/components</code> and <code>src/lib</code>.</p>
+<h3>Flutter application</h3>
+<p>The mobile application is organised by feature under <code>lib/features</code>. Shared API, socket, storage, and dependency-injection code is under <code>lib/core</code>. The production API and website addresses are currently declared in <code>lib/core/network/constants/api_constants.dart</code>.</p>
+<h2>5. Main functional areas</h2>
+<h3>Accounts and access</h3>
+<p>The user record supports <code>candidate</code>, <code>recruiter</code>, <code>company</code>, <code>admin</code>, and <code>super-admin</code> roles. Registration includes email verification by OTP. The account service also supports password reset, security questions, email changes, access-token refresh, and soft or scheduled account deactivation.</p>
+<p>Protected backend routes use the <code>protect</code> middleware. It validates the JWT, confirms that the user still exists, rejects deactivated accounts, and checks email verification. Administrative catalogue and content operations add the <code>isAdmin</code> role check.</p>
+<p>The admin portal only accepts staff accounts and enforces a 30-minute inactivity window through middleware. The public website protects selected account areas with NextAuth middleware; individual pages and API requests also apply their own session checks.</p>
+<h3>Profiles and resumes</h3>
+<p>Candidates can maintain personal details, education, experience, skills, awards, resume files, and a generated resume. Recruiters have a dedicated recruiter-account record. Companies have a company profile and can associate recruiters or employees through request and membership workflows.</p>
+<p>Public profile routes support candidate, recruiter, and company views. Slugs are used where available, while older routes also accept record or user IDs.</p>
+<h3>Jobs and applications</h3>
+<p>Companies and recruiters can create and manage jobs. Jobs support category, employment type, location type, career level, salary information, publishing and deadline dates, approval status, archiving, and billing attribution.</p>
+<p>Candidates can browse, search, receive recommendations, bookmark jobs, apply, and review application history. Recruiters and companies can review applicants and change an application’s status to pending, rejected, or shortlisted.</p>
+<p>Job creation records its billing source. Credit-backed jobs reference the payment record that supplied the credit. This association is used for durable usage accounting and refund calculations.</p>
+<h3>Elevator video pitches</h3>
+<p>The pitch workflow uses a direct-upload pattern:</p>
+<ol>
+<li>An authenticated client requests an upload URL.</li>
+<li>The client uploads the source media to private Cloudflare R2 storage.</li>
+<li>The client notifies the API that the upload is complete.</li>
+<li>The backend queues video processing and generates HLS playback assets.</li>
+<li>Access checks are applied when a viewer requests a stream, segment, key, or playback token.</li>
+</ol>
+<p>Company and recruiter pitches can be publicly viewable. Candidate pitches are subject to entitlement and viewer-access rules. Short-lived playback tokens prevent the login JWT from being propagated into HLS playlist and segment URLs.</p>
+<h3>Messaging and notifications</h3>
+<p>Messages and message rooms are stored in MongoDB. <a href="http://Socket.IO">Socket.IO</a> supplies live updates. Clients join a message-room ID for conversation updates and a user ID room for notifications. Notification events currently include <code>newNotification</code> and <code>notificationCountUpdated</code>.</p>
+<p>REST endpoints remain the source of truth for message history, read status, room state, and notification lists. A client should re-fetch after reconnecting because socket delivery is not a permanent queue.</p>
+<h3>Content, FAQs, blogs, and chatbot</h3>
+<p>The admin portal manages built-in and custom content pages, FAQs, blogs, scrolling messages, and chatbot question-and-answer entries. The backend ensures that the six built-in content records exist whenever it starts.</p>
+<p>The chatbot can answer from curated Q&amp;A and indexed site material. Gemini-backed chat, embeddings, and job-fit features are controlled through environment variables so they can be enabled or disabled independently.</p>
+<h2>6. Job-post pricing and credits</h2>
+<h3>Catalogue behaviour</h3>
+<p>Company and recruiter job-post products use one-time credits. The public company and recruiter pricing pages read the active catalogue from the API and share the same pricing component.</p>
+<p>The source currently displays:</p>
+<ul>
+<li>All job posts free until April 2027.</li>
+<li>Job post rates.</li>
+<li>The more job posts purchased, the more discounts gained.</li>
+<li>Prices apply from April 2027 until March 2028.</li>
+<li>A direction to view the refund policy in Terms and Conditions or search the chatbot.</li>
+</ul>
+<p>The default package catalogue used by the initial migration is shown below. Live prices may be changed by an administrator and should always be treated as authoritative.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th style="text-align:right">Default price</th>
+<th style="text-align:right">Job-post credits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pay as You Go</td>
+<td style="text-align:right">$99.99</td>
+<td style="text-align:right">1</td>
+</tr>
+<tr>
+<td>Basic Plan</td>
+<td style="text-align:right">$195.99</td>
+<td style="text-align:right">2</td>
+</tr>
+<tr>
+<td>Premium Basic Plan</td>
+<td style="text-align:right">$2,155.99</td>
+<td style="text-align:right">24</td>
+</tr>
+<tr>
+<td>Bronze Plan</td>
+<td style="text-align:right">$270.99</td>
+<td style="text-align:right">3</td>
+</tr>
+<tr>
+<td>Premium Bronze Plan</td>
+<td style="text-align:right">$2,980.99</td>
+<td style="text-align:right">36</td>
+</tr>
+<tr>
+<td>Silver Plan</td>
+<td style="text-align:right">$350.99</td>
+<td style="text-align:right">4</td>
+</tr>
+<tr>
+<td>Premium Silver Plan</td>
+<td style="text-align:right">$3,915.99</td>
+<td style="text-align:right">48</td>
+</tr>
+<tr>
+<td>Gold Plan</td>
+<td style="text-align:right">$430.99</td>
+<td style="text-align:right">5</td>
+</tr>
+<tr>
+<td>Premium Gold Plan</td>
+<td style="text-align:right">$4,839.99</td>
+<td style="text-align:right">60</td>
+</tr>
+<tr>
+<td>Platinum Plan</td>
+<td style="text-align:right">$1,199.99</td>
+<td style="text-align:right">14</td>
+</tr>
+<tr>
+<td>Premium Platinum Plan</td>
+<td style="text-align:right">$12,319.99</td>
+<td style="text-align:right">Unlimited</td>
+</tr>
+</tbody>
+</table>
+<p>Administrators change catalogue prices and allocations under <strong>Admin &gt; Plan &gt; Edit price</strong>. Company and recruiter catalogue records are separate, so both must be updated when both audiences should receive the same change.</p>
+<h3>Purchase snapshot and later price changes</h3>
+<p>When a credit package is paid successfully, the payment record stores:</p>
+<ul>
+<li>the amount actually paid;</li>
+<li>the purchased credit allocation;</li>
+<li>the number of credits used, initially zero;</li>
+<li>the transaction ID and payment method;</li>
+<li>the original purchase timestamp;</li>
+<li>an active plan status; and</li>
+<li>the catalogue plan reference.</li>
+</ul>
+<p>Credit use does not compare the old purchase price with the current catalogue price. The backend looks for a completed, active, non-refunded payment with an unused credit and increments its durable usage counter.</p>
+<p>This means a recruiter who buys one credit for $99 in March 2028 can still use that credit after the catalogue price changes to $109.99 in April 2028. The $109.99 price applies to new purchases only. The earlier credit remains valid until it is used, refunded, or administratively deactivated.</p>
+<p>Credits do not expire. Purchasing another package adds another payment allocation instead of replacing an earlier balance. The oldest available purchase is consumed first. Deleting a posted job does not return its credit.</p>
+<p>Job creation and credit consumption run in the same MongoDB transaction. This prevents two simultaneous requests from spending the last credit twice. Production MongoDB must therefore be Atlas or a replica set with transaction support.</p>
+<h3>Free-posting switch</h3>
+<p><code>JOB_POST_PAYWALL_ENABLED</code> controls enforcement. When it is <code>true</code>, a company or recruiter needs an available credit. When it is disabled, posting can proceed without consuming a paid credit. Production was recorded with this setting enabled after the September 2026 rollout.</p>
+<h2>7. Refund rules</h2>
+<p>Company and recruiter job-package refunds follow these rules:</p>
+<ul>
+<li>The request must be made no later than 30 days from the original payment timestamp.</li>
+<li>Each job already posted from that purchase is deducted at $99.99.</li>
+<li>A 10% administration fee is applied to the remaining balance after job deductions.</li>
+<li>Monetary calculations are rounded to cents.</li>
+<li>A refund is not issued when no positive refundable balance remains.</li>
+<li>A refunded payment cannot supply further credits.</li>
+<li>A per-payment lock prevents a refund and credit spend from completing concurrently.</li>
+</ul>
+<p>Example for a $195.99 package with one job already posted:</p>
+<pre><code class="language-text">Purchase amount                         $195.99
+One job-post deduction                  -99.99
+Remaining balance                        96.00
+Administration fee (10%)                 -9.60
+Refund                                   $86.40
+</code></pre>
+<p>The fixed $99.99 refund deduction is a policy value and is separate from the current Pay as You Go sale price. Changing the PAYG catalogue price does not change the deduction.</p>
+<p>If a provider times out after a refund request has been submitted, the payment remains locked for reconciliation. Check Stripe or PayPal before clearing that state; retrying without checking can duplicate a successful provider-side refund.</p>
+<p>Candidate monthly and yearly subscriptions retain their existing, separate refund and expiry rules.</p>
+<h2>8. Payments</h2>
+<h3>Stripe</h3>
+<p>The backend creates Payment Intents using the price read from the catalogue, not an amount supplied by the browser. Credit allocation and audience are copied into Payment Intent metadata. On successful confirmation or webhook fulfilment, the backend records the settled amount and the purchased credit allocation.</p>
+<p>The Stripe webhook is registered before JSON body parsing because signature verification requires the raw request body. <code>STRIPE_WEBHOOK_SECRET</code> must match the endpoint configured in Stripe.</p>
+<p>The website uses Stripe Elements. The Content Security Policy permits Stripe scripts, API connections, frames, and 3-D Secure challenges.</p>
+<h3>PayPal</h3>
+<p>PayPal runs against the live environment when <code>NODE_ENV=production</code>; all other environments use the sandbox. At capture, the backend checks that the currency is USD and that the captured amount matches the selected catalogue entry.</p>
+<p>For a clean operational change, avoid editing a price while a PayPal order for that exact catalogue record is awaiting capture. A completed purchase is unaffected by later price changes.</p>
+<h3>Idempotency and history</h3>
+<p>Credit payments have a unique transaction index. Stripe confirmation, webhook fulfilment, and repeated callbacks return the existing payment when the transaction has already been recorded. Historical payments keep their original amount and allocation when an administrator edits a plan.</p>
+<h2>9. API conventions</h2>
+<h3>Base addresses</h3>
+<pre><code class="language-text">Service check:  GET /
+Health check:   GET /health
+API base:       /api/v1
+</code></pre>
+<p>Successful controller responses generally follow:</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;Optional description&quot;,
+  &quot;data&quot;: {}
+}
+</code></pre>
+<p>Handled errors generally follow:</p>
+<pre><code class="language-json">{
+  &quot;success&quot;: false,
+  &quot;message&quot;: &quot;Readable error message&quot;,
+  &quot;errorSources&quot;: [
+    { &quot;path&quot;: &quot;&quot;, &quot;message&quot;: &quot;Readable error message&quot; }
+  ]
+}
+</code></pre>
+<p>Protected requests use:</p>
+<pre><code class="language-http">Authorization: Bearer &lt;access-token&gt;
+</code></pre>
+<p>JSON and URL-encoded request bodies are limited to 25 MB. File-upload limits are defined separately by the relevant Multer middleware and storage workflow.</p>
+<h3>Route groups</h3>
+<table>
+<thead>
+<tr>
+<th>API prefix</th>
+<th>Main responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/api/v1/user/*</code> and selected <code>/api/v1/*</code> routes</td>
+<td>Registration, login, OTP, recovery, users, profiles, and search</td>
+</tr>
+<tr>
+<td><code>/api/v1/jobs*</code></td>
+<td>Jobs, recommendations, usage, AI fit, archive, and approval</td>
+</tr>
+<tr>
+<td><code>/api/v1/category/*</code></td>
+<td>Job categories</td>
+</tr>
+<tr>
+<td><code>/api/v1/subscription/plans*</code></td>
+<td>Candidate plans and company/recruiter credit catalogue</td>
+</tr>
+<tr>
+<td><code>/api/v1/payments/*</code></td>
+<td>Stripe, PayPal, payment history, and refunds</td>
+</tr>
+<tr>
+<td><code>/api/v1/applied-jobs/*</code></td>
+<td>Applications and applicant status</td>
+</tr>
+<tr>
+<td><code>/api/v1/company/*</code></td>
+<td>Company profile and recruiter/employee relationships</td>
+</tr>
+<tr>
+<td><code>/api/v1/recruiter/*</code></td>
+<td>Recruiter accounts</td>
+</tr>
+<tr>
+<td><code>/api/v1/elevator-pitch/*</code></td>
+<td>Direct upload, processing state, playback, and deletion</td>
+</tr>
+<tr>
+<td><code>/api/v1/resume/*</code> and <code>/api/v1/create-resume/*</code></td>
+<td>Uploaded and generated resumes</td>
+</tr>
+<tr>
+<td><code>/api/v1/message-room/*</code> and <code>/api/v1/message/*</code></td>
+<td>Conversations and messages</td>
+</tr>
+<tr>
+<td><code>/api/v1/notifications/*</code></td>
+<td>Notification retrieval and read state</td>
+</tr>
+<tr>
+<td><code>/api/v1/following/*</code></td>
+<td>Recruiter following</td>
+</tr>
+<tr>
+<td><code>/api/v1/bookmarks/*</code></td>
+<td>Saved jobs</td>
+</tr>
+<tr>
+<td><code>/api/v1/content/*</code></td>
+<td>Terms, policies, built-in pages, and custom pages</td>
+</tr>
+<tr>
+<td><code>/api/v1/blogs/*</code></td>
+<td>Blog content</td>
+</tr>
+<tr>
+<td><code>/api/v1/faqs/*</code></td>
+<td>Frequently asked questions</td>
+</tr>
+<tr>
+<td><code>/api/v1/chatbot/*</code></td>
+<td>Chat, knowledge rebuild, and curated Q&amp;A</td>
+</tr>
+<tr>
+<td><code>/api/v1/scrolling-info/*</code></td>
+<td>Role-specific scrolling messages</td>
+</tr>
+<tr>
+<td><code>/api/v1/newsletter/*</code></td>
+<td>Subscribers and newsletter sending</td>
+</tr>
+<tr>
+<td><code>/api/v1/skill/*</code>, <code>/language/*</code>, <code>/university/*</code>, <code>/courency/*</code></td>
+<td>Reference data and bulk imports</td>
+</tr>
+<tr>
+<td><code>/api/v1/countries/*</code></td>
+<td>Country and city data</td>
+</tr>
+<tr>
+<td><code>/api/v1/admin/stats</code></td>
+<td>Administration dashboard statistics</td>
+</tr>
+</tbody>
+</table>
+<p>The route files in <code>src/routes</code> are the definitive endpoint register. Authentication varies by operation; integrations must verify the route declaration before relying on an endpoint as public or protected.</p>
+<h2>10. Data model summary</h2>
+<table>
+<thead>
+<tr>
+<th>Collection area</th>
+<th>Important records and relationships</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Identity</td>
+<td><code>User</code> is the login identity and role owner. Company and recruiter records reference a user.</td>
+</tr>
+<tr>
+<td>Profiles</td>
+<td>Education, experience, awards, skills, generated resumes, uploaded resumes, and elevator pitches link back to users.</td>
+</tr>
+<tr>
+<td>Recruitment</td>
+<td>Jobs reference their owner, category, approval state, and billing source. Applications connect users and jobs. Bookmarks and following records capture user relationships.</td>
+</tr>
+<tr>
+<td>Billing</td>
+<td>Subscription plans are the editable catalogue. Payment records are immutable purchase history plus mutable usage/refund state. Jobs can reference the payment that funded them.</td>
+</tr>
+<tr>
+<td>Communication</td>
+<td>Message rooms contain participants; messages reference rooms and read state. Notifications target users.</td>
+</tr>
+<tr>
+<td>Publishing</td>
+<td>Content, FAQs, blogs, scrolling information, newsletter subscriptions, and chatbot records support managed site content.</td>
+</tr>
+</tbody>
+</table>
+<p>Important billing fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SubscriptionPlan.price</code></td>
+<td>Current sale price for future purchases</td>
+</tr>
+<tr>
+<td><code>SubscriptionPlan.jobPostCredits</code></td>
+<td>Current allocation; <code>null</code> means unlimited</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.amount</code></td>
+<td>Amount paid for that historical transaction</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.jobPostCredits</code></td>
+<td>Allocation purchased in that transaction</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.jobPostsUsed</code></td>
+<td>Durable number of credits consumed</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.duration</code></td>
+<td><code>credits</code> for non-expiring job packages</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.paymentStatus</code></td>
+<td>Pending, complete, failed, or refunded</td>
+</tr>
+<tr>
+<td><code>PaymentInfo.planStatus</code></td>
+<td>Active or deactivated entitlement</td>
+</tr>
+<tr>
+<td><code>Job.billingPlanId</code></td>
+<td>Payment record that supplied the job credit</td>
+</tr>
+</tbody>
+</table>
+<h2>11. Storage and media</h2>
+<p>EVPitch uses two Cloudflare R2 storage patterns:</p>
+<ul>
+<li>Private storage holds original pitch media, HLS playlists, segments, and encryption keys. Access is granted through signed URLs or controlled streaming endpoints.</li>
+<li>Public storage holds browser-readable assets such as avatars, banners, logos, images, documents, and selected short videos. MongoDB stores stable public URLs.</li>
+</ul>
+<p>Cloudinary configuration remains in the backend for workflows that still use it. Local <code>uploads</code> are exposed by Express for legacy files, but new media should use the appropriate R2 service.</p>
+<p>Temporary upload files are removed after public R2 upload. Video processing requires FFmpeg and FFprobe to be installed and reachable by the backend process.</p>
+<h2>12. Scheduled and startup work</h2>
+<p>On startup, the backend connects to MongoDB, creates missing built-in content, and aligns legacy job-approval fields.</p>
+<p>The server schedules daily maintenance:</p>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Work</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>00:00 server time</td>
+<td>Delete eligible deactivated users, update expired plans, and notify recruiters about job expiry</td>
+</tr>
+<tr>
+<td>00:01 server time</td>
+<td>Notify expired subscriptions, remove expired elevator pitches, and purge expired job applications</td>
+</tr>
+<tr>
+<td>00:02 server time</td>
+<td>Remove old application resume files</td>
+</tr>
+</tbody>
+</table>
+<p>Cron uses the server’s local timezone because no timezone is supplied in the schedule. Production hosts should have a deliberate and documented timezone setting.</p>
+<h2>13. Environment configuration</h2>
+<p>Create environment files on the relevant host. Never commit live values.</p>
+<h3>Backend essentials</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NODE_ENV</code></td>
+<td>Selects production behaviour, including live PayPal</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td>HTTP and <a href="http://Socket.IO">Socket.IO</a> listening port; defaults to 5000</td>
+</tr>
+<tr>
+<td><code>MONGO_URI</code></td>
+<td>MongoDB connection string</td>
+</tr>
+<tr>
+<td><code>JWT_ACCESS_SECRET</code>, <code>JWT_REFRESH_SECRET</code></td>
+<td>JWT signing secrets</td>
+</tr>
+<tr>
+<td><code>JWT_ACCESS_EXPIRES_IN</code>, <code>JWT_REFRESH_EXPIRES_IN</code></td>
+<td>Token lifetimes</td>
+</tr>
+<tr>
+<td><code>OTP_SECRET</code></td>
+<td>OTP signing or verification secret</td>
+</tr>
+<tr>
+<td><code>BCRYPT_SALT_ROUNDS</code></td>
+<td>Password hashing cost</td>
+</tr>
+<tr>
+<td><code>SERVER_URL</code></td>
+<td>Public backend origin used when generating links</td>
+</tr>
+<tr>
+<td><code>JOB_POST_PAYWALL_ENABLED</code></td>
+<td>Enables enforcement and consumption of job credits</td>
+</tr>
+</tbody>
+</table>
+<h3>Payments</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>STRIPE_SECRET_KEY</code></td>
+<td>Server-side Stripe API key</td>
+</tr>
+<tr>
+<td><code>STRIPE_PUBLISHABLE_KEY</code></td>
+<td>Publishable key exposed through the config endpoint where used</td>
+</tr>
+<tr>
+<td><code>STRIPE_WEBHOOK_SECRET</code></td>
+<td>Stripe webhook signature secret</td>
+</tr>
+<tr>
+<td><code>PAYPAL_CLIENT_ID</code>, <code>PAYPAL_CLIENT_SECRET</code></td>
+<td>Server-side PayPal credentials</td>
+</tr>
+</tbody>
+</table>
+<h3>Email</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SMTP_HOST</code>, <code>SMTP_PORT</code></td>
+<td>SMTP server connection</td>
+</tr>
+<tr>
+<td><code>APP_USER</code>, <code>APP_PASSWORD</code></td>
+<td>SMTP authentication</td>
+</tr>
+<tr>
+<td><code>EMAIL_FROM</code>, <code>NO_REPLY_EMAIL</code></td>
+<td>General sender addresses</td>
+</tr>
+<tr>
+<td><code>CANDIDATE_EMAIL_FROM</code></td>
+<td>Candidate-specific sender identity</td>
+</tr>
+<tr>
+<td><code>RECRUITER_EMAIL_FROM</code></td>
+<td>Recruiter-specific sender identity</td>
+</tr>
+<tr>
+<td><code>COMPANY_EMAIL_FROM</code></td>
+<td>Company-specific sender identity</td>
+</tr>
+</tbody>
+</table>
+<h3>Media storage and playback</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>R2_ACCOUNT_ID</code>, <code>R2_ACCESS_KEY_ID</code>, <code>R2_SECRET_ACCESS_KEY</code></td>
+<td>Private R2 access</td>
+</tr>
+<tr>
+<td><code>R2_BUCKET_NAME</code>, <code>R2_PRIVATE_BASE</code></td>
+<td>Private bucket and base address</td>
+</tr>
+<tr>
+<td><code>R2_PUBLIC_ACCOUNT_ID</code>, <code>R2_PUBLIC_ACCESS_KEY_ID</code>, <code>R2_PUBLIC_SECRET_ACCESS_KEY</code></td>
+<td>Public R2 access; private credentials are fallback values</td>
+</tr>
+<tr>
+<td><code>R2_PUBLIC_BUCKET_NAME</code>, <code>R2_PUBLIC_BASE</code></td>
+<td>Public asset bucket and public origin</td>
+</tr>
+<tr>
+<td><code>AWS_BUCKET_NAME</code>, <code>AWS_BUCKET_VISIBILITY</code></td>
+<td>Compatibility settings used by older storage paths</td>
+</tr>
+<tr>
+<td><code>PITCH_PLAYBACK_SECRET</code></td>
+<td>Signs short-lived pitch playback tokens</td>
+</tr>
+<tr>
+<td><code>CLOUDINARY_CLOUD_NAME</code>, <code>CLOUDINARY_API_KEY</code>, <code>CLOUDINARY_API_SECRET</code></td>
+<td>Legacy/alternate Cloudinary integration</td>
+</tr>
+</tbody>
+</table>
+<h3>AI and search</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GEMINI_API_KEY</code></td>
+<td>Gemini API access</td>
+</tr>
+<tr>
+<td><code>GEMINI_CHAT_MODEL</code></td>
+<td>Chatbot model selection</td>
+</tr>
+<tr>
+<td><code>GEMINI_EMBED_MODEL</code></td>
+<td>Embedding model selection</td>
+</tr>
+<tr>
+<td><code>GEMINI_THINKING_LEVEL</code></td>
+<td>Optional reasoning configuration</td>
+</tr>
+<tr>
+<td><code>JOB_FIT_AI</code></td>
+<td>Enables AI job-fit analysis</td>
+</tr>
+<tr>
+<td><code>JOB_EMBEDDINGS</code></td>
+<td>Enables job embedding generation</td>
+</tr>
+<tr>
+<td><code>MONGODB_VECTOR_INDEX</code></td>
+<td>MongoDB Atlas vector index name</td>
+</tr>
+</tbody>
+</table>
+<h3>Public website</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NEXT_PUBLIC_BASE_URL</code></td>
+<td>API base including <code>/api/v1</code></td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_API_BASE_URL</code></td>
+<td>Chatbot or alternate API base where configured</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_SOCKET_URL</code></td>
+<td><a href="http://Socket.IO">Socket.IO</a> server origin</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_SITE_URL</code>, <code>NEXT_PUBLIC_APP_URL</code>, <code>NEXT_PUBLIC_BASE_SHARE_URL</code></td>
+<td>Website and share-link origins</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code></td>
+<td>Stripe Elements publishable key</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_PAYPAL_CLIENT_ID</code></td>
+<td>PayPal browser SDK client ID</td>
+</tr>
+<tr>
+<td><code>NEXTAUTH_SECRET</code></td>
+<td>NextAuth session signing secret required in production</td>
+</tr>
+</tbody>
+</table>
+<h3>Admin portal</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NEXT_PUBLIC_BASE_URL</code></td>
+<td>API base including <code>/api/v1</code></td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_SITE_URL</code></td>
+<td>Admin portal origin where required</td>
+</tr>
+<tr>
+<td><code>NEXTAUTH_SECRET</code></td>
+<td>Admin session signing secret</td>
+</tr>
+</tbody>
+</table>
+<h2>14. Local development</h2>
+<h3>Prerequisites</h3>
+<ul>
+<li>A current Node.js LTS release compatible with Next.js 15 and the package lockfiles.</li>
+<li>npm.</li>
+<li>MongoDB Atlas or a local replica set when testing credit transactions.</li>
+<li>Flutter SDK compatible with Dart <code>^3.9.2</code> for mobile work.</li>
+<li>FFmpeg and FFprobe for pitch processing.</li>
+<li>Sandbox Stripe, PayPal, R2, SMTP, and Gemini credentials for the workflows being tested.</li>
+</ul>
+<h3>Backend</h3>
+<pre><code class="language-bash">cd evpitch-backend
+npm ci
+npm run dev
+</code></pre>
+<p>The API defaults to port 5000. Confirm <code>GET /health</code> before starting client applications.</p>
+<h3>Public website</h3>
+<pre><code class="language-bash">cd evpitch-frontend
+npm ci
+npm run dev
+</code></pre>
+<h3>Admin portal</h3>
+<pre><code class="language-bash">cd evpitch-admin
+npm ci
+npm run dev
+</code></pre>
+<h3>Flutter</h3>
+<pre><code class="language-bash">cd flutter_giveandtake_getx
+flutter pub get
+flutter run
+</code></pre>
+<p>Do not use live payment credentials for local testing. The mobile source contains fixed production and sandbox addresses in some older payment paths; review those constants before running a payment test.</p>
+<h2>15. Build and test commands</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Build</th>
+<th>Tests/checks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend</td>
+<td><code>npm run build</code></td>
+<td><code>npm test</code>; <code>npm run lint</code></td>
+</tr>
+<tr>
+<td>Public website</td>
+<td><code>npm run build</code></td>
+<td><code>npx tsc --noEmit --incremental false</code></td>
+</tr>
+<tr>
+<td>Admin portal</td>
+<td><code>npm run build</code></td>
+<td><code>npx tsc --noEmit --incremental false</code></td>
+</tr>
+<tr>
+<td>Flutter</td>
+<td><code>flutter build &lt;target&gt;</code></td>
+<td><code>flutter test</code>; <code>flutter analyze</code></td>
+</tr>
+</tbody>
+</table>
+<p>Backend tests cover the job-package catalogue, non-expiry, purchase accumulation, durable usage, unlimited allocations, candidate expiry, refund amounts, and the exact 30-day boundary.</p>
+<p>At the time of this handover, the focused backend job-package suites pass all 15 tests. The public website’s full TypeScript check still reports existing errors outside the pricing component. The Next.js configuration currently allows production builds to continue despite lint and TypeScript errors, so a successful website build alone should not be treated as a clean type check.</p>
+<h2>16. Deployment and release procedure</h2>
+<p>The recorded production layout uses PM2, with the backend and admin portal under <code>/var/www/api</code> and <code>/var/www/admin</code>. Confirm actual paths and process names on the host before issuing commands; they are operational details, not application constants.</p>
+<p>For a routine code release:</p>
+<ol>
+<li>Review the commits in each affected repository and confirm that environment files are not included.</li>
+<li>Back up the affected code and database collections.</li>
+<li>Install exact dependencies with <code>npm ci</code> or the established lockfile-based process.</li>
+<li>Run backend tests and compile the backend.</li>
+<li>Run explicit TypeScript checks and production builds for each Next.js application.</li>
+<li>Deploy backend and clients as one coordinated release when API contracts changed.</li>
+<li>Restart the relevant PM2 processes.</li>
+<li>Check <code>/health</code>, login, the changed workflow, and browser/server logs.</li>
+<li>Where payments changed, run a sandbox checkout, post, and refund smoke test before approving the release.</li>
+</ol>
+<h3>Database migrations</h3>
+<p>The initial non-expiring job-package rollout used:</p>
+<pre><code class="language-bash">npm run migrate-job-packages
+npm run migrate-job-packages -- --apply
+</code></pre>
+<p>The first command is a preview. The second writes changes. The full migration reapplies the original ten package prices and must not be used for routine catalogue editing after administrators have customised prices.</p>
+<p>The focused PAYG restoration uses:</p>
+<pre><code class="language-bash">npm run restore-job-payg
+npm run restore-job-payg -- --apply
+</code></pre>
+<p>Always preview, back up <code>subscriptionplans</code>, <code>paymentinfos</code>, and <code>jobs</code>, and use a maintenance window before an applying migration.</p>
+<h3>Routine price changes</h3>
+<p>A normal price change requires no migration and no code deployment:</p>
+<ol>
+<li>Open <strong>Admin &gt; Plan</strong>.</li>
+<li>Locate the package and audience.</li>
+<li>Select <strong>Edit price</strong>.</li>
+<li>Enter the new USD price and confirm the credit allocation.</li>
+<li>Save the change.</li>
+<li>Repeat for the other audience when appropriate.</li>
+<li>Verify the public company and recruiter pricing pages.</li>
+</ol>
+<p>Existing completed purchases must not be edited. Their recorded amounts and credits remain valid at the terms on which they were bought.</p>
+<h2>17. Backup and recovery</h2>
+<p>Before billing, migration, or deletion work, back up at least:</p>
+<ul>
+<li><code>subscriptionplans</code>;</li>
+<li><code>paymentinfos</code>;</li>
+<li><code>jobs</code>;</li>
+<li><code>users</code>;</li>
+<li><code>appliedjobs</code>;</li>
+<li>content and media metadata affected by the release; and</li>
+<li>the active PM2 configuration and deployed code.</li>
+</ul>
+<p>MongoDB backups should be restorable and periodically tested. R2 lifecycle and recovery arrangements should be documented separately in the infrastructure account because deleting an object can leave a valid MongoDB URL pointing to missing media.</p>
+<p>If a release fails, restore the previous code and environment first. Restore database collections only when the failed release wrote incompatible data; rolling back code against already migrated data can be more damaging than leaving the new schema in place.</p>
+<h2>18. Monitoring and operational checks</h2>
+<p>At minimum, monitor:</p>
+<ul>
+<li>API availability and <code>/health</code> response time;</li>
+<li>PM2 process restarts and memory usage;</li>
+<li>MongoDB connection errors, storage growth, and transaction failures;</li>
+<li>HTTP 4xx/5xx rates;</li>
+<li>Stripe and PayPal webhook failures;</li>
+<li>SMTP delivery failures;</li>
+<li>R2 upload and playback failures;</li>
+<li>FFmpeg queue failures or pitches stuck in <code>queued</code> or <code>processing</code>;</li>
+<li>cron task completion;</li>
+<li>failed login, OTP, and password-reset patterns; and</li>
+<li>socket connection and reconnect errors.</li>
+</ul>
+<p>Operational logs must not include passwords, full JWTs, payment credentials, card details, or private playback keys.</p>
+<h2>19. Security notes and known technical debt</h2>
+<p>The following items deserve priority in future maintenance:</p>
+<ol>
+<li>Restrict API and <a href="http://Socket.IO">Socket.IO</a> CORS to approved production and staging origins. The current server configuration allows all origins.</li>
+<li>Review every route for authentication and role enforcement. Several older mutation and administrative-looking routes do not declare <code>protect</code> or <code>isAdmin</code> at route level.</li>
+<li>Authenticate <a href="http://Socket.IO">Socket.IO</a> connections and authorise room membership on the server. A client-provided room or user ID should not be trusted by itself.</li>
+<li>Resolve the public website TypeScript backlog and remove <code>ignoreBuildErrors</code> and <code>ignoreDuringBuilds</code> once clean.</li>
+<li>Remove test credentials and obsolete local addresses from source documentation and mobile code. Rotate any credential that may previously have been shared.</li>
+<li>Move fixed mobile API/payment addresses to build-time environment flavours for development, staging, and production.</li>
+<li>Add request validation consistently to payment, identity, content, and upload endpoints.</li>
+<li>Add rate limiting to login, OTP, password recovery, chatbot, contact, and other abuse-sensitive public endpoints.</li>
+<li>Confirm that production cookies, proxy headers, TLS, CSP, and secrets follow the live hosting design.</li>
+<li>Add automated integration coverage for provider webhooks, MongoDB transaction conflicts, direct uploads, socket authorisation, and full refund reconciliation.</li>
+</ol>
+<p>These notes describe the present source tree and should be treated as a maintenance list, not as evidence that a production incident has occurred.</p>
+<h2>20. Support runbook</h2>
+<h3>A user cannot post a job</h3>
+<ol>
+<li>Check <code>JOB_POST_PAYWALL_ENABLED</code>.</li>
+<li>Confirm the user role and account status.</li>
+<li>Find completed, active <code>credits</code> payments for the user.</li>
+<li>Compare <code>jobPostsUsed</code> with <code>jobPostCredits</code>; <code>null</code> means unlimited.</li>
+<li>Confirm the payment is not refunded or locked for refund processing.</li>
+<li>Check API logs for transaction or MongoDB replica-set errors.</li>
+<li>Do not manually change a catalogue price or create a fake payment to repair a historical purchase.</li>
+</ol>
+<h3>A historical credit fails after a price change</h3>
+<p>The current price should not affect credit use. Check the historical payment’s <code>paymentStatus</code>, <code>planStatus</code>, <code>refundProcessing</code>, <code>jobPostCredits</code>, and <code>jobPostsUsed</code>. A price mismatch during posting would indicate a regression because the credit-consumption service does not read the catalogue price.</p>
+<h3>A price is different on the two public pages</h3>
+<p>Company and recruiter plans are separate records. Edit and verify both audience entries in Admin &gt; Plan. Confirm that the website is using the correct API environment and clear any intermediary cache if the API already returns the new price.</p>
+<h3>A payment completed but credits are missing</h3>
+<ol>
+<li>Check the provider dashboard for the final status.</li>
+<li>Locate the transaction ID in <code>paymentinfos</code>.</li>
+<li>Inspect webhook and confirmation logs.</li>
+<li>Confirm that the plan metadata contains <code>valid=credits</code> and a valid allocation.</li>
+<li>Reconcile idempotently by transaction ID; never insert a second payment blindly.</li>
+</ol>
+<h3>A refund appears stuck</h3>
+<p>Check the provider before removing <code>refundProcessing</code>. A network timeout can occur after the provider has accepted a refund. Record the reconciliation outcome and provider refund ID before changing local state.</p>
+<h3>A video will not play</h3>
+<p>Confirm the pitch status is <code>ready</code>, the HLS objects exist in the private bucket, the playback or access token is valid, the viewer has permission, and the CSP permits the configured API/media origin. Check FFmpeg and R2 logs if processing never reached <code>ready</code>.</p>
+<h2>21. Acceptance record for the September 2026 pricing work</h2>
+<p>The following work is complete in the current source and recorded deployment notes:</p>
+<ul>
+<li>Company and recruiter packages use non-expiring job-post credits.</li>
+<li>Existing purchases retain their paid amount, allocation, and remaining credits after catalogue edits.</li>
+<li>PAYG is present for both audiences and can be edited through Admin &gt; Plan.</li>
+<li>Public company and recruiter pricing pages use the shared rate-card component.</li>
+<li>The revised pricing heading and refund-policy wording have been added to that shared component.</li>
+<li>The 30-day refund window, fixed $99.99 used-post deduction, and 10% administration fee are implemented.</li>
+<li>Credit consumption and job creation are transactional.</li>
+<li>The focused backend package and PAYG tests pass all 15 cases.</li>
+</ul>
+<p>The last recorded live deployment was 9 September 2026. No real purchase or refund was made during that deployment verification. A sandbox end-to-end checkout, post, and refund remains the recommended acceptance test whenever payment code or provider configuration changes.</p>
+<h2>22. Ownership and handover checklist</h2>
+<p>The system owner should retain controlled access to:</p>
+<ul>
+<li>source repositories and release branches;</li>
+<li>production and staging environment variables;</li>
+<li>MongoDB Atlas;</li>
+<li>Cloudflare R2;</li>
+<li>Stripe and PayPal;</li>
+<li>SMTP/email provider;</li>
+<li>Gemini/AI provider;</li>
+<li>domain and DNS settings;</li>
+<li>hosting/VPS and PM2;</li>
+<li>Apple and Google developer accounts for mobile releases; and</li>
+<li>backups, monitoring, and incident contacts.</li>
+</ul>
+<p>Before a new maintainer takes responsibility, confirm that they can build each component, reach the staging services, deploy without receiving production secrets in chat, restore a database backup, inspect payment-provider events, and follow the support runbook above.</p>
+<hr>
+<p><strong>End of technical handover</strong></p>
+
+</body>
+</html>
