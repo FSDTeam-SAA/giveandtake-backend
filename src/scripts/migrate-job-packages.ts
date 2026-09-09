@@ -5,6 +5,7 @@ import { SubscriptionPlan } from '../models/subscriptionPlan.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { Job } from '../models/job.model'
 import { JOB_PACKAGES } from '../utils/jobPackagePolicy'
+import { restoreJobPaygCatalog } from '../services/jobPaygCatalog.service'
 
 const key = (title: string, valid: string) => {
   const tier = ['basic', 'bronze', 'silver', 'gold', 'platinum'].find(t => title.toLowerCase().includes(t))
@@ -63,7 +64,7 @@ async function main() {
       for (const duplicate of matching.slice(1)) await SubscriptionPlan.updateOne({ _id: duplicate._id }, { $set: { archived: true } })
     }
   }
-  if (apply) await SubscriptionPlan.updateMany({ for: { $in: ['company', 'recruiter'] }, valid: 'PayAsYouGo' }, { $set: { archived: true } })
+  console.log('Pay As You Go:', JSON.stringify(await restoreJobPaygCatalog(apply)))
   console.log(JSON.stringify(changes, null, 2))
   console.log(apply ? 'Migration complete.' : 'Preview only. Pass --apply to write changes.')
 }
