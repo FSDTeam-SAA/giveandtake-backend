@@ -1,5 +1,35 @@
 EVPITCH - CLIENT REQUIREMENTS IMPLEMENTATION SUMMARY
-Date: 6 September 2026
+Updated: 9 September 2026
+
+ADMIN PRICING AND PAY AS YOU GO FOLLOW-UP - LIVE
+- The top pricing table now has visible Edit price buttons for both
+  companies and recruiters. It is connected to the live catalogue.
+- To change a price: open Admin > Plan, find the package, click Edit price
+  in the Company or Recruiter column, enter the price and click Save changes.
+- The same dialog allows changing job credits or selecting unlimited posts.
+  Company and recruiter entries are edited separately; update both when
+  the same price should apply to both audiences.
+- Price changes apply to future purchases. Existing purchased prices,
+  allocations and used/remaining credits are preserved.
+- Plan search now searches the entire catalogue before pagination.
+- Pay as You Go is available again for both companies and recruiters:
+  $99.99 for one job post, paid once, with no credit expiry.
+  Its price is editable through the same buttons.
+- Both public pricing pages now show PAYG alongside the ten packages.
+- Changing the PAYG sale price does not change the separate $99.99
+  per-post refund deduction or the 30-day refund policy.
+- Backend and admin production builds passed, with all 15 tests passing.
+- Actual live admin saves were verified for Basic Plan and PAYG for both
+  audiences, preserving the configured prices during testing. Both public
+  pricing pages and their mobile layouts were verified after deployment.
+- Payment and job records were compared before/after PAYG restoration:
+  none changed. No real purchase or refund was made for testing.
+- See DEPLOYMENT-2026-09-09.txt for deployment details.
+
+The sections below describe the original 6 September rollout. It is already
+deployed. Do not rerun its full migration for routine admin price changes;
+it reapplies the original package prices. The focused PAYG command and
+current maintenance instructions are in JOB-PACKAGES-ROLLOUT.md.
 
 STATUS
 The requested changes have been implemented and deployed to the public

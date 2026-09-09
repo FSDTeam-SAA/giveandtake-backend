@@ -1,0 +1,46 @@
+EVPITCH PRICING EDITOR AND PAYG FOLLOW-UP
+Deployed: 9 September 2026
+
+Live changes
+- Admin > Plan has a visible Edit price button for each audience/package.
+- The dialog saves USD prices and job credit allocations to the catalogue.
+- Plan search covers all entries before pagination.
+- Restored existing company/recruiter PAYG catalogue IDs at their existing
+  $99.99 prices, each providing one non-expiring credit.
+- Both website pricing pages show 11 packages. No frontend rebuild was
+  needed because the website reads these prices from the API.
+- Candidate plans, Flutter and existing purchases were not changed.
+
+Source and deployment
+- Main source commits: backend e02ef34, admin 1cfdc59.
+- Live release commits: backend 5446aeb, admin 5f864e9, on the
+  deploy/pricing-editor-20260909 branches in their respective repositories.
+- Deployment branches isolate this change from unrelated scrolling-bar
+  commits on main. Those scrolling-bar commits were not deployed.
+- Existing server dependency overrides and environment files were preserved.
+- Backend/admin: /var/www/api and /var/www/admin, both PM2 processes online.
+- JOB_POST_PAYWALL_ENABLED remains true.
+
+Backups and validation
+- Server backup: /var/www/backups/pricing-editor-20260909
+  Contains prior api/admin releases, PM2 dump and database EJSON snapshots.
+- Database backup verified: 34 subscriptionplans, 9 paymentinfos, 22 jobs.
+- Only the focused restore-job-payg script was applied. The original full
+  package migration was not rerun; the ten package prices were preserved.
+- Payment and job collections matched their backups after PAYG restoration.
+- Server backend/admin production builds passed; all 15 backend tests passed.
+- Actual authenticated browser saves succeeded for company/recruiter Basic
+  Plan and PAYG, retaining the existing values during verification.
+- Search across pagination passed. Both public pricing pages showed all
+  original prices plus PAYG and passed a 390px mobile width check.
+- No real checkout, job creation or refund was performed during verification.
+
+Future catalogue changes
+Use Admin > Plan > Edit price > Save changes. Update company and recruiter
+separately if both should match. No code deployment is needed for a price
+change. Existing purchases preserve their recorded price and credits.
+
+If PAYG restoration is needed elsewhere, preview with npm run restore-job-payg,
+then apply with npm run restore-job-payg -- --apply after reviewing a backup.
+The focused script preserves active PAYG credit plans with admin customisations.
+Do not rerun the original full package migration after customising prices.
