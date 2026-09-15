@@ -28,6 +28,15 @@ export interface IPaymentInfo extends Document {
   expiresAt?: Date
   expiryReminderSentAt?: Date
   userDeletedAt?: Date
+  storePlatform?: 'apple' | 'google'
+  /** Apple originalTransactionId or Google purchaseToken. */
+  storeSubscriptionId?: string
+  storeProductId?: string
+  storeEnvironment?: 'production' | 'sandbox'
+  /** Expiry as last reported by the store (expiresAt may carry an outage grace). */
+  storeExpiresAt?: Date
+  storeAutoRenew?: boolean
+  storeLastSyncedAt?: Date
 }
 
 export interface PaymentInfoModel extends Model<IPaymentInfo> {}

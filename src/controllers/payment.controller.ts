@@ -240,6 +240,11 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
     throw new AppError(400, "Payment already refunded");
   }
 
+  // Apple and Google take the money for in-app purchases and own their refunds.
+  if (payment.storePlatform) {
+    throw new AppError(400, "App Store and Google Play purchases can only be refunded by Apple or Google");
+  }
+
   if (payment.paymentStatus !== 'complete') throw new AppError(400, 'Only completed payments can be refunded');
   if (!req.user || (!['admin', 'super-admin'].includes(req.user.role) && String(req.user._id) !== String(payment.userId))) {
     throw new AppError(403, 'You cannot refund this payment');

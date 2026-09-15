@@ -4,6 +4,7 @@ import { ElevatorPitch } from '../models/elevatorPitch.model'
 import AppError from '../errors/AppError'
 import httpStatus from 'http-status'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
+import { isStorePlanStillCurrent } from '../services/candidateIap.service'
 
 export const ELEVATOR_PITCH_LIMITS = {
   candidateFreeSeconds: 30,
@@ -43,6 +44,9 @@ export const validateElevatorPitchAccess = async (
 
     if (!plan) {
       isCandidateFreeTier = true
+    } else if (isPaymentExpired(plan, now) && (await isStorePlanStillCurrent(plan))) {
+      // Store plans renew on Apple/Google's side; they confirmed this one.
+      maxDuration = ELEVATOR_PITCH_LIMITS.paidOrBusinessSeconds
     } else {
       const expiryDate = resolvePaymentExpiry(plan)
       const expired = isPaymentExpired(plan, now)

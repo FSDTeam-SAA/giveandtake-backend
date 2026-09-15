@@ -20,6 +20,7 @@ import path from 'path'
 import { initNotificationSocket } from './sockets/notification.service'
 import { ensureBuiltInContent } from './jobs/ensureBuiltInContent'
 import { ensureJobApprovalConsistency } from './jobs/ensureJobApprovalConsistency'
+import { syncStoreSubscriptions } from './services/candidateIap.service'
 
 dotenv.config()
 
@@ -40,7 +41,11 @@ initNotificationSocket(io)
 cron.schedule('0 0 * * *', async () => {
   console.log('Running user deletion job...')
   await deleteOldDeactivatedUsers()
-  await updateExpiredPlans(); 
+  // Pull App Store / Google Play renewals before expired plans are deactivated.
+  await syncStoreSubscriptions().catch((error) =>
+    console.error('[iap] Store subscription sync failed:', error)
+  )
+  await updateExpiredPlans();
   await notifyJobExpiryToRecruiters();
 })
 

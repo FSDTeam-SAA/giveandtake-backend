@@ -50,12 +50,22 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
     expiresAt: { type: Date },
     expiryReminderSentAt: { type: Date },
     userDeletedAt: { type: Date },
+    // Native in-app purchases (mobile candidate subscription). Absent on web payments.
+    storePlatform: { type: String, enum: ['apple', 'google'] },
+    storeSubscriptionId: { type: String },
+    storeProductId: { type: String },
+    storeEnvironment: { type: String, enum: ['production', 'sandbox'] },
+    storeExpiresAt: { type: Date },
+    storeAutoRenew: { type: Boolean },
+    storeLastSyncedAt: { type: Date },
   },
   { timestamps: true }
 )
 
 // Both the webhook and checkout confirmation can fulfil the same payment.
 paymentInfoSchema.index({ transactionId: 1 }, { name: 'unique_credit_transaction', unique: true, partialFilterExpression: { duration: 'credits' } })
+// One row per store subscription, however often the app re-sends the purchase.
+paymentInfoSchema.index({ storePlatform: 1, storeSubscriptionId: 1 }, { name: 'unique_store_subscription', unique: true, partialFilterExpression: { storeSubscriptionId: { $exists: true } } })
 
 export const paymentInfo = mongoose.model<IPaymentInfo, PaymentInfoModel>(
   'PaymentInfo',

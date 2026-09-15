@@ -2,6 +2,7 @@ import { Types } from 'mongoose'
 import { ElevatorPitch, IElevatorPitch } from '../models/elevatorPitch.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
+import { isStorePlanStillCurrent } from './candidateIap.service'
 
 export const CANDIDATE_FREE_PITCH_SECONDS = 30
 export const PITCH_DURATION_TOLERANCE_SECONDS = 0.5
@@ -50,6 +51,12 @@ export const isCandidatePitchAvailable = async (
       plan.duration || (plan.planId as any)?.valid || ''
     ).toLowerCase()
     if (validity !== 'monthly' && validity !== 'yearly') continue
+
+    // Store plans renew on Apple/Google's side; confirm with them before lapsing.
+    if (isPaymentExpired(plan) && (await isStorePlanStillCurrent(plan))) {
+      hasCurrentPlan = true
+      continue
+    }
 
     const expiryDate = resolvePaymentExpiry(plan)
     const expired = isPaymentExpired(plan)

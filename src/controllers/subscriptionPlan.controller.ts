@@ -200,7 +200,9 @@ export const deleteSubscriptionPlan = catchAsync(
 export const unSubscribePlan = catchAsync(async(req,res)=>{
   const userId = req.user?._id
 
-  await paymentInfo.updateMany({ userId, duration: { $ne: 'credits' } }, { $set: { planStatus: 'deactivate' } })
+  // App Store / Google Play subscriptions can only be cancelled in the store, so
+  // they stay as the store reports them.
+  await paymentInfo.updateMany({ userId, duration: { $ne: 'credits' }, storePlatform: { $exists: false } }, { $set: { planStatus: 'deactivate' } })
   const deleteElevatorPitch = await ElevatorPitch.deleteMany({userId})
 
   sendResponse(res,{
