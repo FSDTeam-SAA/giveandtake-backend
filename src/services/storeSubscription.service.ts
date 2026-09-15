@@ -184,6 +184,7 @@ export const getAppleSubscription = async (
   transactionId: string
 ): Promise<StoreSubscriptionSnapshot> => {
   const token = appleAuthToken()
+  let notFound = false
 
   for (const environment of appleEnvironments()) {
     let response: AppleStatusResponse
@@ -196,7 +197,13 @@ export const getAppleSubscription = async (
     } catch (error) {
       const status = responseStatus(error)
       // Unknown in this environment — a sandbox purchase 404s in production.
-      if (status === 400 || status === 404) continue
+      if (status === 400 || status === 404) {
+        notFound = true
+        continue
+      }
+      // Production answers 401 until the app is live on the App Store, while
+      // sandbox (TestFlight / App Review) already works with the same key.
+      if (status === 401) continue
       throw new StoreUnavailableError(`App Store request failed (${status ?? 'network error'})`)
     }
 
@@ -207,6 +214,9 @@ export const getAppleSubscription = async (
     return snapshot
   }
 
+  if (!notFound) {
+    throw new StoreUnavailableError('App Store rejected the purchase verification credentials (401)')
+  }
   throw new StoreVerificationError('App Store purchase not found')
 }
 

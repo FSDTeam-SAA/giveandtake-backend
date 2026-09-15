@@ -105,3 +105,60 @@ test('a lapsed store subscription deactivates the row; a revoked one is marked r
   assert.equal(revoked.planStatus, 'deactivate')
   assert.equal(revoked.paymentStatus, 'refunded')
 })
+
+const axios = require('axios')
+const crypto = require('crypto')
+const { getAppleSubscription, StoreUnavailableError, StoreVerificationError } = require('../src/services/storeSubscription.service')
+
+const useTestAppleKey = () => {
+  process.env.APPLE_IAP_KEY_ID = 'TESTKEY'
+  process.env.APPLE_IAP_ISSUER_ID = 'test-issuer'
+  process.env.APPLE_IAP_PRIVATE_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+    .privateKey.export({ type: 'pkcs8', format: 'pem' })
+}
+
+// Answers App Store Server API calls per environment without the network.
+const stubAppleHosts = (responses) => {
+  const original = axios.get
+  axios.get = async (url) => {
+    const { status, data } = responses[url.includes('sandbox') ? 'sandbox' : 'production']
+    if (status === 200) return { data }
+    const error = new Error(`HTTP ${status}`)
+    error.isAxiosError = true
+    error.response = { status }
+    throw error
+  }
+  return () => { axios.get = original }
+}
+
+test('before release, a production 401 falls back to sandbox (TestFlight / App Review)', async () => {
+  useTestAppleKey()
+  const restore = stubAppleHosts({ production: { status: 401 }, sandbox: { status: 200, data: appleStatus(1) } })
+  try {
+    const snapshot = await getAppleSubscription('2000')
+    assert.equal(snapshot.environment, 'sandbox')
+    assert.equal(snapshot.subscriptionId, '1000')
+  } finally {
+    restore()
+  }
+})
+
+test('a purchase unknown to sandbox after a production 401 is not found', async () => {
+  useTestAppleKey()
+  const restore = stubAppleHosts({ production: { status: 401 }, sandbox: { status: 404 } })
+  try {
+    await assert.rejects(getAppleSubscription('2000'), StoreVerificationError)
+  } finally {
+    restore()
+  }
+})
+
+test('credentials rejected by both App Store environments are reported as unavailable', async () => {
+  useTestAppleKey()
+  const restore = stubAppleHosts({ production: { status: 401 }, sandbox: { status: 401 } })
+  try {
+    await assert.rejects(getAppleSubscription('2000'), StoreUnavailableError)
+  } finally {
+    restore()
+  }
+})
