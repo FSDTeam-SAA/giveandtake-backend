@@ -36,9 +36,16 @@ export const APPLE_IAP = {
   get environment() {
     return (process.env.APPLE_IAP_ENVIRONMENT || 'auto').toLowerCase()
   },
+  /** Auto-renewable monthly subscriptions. */
   get candidateProductIds() {
     return readList(process.env.APPLE_IAP_CANDIDATE_PRODUCT_IDS, [
       'com.pooelcentral.giveandtake.candidate.premium',
+    ])
+  },
+  /** Non-renewing subscriptions: one payment for 12 months of Premium. */
+  get candidateYearlyProductIds() {
+    return readList(process.env.APPLE_IAP_CANDIDATE_YEARLY_PRODUCT_IDS, [
+      'com.pooelcentral.giveandtake.candidate.yearly',
     ])
   },
 }

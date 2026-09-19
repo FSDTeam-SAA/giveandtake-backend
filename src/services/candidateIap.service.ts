@@ -7,10 +7,11 @@ import { SubscriptionPlan } from '../models/subscriptionPlan.model'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
 import {
   decodeJwsPayload,
-  getAppleSubscription,
+  getApplePurchase,
   getGoogleSubscription,
   StorePlatform,
   StoreSubscriptionSnapshot,
+  StoreTerm,
   StoreVerificationError,
 } from './storeSubscription.service'
 
@@ -60,19 +61,29 @@ export const applyStoreSnapshot = (
   }
 }
 
-const resolveCandidateStorePlan = async () => {
-  const configuredPlanId = process.env.IAP_CANDIDATE_PLAN_ID
+// The candidate monthly plan is stored as PayAsYouGo, which runs for a month
+// (see computeExpiryFromStart), so both count as the monthly plan.
+const PLAN_VALIDITY_BY_TERM: Record<StoreTerm, string[]> = {
+  monthly: ['monthly', 'PayAsYouGo'],
+  yearly: ['yearly'],
+}
+
+const resolveCandidateStorePlan = async (term: StoreTerm) => {
+  const configuredPlanId =
+    term === 'yearly'
+      ? process.env.IAP_CANDIDATE_YEARLY_PLAN_ID
+      : process.env.IAP_CANDIDATE_PLAN_ID
   const plan = configuredPlanId
     ? await SubscriptionPlan.findById(configuredPlanId)
     : await SubscriptionPlan.findOne({
         for: 'candidate',
-        valid: 'monthly',
+        valid: { $in: PLAN_VALIDITY_BY_TERM[term] },
         archived: { $ne: true },
         price: { $gt: 0 },
       }).sort({ price: 1 })
 
   if (!plan) {
-    throw new AppError(500, 'No candidate monthly plan is set up for store subscriptions')
+    throw new AppError(500, `No candidate ${term} plan is set up for store subscriptions`)
   }
   return plan
 }
@@ -105,12 +116,12 @@ export const linkStoreSubscription = async (
 
   if (!snapshot.isActive) return null
 
-  const plan = await resolveCandidateStorePlan()
+  const plan = await resolveCandidateStorePlan(snapshot.term)
   const payment = new paymentInfo({
     userId: user._id,
     planId: plan._id,
     amount: plan.price,
-    duration: 'monthly',
+    duration: snapshot.term,
     paymentStatus: 'complete',
     paymentMethod: STORE_PAYMENT_METHODS[snapshot.platform],
     storePlatform: snapshot.platform,
@@ -136,7 +147,7 @@ export const refreshStorePayment = async (payment: IPaymentInfo) => {
   const snapshot =
     payment.storePlatform === 'google'
       ? await getGoogleSubscription(payment.storeSubscriptionId)
-      : await getAppleSubscription(payment.storeSubscriptionId)
+      : await getApplePurchase(payment.storeProductId, payment.storeSubscriptionId)
 
   applyStoreSnapshot(payment, snapshot)
   await payment.save()
@@ -277,6 +288,8 @@ export interface CandidatePremiumStatus {
   /** Payment method of the plan providing Premium, e.g. "App Store" or "Stripe". */
   source: string | null
   autoRenew: boolean | null
+  /** Term of the plan providing Premium, so the app can tell monthly from yearly. */
+  term: StoreTerm | null
 }
 
 /** Whether the candidate has a current monthly / yearly plan from any provider. */
@@ -292,6 +305,7 @@ export const getCandidatePremiumStatus = async (
     expiresAt: null,
     source: null,
     autoRenew: null,
+    term: null,
   }
 
   for (const plan of plans) {
@@ -306,6 +320,7 @@ export const getCandidatePremiumStatus = async (
         expiresAt,
         source: plan.paymentMethod || null,
         autoRenew: plan.storeAutoRenew ?? null,
+        term: validity as StoreTerm,
       }
     }
   }

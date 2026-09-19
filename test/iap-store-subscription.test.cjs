@@ -162,3 +162,72 @@ test('credentials rejected by both App Store environments are reported as unavai
     restore()
   }
 })
+
+/* ---------------- Yearly (non-renewing) App Store purchases ---------------- */
+
+const { normalizeAppleNonRenewing, getApplePurchase } = require('../src/services/storeSubscription.service')
+
+const purchasedAt = Date.parse('2026-09-10T12:00:00Z')
+const yearlyTransaction = (extra = {}) => ({
+  bundleId: 'com.pooelcentral.giveandtake',
+  productId: 'com.pooelcentral.giveandtake.candidate.yearly',
+  type: 'Non-Renewing Subscription',
+  transactionId: '3000',
+  originalTransactionId: '3000',
+  purchaseDate: purchasedAt,
+  ...extra,
+})
+
+test('a yearly App Store purchase gives 12 months of Premium from the purchase date', () => {
+  const snapshot = normalizeAppleNonRenewing(yearlyTransaction(), 'sandbox', now)
+  assert.equal(snapshot.isActive, true)
+  assert.equal(snapshot.term, 'yearly')
+  assert.equal(snapshot.subscriptionId, '3000')
+  assert.equal(snapshot.autoRenew, false)
+  assert.equal(snapshot.expiresAt.toISOString(), '2027-09-10T12:00:00.000Z')
+})
+
+test('a yearly purchase lapses after 12 months and a refunded one is revoked', () => {
+  const later = new Date('2027-09-11T12:00:00Z')
+  assert.equal(normalizeAppleNonRenewing(yearlyTransaction(), 'production', later).isActive, false)
+  const refunded = normalizeAppleNonRenewing(yearlyTransaction({ revocationDate: past }), 'production', now)
+  assert.equal(refunded.isActive, false)
+  assert.equal(refunded.isRevoked, true)
+})
+
+test('only candidate yearly non-renewing purchases for this app are accepted', () => {
+  assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ bundleId: 'com.other.app' }), 'production', now), null)
+  assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ productId: 'com.pooelcentral.giveandtake.candidate.premium' }), 'production', now), null)
+  assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ type: 'Consumable' }), 'production', now), null)
+})
+
+test('yearly purchases use Get Transaction Info; monthly ones use subscription status', async () => {
+  useTestAppleKey()
+  const original = axios.get
+  const urls = []
+  axios.get = async (url) => {
+    urls.push(url)
+    return url.includes('/inApps/v1/transactions/')
+      ? { data: { signedTransactionInfo: jws(yearlyTransaction({ purchaseDate: Date.now() })) } }
+      : { data: appleStatus(1) }
+  }
+  try {
+    const yearly = await getApplePurchase('com.pooelcentral.giveandtake.candidate.yearly', '3000')
+    assert.equal(yearly.term, 'yearly')
+    assert.match(urls.at(-1), /\/inApps\/v1\/transactions\/3000$/)
+
+    const monthly = await getApplePurchase('com.pooelcentral.giveandtake.candidate.premium', '2000')
+    assert.equal(monthly.term, 'monthly')
+    assert.match(urls.at(-1), /\/inApps\/v1\/subscriptions\/2000$/)
+  } finally {
+    axios.get = original
+  }
+})
+
+test('a yearly store purchase is recorded as a yearly payment', () => {
+  const payment = new paymentInfo({ userId: new Types.ObjectId(), amount: 43.99, transactionId: 'z', duration: 'yearly', paymentStatus: 'complete', planStatus: 'deactivate' })
+  applyStoreSnapshot(payment, normalizeAppleNonRenewing(yearlyTransaction(), 'production', now))
+  assert.equal(payment.planStatus, 'active')
+  assert.equal(payment.storeAutoRenew, false)
+  assert.equal(payment.expiresAt.toISOString(), '2027-09-10T12:00:00.000Z')
+})

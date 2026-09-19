@@ -4,7 +4,7 @@ import sendResponse from '../utils/sendResponse'
 import AppError from '../errors/AppError'
 import { APPLE_IAP, GOOGLE_PLAY_IAP } from '../config/iap'
 import {
-  getAppleSubscription,
+  getApplePurchase,
   getGoogleSubscription,
   StoreSubscriptionSnapshot,
   StoreUnavailableError,
@@ -32,10 +32,13 @@ export const verifyStorePurchase = catchAsync(async (req: Request, res: Response
   let snapshot: StoreSubscriptionSnapshot
   try {
     if (platform === 'ios') {
-      if (!APPLE_IAP.candidateProductIds.includes(productId) || typeof transactionId !== 'string' || !transactionId) {
+      const isCandidateProduct =
+        APPLE_IAP.candidateProductIds.includes(productId) ||
+        APPLE_IAP.candidateYearlyProductIds.includes(productId)
+      if (!isCandidateProduct || typeof transactionId !== 'string' || !transactionId) {
         throw new AppError(400, 'A valid App Store product and transaction id are required')
       }
-      snapshot = await getAppleSubscription(transactionId)
+      snapshot = await getApplePurchase(productId, transactionId)
     } else if (platform === 'android') {
       if (!GOOGLE_PLAY_IAP.candidateProductIds.includes(productId) || typeof purchaseToken !== 'string' || !purchaseToken) {
         throw new AppError(400, 'A valid Google Play product and purchase token are required')

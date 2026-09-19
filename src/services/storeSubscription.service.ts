@@ -9,6 +9,8 @@ import {
 
 export type StorePlatform = 'apple' | 'google'
 export type StoreEnvironment = 'production' | 'sandbox'
+/** monthly: auto-renewing subscription. yearly: one payment for 12 months. */
+export type StoreTerm = 'monthly' | 'yearly'
 
 /** A store subscription's current state, in the same shape for Apple and Google. */
 export interface StoreSubscriptionSnapshot {
@@ -18,6 +20,7 @@ export interface StoreSubscriptionSnapshot {
   /** The latest charge: Apple transactionId, Google latestOrderId. */
   latestTransactionId: string
   productId: string
+  term: StoreTerm
   environment: StoreEnvironment
   expiresAt: Date | null
   isActive: boolean
@@ -69,8 +72,16 @@ interface AppleTransactionPayload {
   originalTransactionId: string
   bundleId: string
   productId: string
+  type?: string
+  purchaseDate?: number
   expiresDate?: number
   revocationDate?: number
+}
+
+const APPLE_NON_RENEWING_TYPE = 'Non-Renewing Subscription'
+
+export interface AppleTransactionInfoResponse {
+  signedTransactionInfo?: string
 }
 
 interface AppleRenewalPayload {
@@ -159,6 +170,7 @@ export const normalizeAppleStatus = (
     subscriptionId: transaction.originalTransactionId,
     latestTransactionId: transaction.transactionId,
     productId: transaction.productId,
+    term: 'monthly',
     environment,
     expiresAt,
     isActive:
@@ -172,6 +184,50 @@ export const normalizeAppleStatus = (
   }
 }
 
+const addYears = (date: Date, years: number) => {
+  const copy = new Date(date)
+  copy.setFullYear(copy.getFullYear() + years)
+  return copy
+}
+
+/**
+ * Converts a non-renewing (yearly) transaction from Apple's "Get Transaction
+ * Info". Apple sends no expiry for these, so access runs 12 months from the
+ * purchase date. Returns null when it is not a candidate yearly purchase.
+ */
+export const normalizeAppleNonRenewing = (
+  transaction: AppleTransactionPayload,
+  environment: StoreEnvironment,
+  now = new Date()
+): StoreSubscriptionSnapshot | null => {
+  if (
+    transaction.bundleId !== APPLE_IAP.bundleId ||
+    !APPLE_IAP.candidateYearlyProductIds.includes(transaction.productId) ||
+    transaction.type !== APPLE_NON_RENEWING_TYPE ||
+    !transaction.purchaseDate
+  ) {
+    return null
+  }
+
+  const expiresAt = addYears(new Date(transaction.purchaseDate), 1)
+  const isRevoked = Boolean(transaction.revocationDate)
+
+  return {
+    platform: 'apple',
+    // A non-renewing purchase never gets another transaction, so the
+    // original id identifies it for refunds and re-checks.
+    subscriptionId: transaction.originalTransactionId || transaction.transactionId,
+    latestTransactionId: transaction.transactionId,
+    productId: transaction.productId,
+    term: 'yearly',
+    environment,
+    expiresAt,
+    isActive: !isRevoked && expiresAt > now,
+    isRevoked,
+    autoRenew: false,
+  }
+}
+
 const appleEnvironments = (): StoreEnvironment[] => {
   if (APPLE_IAP.environment === 'production') return ['production']
   if (APPLE_IAP.environment === 'sandbox') return ['sandbox']
@@ -179,20 +235,24 @@ const appleEnvironments = (): StoreEnvironment[] => {
   return ['production', 'sandbox']
 }
 
-/** Looks up a subscription by any of its transaction ids, including the original one. */
-export const getAppleSubscription = async (
-  transactionId: string
+/**
+ * GETs an App Store Server API path, trying production then sandbox, and
+ * converts the first environment that knows the transaction.
+ */
+const fetchFromApple = async <T>(
+  path: string,
+  normalize: (data: T, environment: StoreEnvironment) => StoreSubscriptionSnapshot | null
 ): Promise<StoreSubscriptionSnapshot> => {
   const token = appleAuthToken()
   let notFound = false
 
   for (const environment of appleEnvironments()) {
-    let response: AppleStatusResponse
+    let response: T
     try {
-      const result = await axios.get<AppleStatusResponse>(
-        `${APPLE_API_HOSTS[environment]}/inApps/v1/subscriptions/${encodeURIComponent(transactionId)}`,
-        { headers: { Authorization: `Bearer ${token}` }, timeout: REQUEST_TIMEOUT_MS }
-      )
+      const result = await axios.get<T>(`${APPLE_API_HOSTS[environment]}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: REQUEST_TIMEOUT_MS,
+      })
       response = result.data
     } catch (error) {
       const status = responseStatus(error)
@@ -207,7 +267,7 @@ export const getAppleSubscription = async (
       throw new StoreUnavailableError(`App Store request failed (${status ?? 'network error'})`)
     }
 
-    const snapshot = normalizeAppleStatus(response, environment)
+    const snapshot = normalize(response, environment)
     if (!snapshot) {
       throw new StoreVerificationError('This App Store purchase is not a candidate subscription')
     }
@@ -219,6 +279,32 @@ export const getAppleSubscription = async (
   }
   throw new StoreVerificationError('App Store purchase not found')
 }
+
+/** Looks up a subscription by any of its transaction ids, including the original one. */
+export const getAppleSubscription = (transactionId: string) =>
+  fetchFromApple<AppleStatusResponse>(
+    `/inApps/v1/subscriptions/${encodeURIComponent(transactionId)}`,
+    (response, environment) => normalizeAppleStatus(response, environment)
+  )
+
+/** Looks up a non-renewing (yearly) purchase by its transaction id. */
+export const getAppleNonRenewingPurchase = (transactionId: string) =>
+  fetchFromApple<AppleTransactionInfoResponse>(
+    `/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
+    (response, environment) =>
+      response.signedTransactionInfo
+        ? normalizeAppleNonRenewing(
+            decodeJwsPayload<AppleTransactionPayload>(response.signedTransactionInfo),
+            environment
+          )
+        : null
+  )
+
+/** Picks the right App Store lookup for a candidate product. */
+export const getApplePurchase = (productId: string | undefined, transactionId: string) =>
+  productId && APPLE_IAP.candidateYearlyProductIds.includes(productId)
+    ? getAppleNonRenewingPurchase(transactionId)
+    : getAppleSubscription(transactionId)
 
 /* ----------------------------- Google Play ----------------------------- */
 
@@ -320,6 +406,7 @@ export const normalizeGooglePurchase = (
     subscriptionId: purchaseToken,
     latestTransactionId: purchase.latestOrderId || purchaseToken.slice(0, 64),
     productId: lineItem.productId,
+    term: 'monthly',
     environment: purchase.testPurchase ? 'sandbox' : 'production',
     expiresAt,
     isActive:
