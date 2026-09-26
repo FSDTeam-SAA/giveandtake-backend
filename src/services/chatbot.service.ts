@@ -350,15 +350,19 @@ class ChatbotService {
       )
       .join("\n\n");
 
+    const { summary: historySummary, messages: historyMessages } =
+      this.buildCondensedHistoryMessages(history);
+
+    // Gemini only accepts a single system message at the start of the
+    // conversation, so the history summary is folded into it.
     const systemMessage = new SystemMessage(
   "You are Elevator Video Pitch's assistant. Use the given context to answer questions about the EVP platform clearly and politely. " +
   "If there's no context, answer that generally but also encourage the user to ask about the EVP website. " +
   "For more info, contact clientsupport@evpitch.com.\n\n" +
-  `Context:\n${context || "No relevant context provided."}`
+  `Context:\n${context || "No relevant context provided."}` +
+  (historySummary ? `\n\n${historySummary}` : "")
 );
 
-
-    const historyMessages = this.buildCondensedHistoryMessages(history);
     const messages = [
       systemMessage,
       ...historyMessages,
@@ -387,30 +391,50 @@ class ChatbotService {
     };
   }
 
-  private buildCondensedHistoryMessages(
-    history?: ChatHistoryEntry[]
-  ): Array<HumanMessage | AIMessage | SystemMessage> {
+  private buildCondensedHistoryMessages(history?: ChatHistoryEntry[]): {
+    summary?: string;
+    messages: Array<HumanMessage | AIMessage>;
+  } {
     const normalized = this.normalizeHistory(history);
     if (!normalized.length) {
-      return [];
+      return { messages: [] };
     }
 
     const earliestSegment = normalized.slice(0, 2);
     const lastSegment = normalized.slice(-3);
 
-    const condensed: Array<HumanMessage | AIMessage | SystemMessage> = [];
-
-    if (earliestSegment.length) {
-      condensed.push(
-        new SystemMessage(
-          `Early conversation summary (first ${earliestSegment.length} messages): ${this.summarizeHistorySegment(
-            earliestSegment
-          )}`
-        )
-      );
+    // The replayed turns must start with a user message and alternate roles.
+    while (lastSegment.length && lastSegment[0].role !== "user") {
+      lastSegment.shift();
+    }
+    const turns: NormalizedHistoryEntry[] = [];
+    for (const entry of lastSegment) {
+      const previous = turns[turns.length - 1];
+      if (previous && previous.role === entry.role) {
+        turns[turns.length - 1] = {
+          ...previous,
+          content: `${previous.content}\n\n${entry.content}`,
+          thoughtSignature: entry.thoughtSignature ?? previous.thoughtSignature,
+        };
+        continue;
+      }
+      turns.push(entry);
+    }
+    // The current question is sent as the next user turn, so the replayed
+    // history has to end on an assistant reply.
+    if (turns.length && turns[turns.length - 1].role === "user") {
+      turns.pop();
     }
 
-    for (const entry of lastSegment) {
+    const summary = earliestSegment.length
+      ? `Early conversation summary (first ${earliestSegment.length} messages): ${this.summarizeHistorySegment(
+          earliestSegment
+        )}`
+      : undefined;
+
+    const condensed: Array<HumanMessage | AIMessage> = [];
+
+    for (const entry of turns) {
       if (entry.role === "assistant") {
         const additional_kwargs = entry.thoughtSignature
           ? { thoughtSignature: entry.thoughtSignature }
@@ -426,7 +450,7 @@ class ChatbotService {
       condensed.push(new HumanMessage(entry.content));
     }
 
-    return condensed;
+    return { summary, messages: condensed };
   }
 
   private normalizeHistory(
