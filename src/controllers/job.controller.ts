@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import catchAsync from "../utils/catchAsync";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError";
+import { getJobDescriptionError } from "../utils/jobDescriptionPolicy";
 import { Job } from "../models/job.model";
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
 import sendResponse from "../utils/sendResponse";
@@ -39,6 +40,11 @@ import {
   jobNotificationEmailTemplate,
   sendEmail,
 } from "../utils/sendEmail";
+
+const validateJobDescription = (description: unknown) => {
+  const message = getJobDescriptionError(description);
+  if (message) throw new AppError(httpStatus.BAD_REQUEST, message);
+};
 
 const logEmbeddingWarning = (context: string, error: unknown) => {
   console.warn(
@@ -323,6 +329,8 @@ export const createJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
+  validateJobDescription(description);
+
   // CHECK THE USER
   const user = await User.findById(userId);
 
@@ -541,6 +549,9 @@ export const getJobPostingUsage = catchAsync(
 
 export const editJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "description")) {
+    validateJobDescription(req.body.description);
+  }
 
   // Require userId in body to authorize edit
   const { userId } = req.body || {};
@@ -1196,6 +1207,9 @@ export const getJobSuggestions = catchAsync(
 
 export const updateJob = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "description")) {
+    validateJobDescription(req.body.description);
+  }
 
   const job = await Job.findById(id).populate("userId");
   if (!job) {
