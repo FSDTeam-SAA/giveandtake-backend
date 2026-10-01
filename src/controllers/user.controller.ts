@@ -1,5 +1,6 @@
 import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
+import { isValidPassword, PASSWORD_REQUIREMENT_MESSAGE } from "../utils/passwordPolicy";
 import httpStatus from "http-status";
 import { generateOTP } from "../utils/generateOTP";
 import { createToken, verifyToken } from "../utils/authToken";
@@ -30,6 +31,12 @@ import { deleteUserAndRelatedData } from "../services/userDeletion.service";
 const DEFAULT_NO_REPLY_EMAIL =
   process.env.NO_REPLY_EMAIL || "no-reply@evpitch.com";
 const OTP_EXPIRES_IN = "10m";
+
+const validateNewPassword = (password: unknown) => {
+  if (!isValidPassword(password)) {
+    throw new AppError(httpStatus.BAD_REQUEST, PASSWORD_REQUIREMENT_MESSAGE);
+  }
+};
 
 const decodeOtpToken = (token: string) => {
   try {
@@ -126,6 +133,7 @@ export const register = catchAsync(async (req, res) => {
   if (!name || !email || !password) {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
+  validateNewPassword(password);
   const otp = generateOTP();
   const jwtPayloadOTP = { otp };
   const otptoken = createToken(
@@ -447,6 +455,7 @@ export const otpVerifyResetPassword = catchAsync(async (req, res) => {
 
 export const resetPassword = catchAsync(async (req, res) => {
   const { password, otp, email } = req.body;
+  validateNewPassword(password);
   const user = await User.isUserExistsByEmail(email);
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -480,6 +489,7 @@ export const changePassword = catchAsync(async (req, res) => {
       "Old password and new password are required"
     );
   }
+  validateNewPassword(newPassword);
   if (oldPassword === newPassword) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -677,6 +687,7 @@ export const securityResetPassword = catchAsync(
     if (!newPassword || typeof newPassword !== "string") {
       throw new AppError(httpStatus.BAD_REQUEST, "New password is required");
     }
+    validateNewPassword(newPassword);
 
     const user = await User.findOne({
       "verificationInfo.resetToken": token,
