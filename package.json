@@ -7,11 +7,11 @@
     "test": "node --test test/*.test.cjs",
     "migrate-job-packages": "ts-node --transpile-only src/scripts/migrate-job-packages.ts",
     "restore-job-payg": "ts-node --transpile-only src/scripts/restore-job-payg.ts",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "node init && ts-node-dev --respawn --transpile-only src/server.ts",
     "sync-indexes": "ts-node --transpile-only src/scripts/sync-search-indexes.ts",
     "lint": "eslint . --ext .ts",
-    "start": "node dist/server.js",
-    "build": "tsc"
+    "start": "node init && node dist/server.js",
+    "build": "node init && tsc"
   },
   "keywords": [],
   "author": "",
@@ -42,7 +42,7 @@
     "langchain": "^0.2.20",
     "moment": "^2.30.1",
     "mongoose": "^8.13.2",
-    "multer": "^2.0.1",
+    "multer": "^2.4.0",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.3",
     "parser": "^0.1.4",
