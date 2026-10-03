@@ -21,6 +21,11 @@ for (const [name, file] of [
   ['admin', '../../evpitch-admin/src/lib/password-policy.ts'],
 ]) {
   const policy = loadPolicy(file);
+  test(`${name}: accepts eighteen characters and rejects nineteen`, () => {
+    assert.equal(policy.PASSWORD_MAX_LENGTH, 18);
+    assert.equal(policy.isValidPassword('Abcdefghijklmnop1!'), true);
+    assert.equal(policy.isValidPassword('Abcdefghijklmnopq1!'), false);
+  });
   test(`${name}: rejects nine characters and accepts ten and eleven`, () => {
     assert.equal(policy.PASSWORD_MIN_LENGTH, 10);
     assert.equal(policy.isValidPassword('Abcdefg1!'), false);
