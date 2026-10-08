@@ -4,5 +4,4 @@ dist
 test.html
 /temp/
 
-config.bat
 .env
