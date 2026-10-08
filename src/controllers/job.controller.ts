@@ -3,6 +3,7 @@ import catchAsync from "../utils/catchAsync";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError";
 import { getJobDescriptionError } from "../utils/jobDescriptionPolicy";
+import { getJobDisplayStatus, resolveJobDatePatch } from "../utils/jobLifecycle";
 import { Job } from "../models/job.model";
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
 import sendResponse from "../utils/sendResponse";
@@ -77,6 +78,7 @@ const withoutJobEmbedding = (job: any) => {
   const responseJob =
     typeof job?.toObject === "function" ? job.toObject() : { ...job };
   delete responseJob.embedding;
+  responseJob.displayStatus = getJobDisplayStatus(responseJob);
   return responseJob;
 };
 
@@ -618,24 +620,15 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   }
 
   ensurePaygWindowMetadata(job);
-  const jobCreatedAt = getDocumentCreatedAt(job);
-  const incomingPublishDate = coerceDate(req.body?.publishDate);
-  const incomingDeadline = coerceDate(req.body?.deadline);
-  const derivedEditExpiry = deriveExpiryDate(
-    incomingPublishDate ?? job.publishDate ?? jobCreatedAt ?? new Date(),
-    {
-      expirationDate: req.body?.expirationDate,
-      expiryDate: req.body?.expiryDate,
-      expiaryDate: req.body?.expiaryDate,
-      deadline: req.body?.deadline ?? job.deadline ?? job.expiryDate,
-    }
-  );
+  const datePatch = resolveJobDatePatch(job, req.body || {});
+  const incomingPublishDate = datePatch.publishDate;
+  const derivedEditExpiry = datePatch.deadline;
 
   await enforcePaygEditRestriction(job);
   enforcePaygDateBounds(
     job,
     incomingPublishDate,
-    derivedEditExpiry ?? incomingDeadline
+    derivedEditExpiry
   );
 
   if (
@@ -650,18 +643,11 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  const safeBody: Record<string, unknown> = { ...req.body };
-  if (incomingPublishDate) {
-    safeBody.publishDate = incomingPublishDate;
-  }
-  if (incomingDeadline) {
-    safeBody.deadline = incomingDeadline;
-  }
-  if (derivedEditExpiry) {
-    safeBody.deadline = derivedEditExpiry;
-    safeBody.expiryDate = derivedEditExpiry;
-  } else if (incomingDeadline) {
-    safeBody.expiryDate = incomingDeadline;
+  const safeBody: Record<string, unknown> = { ...req.body, ...datePatch };
+  // Older full-form clients submit blanks for optional enums/references.
+  // Treat these as omitted so an unrelated edit preserves existing values.
+  for (const field of ["employement_Type", "career_Stage", "location_Type", "jobCategoryId"]) {
+    if (safeBody[field] === "" || safeBody[field] === null) delete safeBody[field];
   }
 
   // ---- Whitelist of fields allowed to be updated ----
@@ -741,7 +727,7 @@ export const editJob = catchAsync(async (req: Request, res: Response) => {
   // If you DO want to allow company/recruiter switching, handle explicitly here.
 
   await attachEmbeddingBeforeSave(job);
-  await job.save();
+  await job.save({ validateModifiedOnly: true });
 
   // ---- Optional: notify followers if the job just became active or newly published now ----
   const justActivated = prevStatus !== "active" && job.status === "active";
@@ -1074,7 +1060,7 @@ export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Jobs fetched successfully",
-    data: { meta, jobs },
+    data: { meta, jobs: jobs.map(withoutJobEmbedding) },
   });
 });
 
@@ -1215,6 +1201,7 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
   if (!job) {
     throw new AppError(400, "job not found");
   }
+  const datePatch = resolveJobDatePatch(job, req.body || {});
   const jobOwner = job.userId as any;
   const hasAdminApprovalDecision =
     typeof req.body?.adminApprove === "boolean";
@@ -1283,36 +1270,10 @@ export const updateJob = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
-  const incomingPublishDate = coerceDate(req.body?.publishDate);
-  const jobCreatedAt = getDocumentCreatedAt(job);
-  const derivedAdminExpiry = deriveExpiryDate(
-    incomingPublishDate ?? job.publishDate ?? jobCreatedAt ?? new Date(),
-    {
-      expirationDate: req.body?.expirationDate,
-      expiryDate: req.body?.expiryDate,
-      expiaryDate: req.body?.expiaryDate,
-      deadline: req.body?.deadline ?? job.deadline ?? job.expiryDate,
-    }
-  );
-
-  const nextBody: Record<string, unknown> = { ...req.body };
+  const nextBody: Record<string, unknown> = { ...req.body, ...datePatch };
   if (hasAdminApprovalDecision) {
     nextBody.jobApprove = req.body.adminApprove ? "approved" : "denied";
   }
-  if (incomingPublishDate) {
-    nextBody.publishDate = incomingPublishDate;
-  }
-  if (derivedAdminExpiry) {
-    nextBody.deadline = derivedAdminExpiry;
-    nextBody.expiryDate = derivedAdminExpiry;
-  } else if (req.body?.deadline) {
-    const fallbackDeadline = coerceDate(req.body.deadline);
-    if (fallbackDeadline) {
-      nextBody.deadline = fallbackDeadline;
-      nextBody.expiryDate = fallbackDeadline;
-    }
-  }
-
   const nextDeadline = nextBody.deadline as Date | undefined;
   if (
     nextDeadline &&
@@ -1778,24 +1739,13 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      let derivedStatus = "Pending";
-
-      if (job.deadline && job.deadline < today) {
-        derivedStatus = "Expired";
-      } else if (job.publishDate && job.adminApprove) {
-        if (job.publishDate <= today) {
-          derivedStatus = "Live";
-        } else {
-          derivedStatus = "Scheduled (Admin Approved)";
-        }
-      } else if (job.publishDate && !job.adminApprove) {
-        if (job.publishDate > today) {
-          derivedStatus = "Scheduled";
-        }
-      }
+      const displayStatus = getJobDisplayStatus(job, today);
+      const derivedStatus = displayStatus === 'pending' ? 'Pending approval' :
+        displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
 
       return {
         ...job.toObject(),
+        displayStatus,
         applicantCount: job.counter ?? 0,
         derivedStatus,
       };
@@ -1904,25 +1854,13 @@ export const getRicruitercompanyJobs2 = catchAsync(async (req, res) => {
 
   const jobsWithApplicants = await Promise.all(
     Jobs.map(async (job) => {
-      let derivedStatus = "Pending";
-
-      // ✅ Mark as Expired if the job's deadline has passed
-      if (job.deadline && job.deadline < today) {
-        derivedStatus = "Expired";
-      } else if (job.publishDate && job.adminApprove) {
-        if (job.publishDate <= today) {
-          derivedStatus = "Live";
-        } else {
-          derivedStatus = "Scheduled (Admin Approved)";
-        }
-      } else if (job.publishDate && !job.adminApprove) {
-        if (job.publishDate > today) {
-          derivedStatus = "Scheduled";
-        }
-      }
+      const displayStatus = getJobDisplayStatus(job, today);
+      const derivedStatus = displayStatus === 'pending' ? 'Pending approval' :
+        displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
 
       return {
         ...job.toObject(),
+        displayStatus,
         applicantCount: job.counter ?? 0,
         derivedStatus, // 👈 includes "Expired" logic
       };

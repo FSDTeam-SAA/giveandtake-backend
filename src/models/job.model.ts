@@ -1,5 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import { IJob, JobModel } from "../interface/job.interface";
+import { getJobDisplayStatus } from "../utils/jobLifecycle";
 
 const jobSchema: Schema<IJob> = new Schema<IJob>(
   {
@@ -90,8 +91,12 @@ const jobSchema: Schema<IJob> = new Schema<IJob>(
     deactivatedAt: { type: Date, default: null },
     expiryReminderSentAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true, toJSON: { virtuals: ["displayStatus"] } }
 );
+
+jobSchema.virtual("displayStatus").get(function () {
+  return getJobDisplayStatus(this);
+});
 
 /**
  * 🔍 Full-Text Search Index
