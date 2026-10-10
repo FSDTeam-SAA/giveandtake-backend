@@ -3,7 +3,7 @@ import catchAsync from "../utils/catchAsync";
 import httpStatus from "http-status";
 import AppError from "../errors/AppError";
 import { getJobDescriptionError } from "../utils/jobDescriptionPolicy";
-import { getJobDisplayStatus, resolveJobDatePatch } from "../utils/jobLifecycle";
+import { buildLiveJobFilter, getJobAvailability, getJobDisplayStatus, resolveJobDatePatch } from "../utils/jobLifecycle";
 import { Job } from "../models/job.model";
 import { getPaginationParams, buildMetaPagination } from "../utils/pagination";
 import sendResponse from "../utils/sendResponse";
@@ -78,7 +78,7 @@ const withoutJobEmbedding = (job: any) => {
   const responseJob =
     typeof job?.toObject === "function" ? job.toObject() : { ...job };
   delete responseJob.embedding;
-  responseJob.displayStatus = getJobDisplayStatus(responseJob);
+  Object.assign(responseJob, getJobAvailability(responseJob));
   return responseJob;
 };
 
@@ -921,34 +921,6 @@ function parseEnumList(raw: unknown, allowed: string[]): string[] {
   );
 }
 
-// Shared gating for publicly visible jobs (approval + publish/deadline windows).
-// All date gating lives inside `$and` so extra clauses can be pushed safely
-// without clobbering the `$or` blocks.
-function buildLiveJobFilter() {
-  const now = new Date();
-  return {
-    arcrivedJob: false,
-    jobApprove: "approved",
-    adminApprove: true,
-    $and: [
-      {
-        $or: [
-          { publishDate: { $exists: false } },
-          { publishDate: null },
-          { publishDate: { $lte: now } },
-        ],
-      },
-      {
-        $or: [
-          { deadline: { $exists: false } },
-          { deadline: null },
-          { deadline: { $gte: now } },
-        ],
-      },
-    ] as any[],
-  };
-}
-
 export const getAllJobs = catchAsync(async (req: Request, res: Response) => {
   // Free-text query: `q` preferred, `title` kept for back-compat (`q` wins)
   const q = capQuery(req.query.q, 200) || capQuery(req.query.title, 200);
@@ -1408,29 +1380,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
   }
   if (jobCategoryId) matchConditions.push({ jobCategoryId });
 
-  // ✅ Filter for published jobs only (no future publish dates)
-  const dateFilter = {
-    $or: [
-      { publishDate: { $exists: false } },
-      { publishDate: null },
-      { publishDate: { $lte: new Date() } },
-    ],
-  };
-
-  // ✅ Filter to exclude jobs past their deadline
-  const deadlineFilter = {
-    $or: [
-      { deadline: { $exists: false } },
-      { deadline: null },
-      { deadline: { $gte: new Date() } },
-    ],
-  };
-
-  const baseFilters = {
-    arcrivedJob: false,
-    adminApprove: true,
-    jobApprove: "approved",
-  };
+  const { $and: [dateFilter, deadlineFilter], ...baseFilters } = buildLiveJobFilter();
 
   const jobs = await Job.find({
     $and: [
@@ -1574,8 +1524,7 @@ export const recommendJobs = catchAsync(async (req: Request, res: Response) => {
       arcrivedJob: false,
       adminApprove: true,
       jobApprove: "approved",
-      ...dateFilter,
-      ...deadlineFilter, // 🆕 exclude expired
+      $and: [dateFilter, deadlineFilter],
     })
       .select("-embedding")
       .populate("companyId recruiterId")
@@ -1618,8 +1567,7 @@ const findEmbeddingRecommendedJobs = async (
 
   const queryFilters = {
     ...baseFilters,
-    ...dateFilter,
-    ...deadlineFilter,
+    $and: [dateFilter, deadlineFilter],
     ...(exclude.length ? { _id: { $nin: exclude } } : {}),
   };
 
@@ -1770,28 +1718,9 @@ export const getRecruiterCompanyJobs = catchAsync(async (req, res) => {
 
 export const getRicruitercompanyJobs1 = catchAsync(async (req, res) => {
   const userId = req.params.id;
-  const now = new Date();
-  const publishDateFilter = {
-    $or: [
-      { publishDate: { $exists: false } },
-      { publishDate: null },
-      { publishDate: { $lte: now } },
-    ],
-  };
-  const deadlineFilter = {
-    $or: [
-      { deadline: { $exists: false } },
-      { deadline: null },
-      { deadline: { $gte: now } },
-    ],
-  };
   const Jobs = await Job.find({
+    ...buildLiveJobFilter(),
     companyId: userId,
-    jobApprove: "approved",
-    adminApprove: true,
-    arcrivedJob: false,
-    ...publishDateFilter,
-    $and: [deadlineFilter],
   })
     .select("-embedding")
     .sort({

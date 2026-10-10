@@ -4,11 +4,52 @@ export type JobDisplayStatus = "archived" | "expired" | "denied" | "pending" | "
 
 export function getJobDisplayStatus(job: any, now = new Date()): JobDisplayStatus {
   if (job.arcrivedJob) return "archived";
-  if (job.deadline && new Date(job.deadline).getTime() < now.getTime()) return "expired";
+  const deadline = job.deadline ?? job.expiryDate;
+  if (deadline && new Date(deadline).getTime() <= now.getTime()) return "expired";
   if (job.jobApprove === "denied") return "denied";
   if (job.adminApprove !== true || job.jobApprove !== "approved") return "pending";
   if (job.publishDate && new Date(job.publishDate).getTime() > now.getTime()) return "scheduled";
   return "published";
+}
+
+export function getJobAvailability(job: any, now = new Date()) {
+  const displayStatus = getJobDisplayStatus(job, now);
+  const deadline = job.deadline ?? job.expiryDate;
+  const validDeadline = !deadline || Number.isFinite(new Date(deadline).getTime());
+  const canApply = displayStatus === "published" && job.status !== "deactivate" && validDeadline;
+  const applicationClosedReason = canApply ? null : displayStatus === "expired"
+    ? "This job has expired and is no longer accepting applications."
+    : displayStatus === "scheduled"
+    ? "Applications for this job are not open yet."
+    : "This job is not currently accepting applications.";
+  return { displayStatus, canApply, applicationClosedReason };
+}
+
+export function assertJobAcceptsApplications(job: any, now = new Date()) {
+  const availability = getJobAvailability(job, now);
+  if (!availability.canApply) {
+    throw new AppError(403, availability.applicationClosedReason!);
+  }
+}
+
+// Keep public listings consistent with application availability, including legacy expiryDate-only jobs.
+export function buildLiveJobFilter(now = new Date()) {
+  return {
+    arcrivedJob: false,
+    status: { $ne: "deactivate" },
+    jobApprove: "approved",
+    adminApprove: true,
+    $and: [
+      { $or: [{ publishDate: null }, { publishDate: { $lte: now } }] },
+      { $or: [
+        { deadline: { $gt: now } },
+        { $and: [
+          { deadline: null },
+          { $or: [{ expiryDate: null }, { expiryDate: { $gt: now } }] },
+        ] },
+      ] },
+    ] as any[],
+  };
 }
 
 // Only submitted dates are updated. Older clients may submit both expiry aliases

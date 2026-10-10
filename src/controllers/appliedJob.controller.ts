@@ -16,6 +16,7 @@ import { User } from "../models/user.model";
 import { io } from "../server";
 import { Notification } from "../models/notification.model";
 import { assertUserCanApplyWithElevatorPitch } from "../helper/elevatorPitchApplicationAccess";
+import { assertJobAcceptsApplications } from "../utils/jobLifecycle";
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, status, resumeId, answer, hasValidVisa } = req.body;
@@ -34,6 +35,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   if (!job) {
     throw new AppError(httpStatus.NOT_FOUND, "Job not found");
   }
+  assertJobAcceptsApplications(job);
   const resume = await CreateResume.findOne({ userId });
 
   if (!resume) {
@@ -78,6 +80,8 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
     }
   }
 
+  // Recheck the clock after resume/entitlement checks in case the deadline passed.
+  assertJobAcceptsApplications(job);
   const application = await AppliedJob.create({
     jobId,
     userId,
