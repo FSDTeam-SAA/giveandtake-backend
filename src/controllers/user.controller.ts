@@ -1,3 +1,4 @@
+import { normalizeEmail, userEmailFilter } from '../utils/email';
 import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
 import { isValidPassword, PASSWORD_REQUIREMENT_MESSAGE } from "../utils/passwordPolicy";
@@ -134,6 +135,9 @@ export const register = catchAsync(async (req, res) => {
     throw new AppError(httpStatus.FORBIDDEN, "Please fill in all fields");
   }
   validateNewPassword(password);
+  if (await User.isUserExistsByEmail(email)) {
+    throw new AppError(httpStatus.CONFLICT, "This email is already associated with another account");
+  }
   const otp = generateOTP();
   const jwtPayloadOTP = { otp };
   const otptoken = createToken(
@@ -327,7 +331,7 @@ export const login = catchAsync(async (req, res) => {
       role: user.role,
       _id: user._id,
       name: user.name,
-      email: email,
+      email: normalizeEmail(user.email),
       address: user.address,
       phoneNum: user.phoneNum,
       dateOfbirth: user.dateOfbirth,
@@ -412,9 +416,7 @@ export const forgetPassword = catchAsync(async (req, res) => {
   user.password_reset_token = otptoken;
   await user.save();
 
-  /////// TODO: SENT EMAIL MUST BE DONE
-  // sendEmail(user.email, "Reset Password", `Your OTP is ${otp}`);
-  sendEmail(
+  await sendEmail(
     user.email,
     "Reset Password OTP - Elevator Video Pitch©",
     resetOtpTemplate(user.name, otp),
@@ -445,10 +447,19 @@ export const otpVerifyResetPassword = catchAsync(async (req, res) => {
   if (verify.otp !== otp) {
     throw new AppError(httpStatus.BAD_REQUEST, "Invalid OTP");
   }
+  // Older mobile releases submit the new password to this endpoint.
+  // Complete that request instead of reporting success without saving it.
+  const hasPassword = req.body.password !== undefined;
+  if (hasPassword) {
+    validateNewPassword(req.body.password);
+    user.password = req.body.password;
+    user.password_reset_token = "";
+    await user.save();
+  }
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "OTP verified successfully",
+    message: hasPassword ? "Password reset successfully" : "OTP verified successfully",
     data: {},
   });
 });
@@ -540,7 +551,7 @@ export const setSecurityQuestions = catchAsync(async (req, res) => {
     );
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne(userEmailFilter(email));
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, "User not found");
@@ -577,7 +588,7 @@ export const submitSecurityAnswers = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne(userEmailFilter(email));
     // console.log("first", user)
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
@@ -601,7 +612,7 @@ export const checkSubmitSecurityAnswers = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne(userEmailFilter(email));
     // console.log("first", user)
     if (!user) throw new AppError(httpStatus.NOT_FOUND, "User not found");
 
@@ -632,7 +643,7 @@ export const verifySecurityAnswers = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid input");
     }
 
-    const user = await User.findOne({ email }).select("securityQuestions");
+    const user = await User.findOne(userEmailFilter(email)).select("securityQuestions verificationInfo email");
 
     if (user?.securityQuestions?.length !== answers.length) {
       throw new AppError(
@@ -1714,7 +1725,7 @@ export const deleteUser = catchAsync(async (req, res) => {
 
 export const emailChange = catchAsync(async (req, res) => {
   const id = req.user?._id;
-  const { email } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!email) {
     throw new AppError(httpStatus.BAD_REQUEST, "New email is required");
   }
@@ -1722,11 +1733,11 @@ export const emailChange = catchAsync(async (req, res) => {
   if (!user) {
     throw new AppError(404, "User not found")
   }
-  if (user.email == email) {
+  if (normalizeEmail(user.email) === email) {
     throw new AppError(400, "New email must be different from the current email")
   }
   const oldEmail = user.email
-  const existingUser = await User.findOne({ email })
+  const existingUser = await User.findOne(userEmailFilter(email))
   if (existingUser) {
     throw new AppError(404, "This email is already associated with another account")
   }

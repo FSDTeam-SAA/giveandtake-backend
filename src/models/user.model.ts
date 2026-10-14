@@ -2,12 +2,13 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 import bcrypt from 'bcrypt'
 import slugify from 'slugify'
 import { IUser, UserModel } from '../interface/user.interface'
+import { userEmailFilter } from '../utils/email'
 
 const userSchema: Schema = new Schema<IUser>(
   {
     name: { type: String, required: true },
     slug: { type: String, unique: true, trim: true }, // ✅ Added slug field
-    email: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     phoneNum: { type: String },
     password: { type: String, select: 0, required: true },
     role: {
@@ -108,7 +109,7 @@ userSchema.pre(['save', 'findOneAndUpdate'], async function (next) {
 // ✅ Static methods remain exactly the same
 //
 userSchema.statics.isUserExistsByEmail = async function (email: string) {
-  return await User.findOne({ email }).select('+password +secureFolderPin')
+  return await User.findOne(userEmailFilter(email)).select('+password +secureFolderPin')
 }
 
 userSchema.statics.isOTPVerified = async function (id: string) {
