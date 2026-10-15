@@ -436,7 +436,8 @@ export const getElevatorPitchForUser = catchAsync(
       return
     }
 
-    const owner = await User.findById(userId).select('role')
+    const owner = await User.findOne({ _id: userId, deactivate: { $ne: true }, deletionInProgress: { $ne: true } }).select('role')
+    if (!owner) throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
     if (
       owner?.role === 'candidate' &&
       !(await isCandidatePitchAvailable(pitch, owner._id as any))
@@ -751,7 +752,7 @@ export const getAllElevatorPitches = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, 'Invalid user type')
     }
 
-    const users = await User.find({ role: type }, '_id name email')
+    const users = await User.find({ role: type, deactivate: { $ne: true }, deletionInProgress: { $ne: true } }, '_id name email')
     const userIds = users.map((u) => u._id)
 
     // Do NOT leak storage URLs / keys — this endpoint is enumerable. Playback

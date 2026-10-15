@@ -8,7 +8,7 @@ import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
 import { removeElevatorPitchArtifacts } from '../services/videoProcessing.queue'
 import sendResponse from '../utils/sendResponse'
-import { uploadMedia } from '../utils/mediaUpload'
+import { uploadMedia, deleteMedia } from '../utils/mediaUpload'
 import path from 'path'
 import { User } from '../models/user.model'
 import fs from 'fs'
@@ -169,7 +169,7 @@ export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => 
   const { slug } = req.params
 
   // Step 1: Find user by slug
-  const user = await User.findOne({ slug }).select('_id deactivate')
+  const user = await User.findOne({ slug, deactivate: { $ne: true }, deletionInProgress: { $ne: true } }).select('_id deactivate')
   if (!user) {
     return res.status(httpStatus.NOT_FOUND).json({
       success: false,
@@ -374,6 +374,35 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     },
   })
 })
+
+export const deleteResumeImage = catchAsync(async (req: Request, res: Response) => {
+  const image = req.params.image;
+  if (image !== 'photo' && image !== 'banner') {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid profile image type');
+  }
+  const previous = await CreateResume.findOneAndUpdate(
+    { userId: req.user?._id },
+    { $unset: { [image]: '', [`${image}Key`]: '' } },
+    { new: false }
+  );
+  if (image === 'photo' && previous?.photo) {
+    await User.updateOne(
+      { _id: req.user?._id, 'avatar.url': previous.photo },
+      { $unset: { avatar: '' } }
+    );
+  }
+  if (previous) {
+    await deleteMedia(image === 'photo'
+      ? previous.photoKey || previous.photo
+      : previous.bannerKey || previous.banner);
+  }
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Profile image deleted successfully',
+    data: {},
+  });
+});
 
 /*******************
  * DELETE A RESUME *

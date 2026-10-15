@@ -90,7 +90,7 @@ function applicationController(job, { duringEntitlement } = {}) {
       findByIdAndUpdate: async () => { effects.updates++; },
     } };
     if (name === '../models/createResume.model') return { CreateResume: {
-      findOne: async () => { effects.resumes++; return {}; },
+      findOne: async () => { effects.resumes++; return { firstName: 'Test', lastName: 'Candidate', email: 'test@mail.com', country: 'UK', city: 'London' }; },
     } };
     if (name === '../helper/elevatorPitchApplicationAccess') return {
       assertUserCanApplyWithElevatorPitch: async () => duringEntitlement?.(),
@@ -101,7 +101,7 @@ function applicationController(job, { duringEntitlement } = {}) {
     if (name === '../server') return { io: { to: () => ({ emit() {} }) } };
     return {};
   });
-  const request = { user: { _id: 'candidate' }, body: { jobId: 'job' } };
+  const request = { user: { _id: 'candidate', role: 'candidate' }, body: { jobId: 'job' } };
   const response = { status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
   return { run: () => controller.applyForJob(request, response), effects, response };
 }

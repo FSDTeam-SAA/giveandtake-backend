@@ -83,10 +83,10 @@ export const gatePitchAccess = catchAsync(
     const { id, userId } = req.params
 
     const pitch = id
-      ? await ElevatorPitch.findById(id).populate('userId', 'role')
-      : await ElevatorPitch.findOne({ userId }).populate('userId', 'role')
+      ? await ElevatorPitch.findById(id).populate('userId', 'role deactivate deletionInProgress')
+      : await ElevatorPitch.findOne({ userId }).populate('userId', 'role deactivate deletionInProgress')
 
-    if (!pitch) {
+    if (!pitch || !pitch.userId || (pitch.userId as any).deactivate || (pitch.userId as any).deletionInProgress) {
       throw new AppError(httpStatus.NOT_FOUND, 'Elevator pitch not found')
     }
 

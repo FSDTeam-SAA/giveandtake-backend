@@ -17,6 +17,24 @@ import { io } from "../server";
 import { Notification } from "../models/notification.model";
 import { assertUserCanApplyWithElevatorPitch } from "../helper/elevatorPitchApplicationAccess";
 import { assertJobAcceptsApplications } from "../utils/jobLifecycle";
+import { assertCanManageJob, assertVisibleAccount, visibleAccountFilter } from '../services/candidateAccess.service';
+
+const isProfileComplete = (profile: any) => !!profile &&
+  ['firstName', 'lastName', 'email', 'country', 'city'].every(
+    field => typeof profile[field] === 'string' && profile[field].trim().length > 0
+  );
+
+export const getApplicationRequirements = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?._id;
+  const [profile, pitch] = await Promise.all([
+    CreateResume.findOne({ userId }),
+    getAvailableCandidatePitch(userId as any),
+  ]);
+  const profileComplete = isProfileComplete(profile);
+  const pitchReady = !!pitch && pitch.status === 'active' &&
+    pitch.processing?.state === 'ready' && !!pitch.video?.hlsUrl;
+  res.status(200).json({ success: true, data: { profileExists: !!profile, profileComplete, pitchReady } });
+});
 
 export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const { jobId, status, resumeId, answer, hasValidVisa } = req.body;
@@ -24,6 +42,9 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
 
   if (!userId) {
     throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
+  }
+  if (req.user?.role !== 'candidate') {
+    throw new AppError(403, 'Only candidates can apply for jobs');
   }
 
   const exists = await AppliedJob.findOne({ jobId, userId });
@@ -38,10 +59,10 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   assertJobAcceptsApplications(job);
   const resume = await CreateResume.findOne({ userId });
 
-  if (!resume) {
+  if (!isProfileComplete(resume)) {
     throw new AppError(
-      404,
-      "You need to create your resume before applying to this job"
+      400,
+      "Please complete your candidate profile before applying to this job"
     );
   }
 
@@ -85,7 +106,7 @@ export const applyForJob = catchAsync(async (req: Request, res: Response) => {
   const application = await AppliedJob.create({
     jobId,
     userId,
-    status,
+    status: 'pending',
     resumeId,
     answer,
     hasValidVisa:
@@ -173,6 +194,9 @@ export const getApplicationsByJob = catchAsync(
     if (!mongoose.Types.ObjectId.isValid(jobId)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid job ID");
     }
+    await assertCanManageJob(jobId, req.user);
+    const visibleCandidates = await User.distinct('_id', { role: 'candidate', ...visibleAccountFilter });
+    const applicationFilter = { jobId, userId: { $in: visibleCandidates } };
 
     // ✅ Extract pagination params (default: page=1, limit=10)
     const page = parseInt(req.query.page as string) || 1;
@@ -180,18 +204,18 @@ export const getApplicationsByJob = catchAsync(
     const skip = (page - 1) * limit;
 
     // ✅ Get total count for pagination metadata
-    const total = await AppliedJob.countDocuments({ jobId });
+    const total = await AppliedJob.countDocuments(applicationFilter);
 
     // ✅ Fetch applications with pagination
-    const applications = await AppliedJob.find({ jobId })
-      .populate("userId", "name email avatar slug")
+    const applications = await AppliedJob.find(applicationFilter)
+      .populate({ path: 'userId', select: 'name email avatar slug', match: visibleAccountFilter })
       .populate("resumeId")
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }); // optional: newest first
 
     const applicationsWithResume = await Promise.all(
-      applications.map(async (app) => {
+      applications.filter(app => app.userId).map(async (app) => {
         const resume = await CreateResume.findOne({ userId: app.userId._id });
         return {
           ...app.toObject(),
@@ -225,6 +249,10 @@ export const getApplicationsByUser = catchAsync(
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid user ID");
+    }
+    await assertVisibleAccount(userId);
+    if (String(req.user?._id) !== userId && !['admin', 'super-admin'].includes(req.user?.role || '')) {
+      throw new AppError(403, 'You cannot view these applications');
     }
 
     const filter: any = { userId };
@@ -286,16 +314,24 @@ export const updateApplicationStatus = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, "Invalid status value");
     }
 
-    const updated = await AppliedJob.findByIdAndUpdate(
-      id,
-      { status: normalizedStatus },
+    const application = await AppliedJob.findById(id);
+    if (!application) throw new AppError(404, 'Application not found');
+    await assertCanManageJob(application.jobId, req.user);
+    await assertVisibleAccount(application.userId);
+    const { expectedVersion } = req.body;
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      throw new AppError(409, 'Reload the candidate list before updating this application');
+    }
+    const updated = await AppliedJob.findOneAndUpdate(
+      { _id: id, __v: expectedVersion },
+      { $set: { status: normalizedStatus }, $inc: { __v: 1 } },
       { new: true }
     )
       .populate("jobId", "title")
       .populate("userId", "name email"); // fetch candidate info
 
     if (!updated) {
-      throw new AppError(httpStatus.NOT_FOUND, "Application not found");
+      throw new AppError(409, 'Another team member updated this application. Review the latest status and try again.');
     }
 
     const jobTitle = (updated.jobId as any)?.title || "the job";
@@ -354,6 +390,11 @@ export const deleteApplication = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params;
 
+    const application = await AppliedJob.findById(id);
+    if (!application) throw new AppError(404, 'Application not found');
+    if (String(application.userId) !== String(req.user?._id)) {
+      await assertCanManageJob(application.jobId, req.user);
+    }
     const deleted = await AppliedJob.findByIdAndDelete(id);
 
     if (!deleted) {

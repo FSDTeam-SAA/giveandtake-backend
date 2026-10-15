@@ -5,6 +5,7 @@ import {
   updateResume,
   deleteResume,
   resumeOfaUser1,
+  deleteResumeImage,
 } from '../controllers/createResume.controller'
 import { protect } from '../middlewares/auth.middleware'
 import { upload } from '../middlewares/multer.middleware'
@@ -22,5 +23,6 @@ router.patch('/resume/update', protect, upload.fields([
     { name: "banner", maxCount: 1 }, // second file field
   ]), updateResume)
 router.delete('/resume/delete', protect, deleteResume)
+router.delete('/resume/image/:image', protect, deleteResumeImage)
 
 export default router

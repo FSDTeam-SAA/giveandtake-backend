@@ -1,4 +1,5 @@
 import { normalizeEmail, userEmailFilter } from '../utils/email';
+import { ACCESS_TOKEN_SECONDS, sessionDeadline, remainingSessionSeconds } from '../utils/sessionPolicy';
 import catchAsync from "../utils/catchAsync";
 import AppError from "../errors/AppError";
 import { isValidPassword, PASSWORD_REQUIREMENT_MESSAGE } from "../utils/passwordPolicy";
@@ -299,20 +300,22 @@ export const login = catchAsync(async (req, res) => {
     }
   }
 
+  const sessionExpiresAt = sessionDeadline(req.body.rememberMe);
   const jwtPayload = {
     _id: user._id,
     email: user.email,
     role: user.role,
+    sessionExpiresAt,
   };
   const accessToken = createToken(
     jwtPayload,
     process.env.JWT_ACCESS_SECRET as string,
-    process.env.JWT_ACCESS_EXPIRES_IN as string
+    ACCESS_TOKEN_SECONDS
   );
   const refreshToken = createToken(
     jwtPayload,
     process.env.JWT_REFRESH_SECRET as string,
-    process.env.JWT_REFRESH_EXPIRES_IN as string
+    remainingSessionSeconds(sessionExpiresAt)
   );
   user.refresh_token = refreshToken;
 
@@ -336,6 +339,7 @@ export const login = catchAsync(async (req, res) => {
       phoneNum: user.phoneNum,
       dateOfbirth: user.dateOfbirth,
       refreshToken,
+      sessionExpiresAt,
       isValid,
       payAsYouGo,
       plan: activePlan,
@@ -399,34 +403,41 @@ export const verifyEmail = catchAsync(async (req, res) => {
 
 export const forgetPassword = catchAsync(async (req, res) => {
   const { email } = req.body;
-  const user = await User.isUserExistsByEmail(email);
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+  if (!normalizeEmail(email)) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Email is required');
   }
-  const otp = generateOTP();
-  const jwtPayloadOTP = {
-    otp: otp,
-  };
+  const user = await User.isUserExistsByEmail(email);
+  if (user && !user.deactivate && !user.deletionInProgress) {
+    try {
+      const otp = generateOTP();
+      const jwtPayloadOTP = {
+        otp: otp,
+      };
 
-  const otptoken = createToken(
-    jwtPayloadOTP,
-    process.env.OTP_SECRET as string,
-    OTP_EXPIRES_IN
-  );
-  user.password_reset_token = otptoken;
-  await user.save();
+      const otptoken = createToken(
+        jwtPayloadOTP,
+        process.env.OTP_SECRET as string,
+        OTP_EXPIRES_IN
+      );
+      user.password_reset_token = otptoken;
+      await user.save();
 
-  await sendEmail(
-    user.email,
-    "Reset Password OTP - Elevator Video Pitch©",
-    resetOtpTemplate(user.name, otp),
-    { from: DEFAULT_NO_REPLY_EMAIL }
-  );
+      await sendEmail(
+        user.email,
+        "Reset Password OTP - Elevator Video Pitch©",
+        resetOtpTemplate(user.name, otp),
+        { from: DEFAULT_NO_REPLY_EMAIL }
+      );
+    } catch (error) {
+      // Keep delivery failures from becoming an account-existence oracle.
+      console.error('Password reset delivery failed', error);
+    }
+  }
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "OTP sent to your email.",
+    message: "If an account exists for this email, you will receive a password reset code.",
     data: "",
   });
 });
@@ -435,7 +446,7 @@ export const otpVerifyResetPassword = catchAsync(async (req, res) => {
   const { otp, email } = req.body;
   const user = await User.isUserExistsByEmail(email);
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    throw new AppError(httpStatus.BAD_REQUEST, "Password reset token is invalid");
   }
   if (!user.password_reset_token) {
     throw new AppError(
@@ -469,7 +480,7 @@ export const resetPassword = catchAsync(async (req, res) => {
   validateNewPassword(password);
   const user = await User.isUserExistsByEmail(email);
   if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, "User not found");
+    throw new AppError(httpStatus.BAD_REQUEST, "Password reset token is invalid");
   }
   if (!user.password_reset_token) {
     throw new AppError(
@@ -778,7 +789,7 @@ export const getAllUserEmails = catchAsync(
 
     // Fetch all users with selected fields
     const users = await User.find(
-      {},
+      { deactivate: { $ne: true }, deletionInProgress: { $ne: true } },
       { _id: 1, email: 1, role: 1, name: 1, avatar: 1 }
     ).lean();
 
@@ -980,8 +991,8 @@ export const getUserById = catchAsync(async (req: Request, res: Response) => {
 export const getUserById1 = catchAsync(async (req: Request, res: Response) => {
   const { userId } = req.params;
 
-  const user = await User.findById(userId).select(
-    "-password -verificationInfo -password_reset_token"
+  const user = await User.findOne({ _id: userId, deactivate: { $ne: true }, deletionInProgress: { $ne: true } }).select(
+    "-password -verificationInfo -password_reset_token -refresh_token"
   );
 
   if (!user) {
@@ -1102,33 +1113,41 @@ export const refreshToken = catchAsync(async (req, res) => {
     throw new AppError(400, "Refresh token is required");
   }
 
-  const decoded = verifyToken(
-    refreshToken,
-    process.env.JWT_REFRESH_SECRET as string
-  ) as JwtPayload;
+  let decoded: JwtPayload;
+  try {
+    decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET as string) as JwtPayload;
+  } catch {
+    throw new AppError(401, 'Your session has expired. Please sign in again.');
+  }
   const user = await User.findById(decoded._id);
   if (!user) {
     throw new AppError(401, "Invalid refresh token");
   }
-  if (user.deactivate) {
+  if (user.deactivate || user.deletionInProgress) {
     throw new AppError(401, "Account is deactivated");
+  }
+  const sessionExpiresAt = Number(decoded.sessionExpiresAt || decoded.exp);
+  const remaining = remainingSessionSeconds(sessionExpiresAt);
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    throw new AppError(401, 'Your session has expired. Please sign in again.');
   }
   const jwtPayload = {
     _id: user._id,
     email: user.email,
     role: user.role,
+    sessionExpiresAt,
   };
 
   const accessToken = createToken(
     jwtPayload,
     process.env.JWT_ACCESS_SECRET as string,
-    process.env.JWT_ACCESS_EXPIRES_IN as string
+    Math.min(ACCESS_TOKEN_SECONDS, remaining)
   );
 
   const refreshToken1 = createToken(
     jwtPayload,
     process.env.JWT_REFRESH_SECRET as string,
-    process.env.JWT_REFRESH_EXPIRES_IN as string
+    remaining
   );
   user.refresh_token = refreshToken1;
   await user.save();
@@ -1137,7 +1156,7 @@ export const refreshToken = catchAsync(async (req, res) => {
     statusCode: 200,
     success: true,
     message: "Token refreshed successfully",
-    data: { accessToken: accessToken, refreshToken: refreshToken1 },
+    data: { accessToken: accessToken, refreshToken: refreshToken1, sessionExpiresAt },
   });
 });
 
@@ -1151,13 +1170,13 @@ export const getCandidates = async (req: Request, res: Response) => {
     const skip = (page - 1) * limit;
 
     // Find candidates
-    const candidates = await User.find({ role: "candidate" })
+    const candidates = await User.find({ role: "candidate", deactivate: { $ne: true }, deletionInProgress: { $ne: true } })
       .skip(skip)
       .limit(limit)
       .select("-password -refresh_token"); // exclude sensitive fields
 
     // Count total candidates
-    const total = await User.countDocuments({ role: "candidate" });
+    const total = await User.countDocuments({ role: "candidate", deactivate: { $ne: true }, deletionInProgress: { $ne: true } });
 
     res.status(200).json({
       success: true,
@@ -1320,6 +1339,7 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
       $match: {
         role: { $in: role ? [role] : PEOPLE_ROLES },
         deactivate: { $ne: true },
+        deletionInProgress: { $ne: true },
       },
     },
     {

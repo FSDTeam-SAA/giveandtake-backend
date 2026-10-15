@@ -7,6 +7,7 @@ import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
 import path from 'path'
 import { getSignedS3Url, uploadFileToS3 } from '../services/s3.service'
+import { assertVisibleAccount } from '../services/candidateAccess.service'
 
 const bucketName = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME || ''
 
@@ -95,6 +96,7 @@ export const getResumeByUserId = catchAsync(
 export const getResumeByUserId1 = catchAsync(
   async (req: Request, res: Response) => {
     const {userId} = req.params
+    await assertVisibleAccount(userId)
 
     const resumes = await Resume.find({ userId })
 
@@ -121,6 +123,7 @@ export const getResumeDownloadUrl = catchAsync(
     if (!resume) {
       throw new AppError(httpStatus.NOT_FOUND, 'Resume not found')
     }
+    await assertVisibleAccount(resume.userId)
 
     const file = fileId
       ? resume.file.find((item) => String(item?._id) === String(fileId))

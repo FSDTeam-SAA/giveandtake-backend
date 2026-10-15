@@ -1,4 +1,5 @@
 import { Types } from 'mongoose'
+import { User } from '../models/user.model'
 import { ElevatorPitch, IElevatorPitch } from '../models/elevatorPitch.model'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { isPaymentExpired, resolvePaymentExpiry } from '../utils/subscription'
@@ -30,6 +31,7 @@ export const isCandidatePitchAvailable = async (
   pitch: IElevatorPitch,
   userId: string | Types.ObjectId = pitch.userId
 ) => {
+  if (!await User.exists({ _id: userId, deactivate: { $ne: true }, deletionInProgress: { $ne: true } })) return false;
   // Pending/failed uploads still need to reach the owner's processing UI. The
   // duration limit is enforced before transcoding in the upload flow.
   if (pitch.processing?.state !== 'ready') return true

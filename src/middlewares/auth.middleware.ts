@@ -7,7 +7,7 @@ import { User } from "../models/user.model";
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.split(" ")[1];
   // console.log(req.headers)
-  if (!token) throw new AppError(httpStatus.NOT_FOUND, "Token not found");
+  if (!token) throw new AppError(httpStatus.UNAUTHORIZED, "Authentication required");
 
 
   try {
@@ -16,7 +16,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     if (!user) {
       throw new AppError(401, "Invalid token");
     }
-    if (user.deactivate) {
+    if (user.deactivate || user.deletionInProgress) {
       throw new AppError(401, "Account is deactivated");
     }
     const verified = await User.isOTPVerified(user._id.toString());
@@ -65,6 +65,7 @@ export const optionalAuth = async (
     if (
       user &&
       !user.deactivate &&
+      !user.deletionInProgress &&
       (await User.isOTPVerified(user._id.toString()))
     ) {
       req.user = user;
