@@ -15,6 +15,13 @@ export const createContactUs = catchAsync(
       throw new AppError(httpStatus.BAD_REQUEST, 'Missing required fields')
     }
 
+    if (typeof message !== 'string') {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Message must be text')
+    }
+    if ((message.match(/\S+/g) ?? []).length > 50) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Message cannot exceed 50 words.')
+    }
+
     const contactEntry = await ContactUs.create({
       firstName,
       lastName,

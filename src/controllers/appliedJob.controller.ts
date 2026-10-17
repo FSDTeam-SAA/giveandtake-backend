@@ -270,6 +270,7 @@ export const getApplicationsByUser = catchAsync(
       })
       .populate("userId", "name email")
       .populate("resumeId")
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit);
 
