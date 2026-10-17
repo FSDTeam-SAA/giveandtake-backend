@@ -1,6 +1,7 @@
 // Environment variables must be loaded before route/controller imports. Some
 // storage clients read their configuration at module initialization time.
 import "dotenv/config";
+import qualificationRoutes from "./routes/qualification.routes";
 
 import express from "express";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler";
@@ -193,6 +194,7 @@ app.use("/api/v1/faqs", faqRoutes);
 app.use("/api/v1/chatbot", chatbotRoutes);
 app.use("/api/v1/scrolling-info", scrollingInfoRoutes);
 
+app.use("/api/v1/qualifications", qualificationRoutes);
 app.use(notFound as never);
 app.use(globalErrorHandler);
 

@@ -1,4 +1,5 @@
 import app from './app'
+import { ensureQualifications } from './jobs/ensureQualifications'
 import dotenv from 'dotenv'
 import { connectDB } from './config/db'
 import { createServer } from 'http'
@@ -68,6 +69,7 @@ connectDB().then(async () => {
   // Makes the six built-in content pages exist and be well-formed in whichever
   // database this environment points at. Safe to run on every boot.
   await ensureBuiltInContent()
+  await ensureQualifications()
   // Preserve compatibility while jobApprove/adminApprove are both exposed.
   await ensureJobApprovalConsistency()
 
