@@ -1,3 +1,4 @@
+import { sortExperiences } from "../utils/profileHistory";
 import mongoose from 'mongoose';
 import sendResponse from '../utils/sendResponse';
 import { Experience } from '../models/experience.model';
@@ -80,7 +81,7 @@ export const getExperiencesByUser = catchAsync(async (req, res) => {
     statusCode: 200,
     success: true,
     message: 'Experiences retrieved successfully',
-    data: experiences,
+    data: sortExperiences(experiences),
   });
 });
 

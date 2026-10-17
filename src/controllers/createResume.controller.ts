@@ -1,3 +1,4 @@
+import { sortExperiences, sortEducation, sortAwards } from "../utils/profileHistory";
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
@@ -125,9 +126,9 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
     message: "Resume created successfully",
     data: {
       resume: resumeDoc,
-      experiences: experienceDocs,
-      education: educationDocs,
-      awardsAndHonors: awarenessDocs,
+      experiences: sortExperiences(experienceDocs),
+      education: sortEducation(educationDocs),
+      awardsAndHonors: sortAwards(awarenessDocs),
     },
   });
 });
@@ -152,9 +153,9 @@ export const resumeOfaUser = catchAsync(async (req: Request, res: Response) => {
     message: 'Resume fetched successfully',
     data: {
       resume,
-      experiences,
-      education,
-      awardsAndHonors,
+      experiences: sortExperiences(experiences),
+      education: sortEducation(education),
+      awardsAndHonors: sortAwards(awardsAndHonors),
       elevatorPitch,
     },
   })
@@ -197,9 +198,9 @@ export const resumeOfaUser1 = catchAsync(async (req: Request, res: Response) => 
     data: {
       deactivate: Boolean(user.deactivate),
       resume,
-      experiences,
-      education,
-      awardsAndHonors,
+      experiences: sortExperiences(experiences),
+      education: sortEducation(education),
+      awardsAndHonors: sortAwards(awardsAndHonors),
       elevatorPitch,
     },
   })
@@ -368,9 +369,9 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
     message: 'Elevator Pitch updated successfully',
     data: {
       resume: updatedResume,
-      experiences: updatedExperiences,
-      education: updatedEducation,
-      awardsAndHonors: updatedAwards,
+      experiences: sortExperiences(updatedExperiences),
+      education: sortEducation(updatedEducation),
+      awardsAndHonors: sortAwards(updatedAwards),
     },
   })
 })

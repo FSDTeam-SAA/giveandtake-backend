@@ -1,0 +1,39 @@
+{
+  "experience": {
+    "items": [
+      {"id":"old", "startDate":"01/2015", "endDate":"12/2018"},
+      {"id":"recent", "startDate":"01/2020", "endDate":"2026-10-01"},
+      {"id":"current-old", "startDate":"01/2018", "endDate":null},
+      {"id":"current-new", "startDate":"2025-01-01", "endDate":"Present"},
+      {"id":"explicit-current", "startDate":"2010", "endDate":"2020", "currentlyWorking":true},
+      {"id":"explicit-ended", "startDate":"02/2026", "endDate":null, "currentlyWorking":false},
+      {"id":"missing", "createdAt":"2026-10-17"},
+      {"id":"invalid-end", "startDate":"2023", "endDate":"invalid"},
+      {"id":"tie-a", "startDate":"2020", "endDate":"2022"},
+      {"id":"tie-b", "startDate":"2020", "endDate":"2022"}
+    ],
+    "expected": ["current-new","current-old","explicit-current","recent","explicit-ended","invalid-end","tie-a","tie-b","old","missing"]
+  },
+  "education": {
+    "items": [
+      {"id":"older", "startDate":"2010", "graduationDate":"2014"},
+      {"id":"recent", "startDate":"2020", "graduationDate":"09/2026"},
+      {"id":"current", "startDate":"2025-09", "graduationDate":null},
+      {"id":"fallback", "startDate":"2024", "currentlyStudying":false},
+      {"id":"missing", "graduationDate":"not a date"}
+    ],
+    "expected": ["current","recent","fallback","older","missing"]
+  },
+  "award": {
+    "items": [
+      {"id":"december", "programeDate":"12/2025"},
+      {"id":"january", "programeDate":"01/2026"},
+      {"id":"year", "year":2024},
+      {"id":"missing", "createdAt":"2026-10-17"},
+      {"id":"iso", "programeDate":"2026-09-01T00:00:00.000Z"},
+      {"id":"tie", "awardDate":"2026-09-01"},
+      {"id":"invalid", "programeDate":"2026-02-30"}
+    ],
+    "expected": ["iso","tie","january","december","year","missing","invalid"]
+  }
+}

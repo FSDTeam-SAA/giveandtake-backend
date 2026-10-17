@@ -1,3 +1,4 @@
+import { sortExperiences, sortEducation, sortAwards } from "../utils/profileHistory";
 import { Request, Response } from "express";
 import httpStatus from "http-status";
 import mongoose from "mongoose";
@@ -293,10 +294,10 @@ export const getApplicationsByUser = catchAsync(
       data: {
         applications,
         createResume,
-        education,
-        experience,
+        education: sortEducation(education),
+        experience: sortExperiences(experience),
         elevatorPitch,
-        awardsAndHonor,
+        awardsAndHonor: sortAwards(awardsAndHonor),
       },
     });
   }

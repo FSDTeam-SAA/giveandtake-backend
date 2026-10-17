@@ -12,6 +12,9 @@ function historyController(records) {
     { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } },
   );
   const imports = {
+    '../utils/profileHistory': {
+      sortExperiences: rows => rows, sortEducation: rows => rows, sortAwards: rows => rows,
+    },
     '../utils/catchAsync': handler => handler,
     '../errors/AppError': class extends Error {
       constructor(statusCode, message) { super(message); this.statusCode = statusCode; }

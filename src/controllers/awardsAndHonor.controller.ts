@@ -1,3 +1,4 @@
+import { sortAwards } from "../utils/profileHistory";
 import { Request, Response } from 'express'
 import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
@@ -33,7 +34,7 @@ export const getByUserId = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: 'Entries fetched successfully',
-    data: result,
+    data: sortAwards(result),
   })
 })
 
