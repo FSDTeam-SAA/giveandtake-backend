@@ -4,7 +4,7 @@ import catchAsync from '../utils/catchAsync'
 import AppError from '../errors/AppError'
 import { RecruiterAccount } from '../models/recruiterAccount.model'
 import sendResponse from '../utils/sendResponse'
-import { uploadMedia } from '../utils/mediaUpload'
+import { deleteMedia, uploadMedia } from '../utils/mediaUpload'
 import { User } from '../models/user.model'
 import { ReqCompany } from '../models/assignCompanyReq.model'
 import mongoose, { Schema } from 'mongoose'
@@ -203,6 +203,20 @@ export const updateRecruiterAccount = catchAsync(
       throw new AppError(httpStatus.NOT_FOUND, 'Recruiter account not found')
     }
 
+    // An explicit empty image field removes it; omitted fields keep it intact.
+    const removedImages: Array<string | undefined> = []
+    if (updates.photo === '' && !files?.photo) {
+      updates.photoKey = ''
+      removedImages.push(existingAccount.photoKey || existingAccount.photo)
+      if (existingAccount.photo && user.avatar?.url === existingAccount.photo) {
+        user.avatar = undefined
+      }
+    }
+    if (updates.banner === '' && !files?.banner) {
+      updates.bannerKey = ''
+      removedImages.push(existingAccount.bannerKey || existingAccount.banner)
+    }
+
     if (files?.videoFile) {
       const uploaded = await uploadMedia(files.videoFile[0].path, 'recruiters')
       if (uploaded) {
@@ -243,6 +257,8 @@ export const updateRecruiterAccount = catchAsync(
       updates,
       { new: true, runValidators: true }
     )
+
+    await Promise.all(removedImages.map(deleteMedia))
 
     sendResponse(res, {
       statusCode: httpStatus.OK,

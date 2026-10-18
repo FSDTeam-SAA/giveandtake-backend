@@ -3,7 +3,7 @@ import { Company } from '../models/company.model'
 import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
 import sendResponse from '../utils/sendResponse'
-import { uploadMedia } from '../utils/mediaUpload'
+import { deleteMedia, uploadMedia } from '../utils/mediaUpload'
 import { AwardsAndHonor } from '../models/awardsAndHonor.model'
 import mongoose from 'mongoose'
 import AppError from '../errors/AppError'
@@ -216,6 +216,20 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
 
   const files = req.files as Record<string, Express.Multer.File[]>
 
+  const removedImages: Array<string | undefined> = []
+  if ((companyData.clogo === '' && !files?.clogo) ||
+      (companyData.banner === '' && !files?.banner)) {
+    const existingCompany = await Company.findById(id)
+    if (companyData.clogo === '' && !files?.clogo) {
+      companyData.clogoKey = ''
+      removedImages.push(existingCompany?.clogoKey || existingCompany?.clogo)
+    }
+    if (companyData.banner === '' && !files?.banner) {
+      companyData.bannerKey = ''
+      removedImages.push(existingCompany?.bannerKey || existingCompany?.banner)
+    }
+  }
+
   if (files?.clogo) {
     const logoRes = await uploadMedia(files.clogo[0].path, 'companies')
     if (logoRes?.url) {
@@ -240,6 +254,7 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
     new: true,
     runValidators: true,
   })
+  await Promise.all(removedImages.map(deleteMedia))
   const honors = JSON.parse(req.body.honors || '[]') // expecting array
   let results
   if (honors.length > 0) {
