@@ -17,7 +17,10 @@ function load(file, imports) {
 const common = {
   '../utils/catchAsync': handler => handler,
   '../utils/sendResponse': () => {},
-  'http-status': { OK: 200, NOT_FOUND: 404 },
+  'http-status': { OK: 200, NOT_FOUND: 404, FORBIDDEN: 403 },
+  '../errors/AppError': class AppError extends Error {
+    constructor(statusCode, message) { super(message); this.statusCode = statusCode; }
+  },
 };
 
 function recruiter() {
@@ -38,7 +41,7 @@ function recruiter() {
     },
   });
   return { user, deleted, updates: () => updates,
-    update: (body, files) => controller.updateRecruiterAccount({ params: { userId: 'owner' }, body, files }, {}),
+    update: (body, files, actor = { _id: 'owner', role: 'recruiter' }) => controller.updateRecruiterAccount({ params: { userId: 'owner' }, body, files, user: actor }, {}),
   };
 }
 
@@ -82,7 +85,7 @@ function company() {
     ...common,
     '../models/company.model': { Company: {
       findById: async id => { assert.equal(id, 'company'); return {
-        clogo: 'logo-url', clogoKey: 'logo-key', banner: 'banner-url', bannerKey: 'banner-key',
+        userId: 'owner', clogo: 'logo-url', clogoKey: 'logo-key', banner: 'banner-url', bannerKey: 'banner-key',
       }; },
       findByIdAndUpdate: async (id, data) => { assert.equal(id, 'company'); updates = data; return data; },
     } },
@@ -92,7 +95,7 @@ function company() {
     },
   });
   return { deleted, updates: () => updates,
-    update: (body, files) => controller.updateCompany({ params: { id: 'company' }, body, files }, {}),
+    update: (body, files, actor = { _id: 'owner', role: 'company' }) => controller.updateCompany({ params: { id: 'company' }, body, files, user: actor }, {}),
   };
 }
 
@@ -118,3 +121,22 @@ test('company text-only edits preserve images, and replacement files override re
   assert.equal(fixture.updates().bannerKey, 'new-key');
   assert.deepEqual(fixture.deleted, []);
 });
+
+for (const [name, create, image] of [
+  ['company', company, 'clogo'], ['recruiter', recruiter, 'photo'],
+]) {
+  test(`${name} profile changes reject other accounts and anonymous callers before updating or deleting media`, async () => {
+    for (const actor of [{ _id: 'someone-else', role: 'candidate' }, null]) {
+      const fixture = create();
+      await assert.rejects(fixture.update({ [image]: '' }, undefined, actor), { statusCode: 403 });
+      assert.equal(fixture.updates(), undefined);
+      assert.deepEqual(fixture.deleted, []);
+    }
+  });
+  test(`${name} profile removal remains available to administrators`, async () => {
+    const fixture = create();
+    await fixture.update({ [image]: '' }, undefined, { _id: 'administrator', role: 'admin' });
+    assert.equal(fixture.updates()[image], '');
+    assert.equal(fixture.deleted.length, 1);
+  });
+}

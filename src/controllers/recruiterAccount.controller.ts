@@ -187,6 +187,11 @@ export const getRecruiterAccountByUserSlug = catchAsync(async (req: Request, res
 export const updateRecruiterAccount = catchAsync(
   async (req: Request, res: Response) => {
     const { userId } = req.params
+    if (!req.user?._id ||
+        (!['admin', 'super-admin'].includes(req.user.role) &&
+         String(userId) !== String(req.user._id))) {
+      throw new AppError(httpStatus.FORBIDDEN, 'You cannot update this recruiter profile')
+    }
     const updates = { ...req.body }
 
     const user = await User.findById(userId);

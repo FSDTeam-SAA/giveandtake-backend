@@ -211,6 +211,15 @@ export const createCompany = catchAsync(async (req: Request, res: Response) => {
  ************************/
 export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params
+  const existingCompany = await Company.findById(id)
+  if (!existingCompany) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Company not found')
+  }
+  if (!req.user?._id ||
+      (!['admin', 'super-admin'].includes(req.user.role) &&
+       String(existingCompany.userId) !== String(req.user._id))) {
+    throw new AppError(httpStatus.FORBIDDEN, 'You cannot update this company profile')
+  }
 
   const companyData = { ...req.body } as any
 
@@ -219,7 +228,6 @@ export const updateCompany = catchAsync(async (req: Request, res: Response) => {
   const removedImages: Array<string | undefined> = []
   if ((companyData.clogo === '' && !files?.clogo) ||
       (companyData.banner === '' && !files?.banner)) {
-    const existingCompany = await Company.findById(id)
     if (companyData.clogo === '' && !files?.clogo) {
       companyData.clogoKey = ''
       removedImages.push(existingCompany?.clogoKey || existingCompany?.clogo)
