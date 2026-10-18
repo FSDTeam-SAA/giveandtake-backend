@@ -19,6 +19,7 @@ import { Notification } from "../models/notification.model";
 import { assertUserCanApplyWithElevatorPitch } from "../helper/elevatorPitchApplicationAccess";
 import { assertJobAcceptsApplications } from "../utils/jobLifecycle";
 import { assertCanManageJob, assertVisibleAccount, visibleAccountFilter } from '../services/candidateAccess.service';
+import { jobNotificationEmailTemplate, sendEmail } from '../utils/sendEmail';
 
 const isProfileComplete = (profile: any) => !!profile &&
   ['firstName', 'lastName', 'email', 'country', 'city'].every(
@@ -339,25 +340,19 @@ export const updateApplicationStatus = catchAsync(
     const jobTitle = (updated.jobId as any)?.title || "the job";
     const roleText = jobTitle; // role = job title here
 
-   // Copy the email contents into notification messages
-let notificationMessage = `"${roleText}" application status updated.`;
-
-if (normalizedStatus === "shortlisted") {
-  notificationMessage =
-    `Your application for the ${roleText} role has been forwarded to the hiring manager. ` +
-    `You may be contacted outside of EVP’s platform if the hire manager wants to proceed with a formal interview. ` +
-    `Good luck!`;
-} else if (normalizedStatus === "rejected") {
-  notificationMessage =
-    `Unfortunately, your application for the ${roleText} role has been unsuccessful on this occasion. ` +
-    `Please continue to apply and we wish you good fortune in your job search!`;
-} else if (normalizedStatus === "pending") {
-  // No provided email template for pending, so keep it neutral.
-  notificationMessage = `Your application for the ${roleText} role is currently pending.`;
-}
-
-
-    // Email notifications for application status changes are temporarily disabled.
+    let notificationMessage: string;
+    if (normalizedStatus === "shortlisted") {
+      notificationMessage =
+        `Your application for the ${roleText} role has been forwarded to the hiring manager. ` +
+        `You may be contacted outside of EVP’s platform if the hire manager wants to proceed with a formal interview. ` +
+        `Good luck!`;
+    } else if (normalizedStatus === "rejected") {
+      notificationMessage =
+        `Unfortunately, your application for the ${roleText} role has been unsuccessful on this occasion. ` +
+        `Please continue to apply and we wish you good fortune in your job search!`;
+    } else {
+      notificationMessage = `Your application for the ${roleText} role is currently pending.`;
+    }
 
     const notification = await createNotification({
       to: updated.userId as mongoose.Types.ObjectId,
@@ -376,6 +371,23 @@ if (normalizedStatus === "shortlisted") {
       notification,
       count,
     });
+
+    const candidate = updated.userId as any;
+    if (normalizedStatus !== "pending" && candidate?.email) {
+      const heading = normalizedStatus === "rejected"
+        ? "Application Unsuccessful"
+        : "Application Shortlisted";
+      await sendEmail(
+        candidate.email,
+        `${heading} — ${jobTitle}`,
+        jobNotificationEmailTemplate({
+          recipientName: candidate.name,
+          heading,
+          message: notificationMessage,
+          jobTitle,
+        })
+      );
+    }
 
     res.status(httpStatus.OK).json({
       success: true,
