@@ -47,3 +47,42 @@ test('contact model permits 50 words and rejects 51', () => {
   const error = new ContactUs({ ...valid, message: words(51) }).validateSync();
   assert.equal(error.errors.message.message, 'Message cannot exceed 50 words.');
 });
+
+test('contact API rejects non-text or over-limit subjects before writes', async () => {
+  const writes = [];
+  class AppError extends Error {
+    constructor(statusCode, message) { super(message); this.statusCode = statusCode; }
+  }
+  const { createContactUs } = load('src/controllers/contactUs.controller.ts', {
+    '../utils/catchAsync': handler => handler,
+    '../errors/AppError': AppError,
+    '../models/contactUs.model': { ContactUs: { create: async data => { writes.push(data); return data; } } },
+    '../models/user.model': { User: { find: () => ({ select: async () => [{ email: 'admin@example.com' }] }) } },
+    '../utils/sendResponse': () => {},
+  });
+  for (const subject of [words(7), words(100), words(7).replaceAll(' ', '\n\t\u00a0'), 123, ['hello'], {}]) {
+    await assert.rejects(createContactUs({ body: { ...valid, subject, message: words(50) } }, {}),
+      error => error.statusCode === 400 && error.message ===
+        (typeof subject === 'string' ? 'Subject cannot exceed 6 words.' : 'Subject must be text'));
+  }
+  assert.equal(writes.length, 0);
+  for (const subject of [words(6), ' one\ttwo\nthree\u00a0four  five six ']) {
+    await createContactUs({ body: { ...valid, subject, message: words(50) } }, {});
+  }
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].subject, words(6));
+});
+
+test('contact model permits six subject words and rejects seven', () => {
+  require('ts-node/register/transpile-only');
+  const { ContactUs } = require('../src/models/contactUs.model');
+  const contact = { ...valid, message: words(50) };
+  for (const subject of [words(6), ' one\ttwo\nthree\u00a0four  five six ']) {
+    assert.equal(new ContactUs({ ...contact, subject }).validateSync(), undefined);
+  }
+  for (const subject of [words(7), words(7).replaceAll(' ', '\n\t\u00a0')]) {
+    const error = new ContactUs({ ...contact, subject }).validateSync();
+    assert.equal(error.errors.subject.message, 'Subject cannot exceed 6 words.');
+  }
+  assert.ok(new ContactUs({ ...contact, subject: '' }).validateSync().errors.subject);
+});

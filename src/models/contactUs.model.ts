@@ -7,7 +7,14 @@ const contactUsSchema: Schema<IContactUs> = new Schema<IContactUs>(
     lastName: { type: String, required: true },
     address: { type: String },
     phoneNumber: { type: String },
-    subject: { type: String, required: true },
+    subject: {
+      type: String,
+      required: true,
+      validate: {
+        validator: (value: string) => (value.match(/\S+/g) ?? []).length <= 6,
+        message: 'Subject cannot exceed 6 words.',
+      },
+    },
     message: {
       type: String,
       required: true,
