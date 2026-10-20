@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from "express";
 import {
   createSkill,
@@ -12,7 +13,7 @@ import { upload } from "../middlewares/multer.middleware";
 const router = express.Router();
 
 // CREATE skill (with optional icon upload)
-router.post("/", createSkill);
+router.post("/", fieldLimits("skill"), createSkill);
 router.post("/csv",upload.single("file"), uploadSkillsFile);
 
 // GET all skills
@@ -22,7 +23,7 @@ router.get("/", getAllSkills);
 router.get("/:id", getSkillById);
 
 // UPDATE skill (with optional new icon upload)
-router.put("/:id", updateSkill);
+router.put("/:id", fieldLimits("skill"), updateSkill);
 
 // DELETE skill
 router.delete("/:id", deleteSkill);

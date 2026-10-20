@@ -1,3 +1,4 @@
+require('ts-node/register/transpile-only');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,7 +11,7 @@ function load(file, imports = {}) {
     fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } },
   );
-  const context = { exports: {}, require: name => imports[name] ?? require(name) };
+  const context = { exports: {}, require: name => imports[name] ?? require(name.startsWith('.') ? path.resolve(__dirname, '..', path.dirname(file), name) : name) };
   vm.runInNewContext(outputText, context);
   return context.exports;
 }

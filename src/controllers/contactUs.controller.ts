@@ -1,3 +1,4 @@
+import { validateFieldLimits } from "../middlewares/fieldLimits"
 import { Request, Response } from 'express'
 import httpStatus from 'http-status'
 import catchAsync from '../utils/catchAsync'
@@ -8,6 +9,7 @@ import sendResponse from '../utils/sendResponse'
 
 export const createContactUs = catchAsync(
   async (req: Request, res: Response) => {
+    validateFieldLimits("contact", req.body)
     const { firstName, lastName, address, phoneNumber, subject, message } =
       req.body
 

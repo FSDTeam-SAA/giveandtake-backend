@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from "express";
 import {
   register,
@@ -35,7 +36,7 @@ import { resumeUpload } from "../middlewares/multer.middleware";
 
 const router = express.Router();
 
-router.post("/user/register", register);
+router.post("/user/register", fieldLimits("register"), register);
 router.post("/user/login", login);
 router.post("/user/verify", verifyEmail);
 router.post("/user/resend-otp", resendVerificationOtp);
@@ -63,7 +64,7 @@ router.get("/all/companies", getAllCompanies);
 
 router.get("/user/single", protect, getUserById);
 router.get("/user/single/:userId", protect, getUserById1);
-router.patch("/user/update", protect, resumeUpload, updateUser);
+router.patch("/user/update", protect, resumeUpload, fieldLimits("user"), updateUser);
 router.post("/refresh-token", refreshToken);
 
 router.get("/candidates", getCandidates);

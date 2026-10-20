@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from 'express'
 import {
   createResume,
@@ -15,13 +16,13 @@ const router = express.Router()
 router.post('/create-resume', upload.fields([
     { name: "photo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
-  ]), createResume)
+  ]), fieldLimits("resume"), createResume)
 router.get('/get-resume', protect, resumeOfaUser)
 router.get('/get-resume/:slug', resumeOfaUser1)
 router.patch('/resume/update', protect, upload.fields([
     { name: "photo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
-  ]), updateResume)
+  ]), fieldLimits("resume"), updateResume)
 router.delete('/resume/delete', protect, deleteResume)
 router.delete('/resume/image/:image', protect, deleteResumeImage)
 

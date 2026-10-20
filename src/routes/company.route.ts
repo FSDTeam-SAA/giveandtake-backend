@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from 'express'
 import {
   createCompany,
@@ -17,11 +18,11 @@ const router = express.Router()
 router.post('/', upload.fields([
     { name: "clogo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
-  ]), protect ,createCompany)
+  ]), protect ,fieldLimits("company"), createCompany)
 router.put('/:id',upload.fields([
     { name: "clogo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
-  ]),protect, updateCompany)
+  ]),protect, fieldLimits("company"), updateCompany)
 router.get('/user/:userId', getCompanyByUserId)
 router.get('/companies/slug/:slug', getCompanyByUserSlug)
 router.get('/employee/:userId', getCompanyByEmployeeId)

@@ -1,3 +1,4 @@
+import { validateFieldLimits } from "../middlewares/fieldLimits"
 import { Request, Response } from "express";
 import httpStatus from "http-status";
 import { SkillModel } from "../models/skill.model";
@@ -168,6 +169,14 @@ export const uploadSkillsFile = catchAsync(async (req: Request, res: Response) =
     });
   } else {
     throw new AppError(httpStatus.BAD_REQUEST, "Unsupported file format. Use .xlsx, .xls, or .csv");
+  }
+
+  // Validate the entire catalogue import before inserting any rows.
+  try {
+    for (const skill of skills) validateFieldLimits('skill', skill);
+  } catch (error) {
+    await fs.promises.unlink(filePath).catch(() => undefined);
+    throw error;
   }
 
   // Insert into DB

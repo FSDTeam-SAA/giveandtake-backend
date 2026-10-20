@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from "express";
 import {
   createJob,
@@ -23,7 +24,7 @@ import { protect } from "../middlewares/auth.middleware";
 
 const router = express.Router();
 
-router.route("/jobs").post(createJob).get(getAllJobs);
+router.route("/jobs").post(fieldLimits("job"), createJob).get(getAllJobs);
 // NOTE: must stay above "/jobs/:id" or the param route captures it
 router.get("/jobs/suggestions", getJobSuggestions);
 router.get("/jobs/posting/usage", protect, getJobPostingUsage);
@@ -33,9 +34,9 @@ router.get("/jobs/:jobId/ai-fit", protect, getJobFitInsight);
  * JOB RECOMMEND SYSTEM *
  ************************/
 router.route("/jobs/recommend").get(protect, recommendJobs);
-router.route("/jobs/:id").get(getSingleJob).patch(updateJob).delete(deleteJob);
+router.route("/jobs/:id").get(getSingleJob).patch(fieldLimits("job"), updateJob).delete(deleteJob);
 
-router.route("/jobs/update/:id").patch(protect, editJob);
+router.route("/jobs/update/:id").patch(protect, fieldLimits("job"), editJob);
 
 /*******************************
  * GET ARCRIVED JOBS BY USERID *

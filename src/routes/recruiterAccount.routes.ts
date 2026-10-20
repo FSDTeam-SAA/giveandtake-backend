@@ -1,3 +1,4 @@
+import { fieldLimits } from "../middlewares/fieldLimits"
 import express from 'express'
 import {
   createRecruiterAccount,
@@ -20,7 +21,7 @@ router.post(
     {name: 'banner', maxCount: 1},
     {name: 'videoFile', maxCount: 1}
   ]),
-  createRecruiterAccount
+  fieldLimits("recruiter"), createRecruiterAccount
 )
 
 router.get('/recruiter-account/:userId', getRecruiterAccountByUserId)
@@ -33,7 +34,7 @@ router.patch(
     { name: 'photo', maxCount: 1 },
     { name: 'videoFile', maxCount: 1 },
   ]),
-  updateRecruiterAccount
+  fieldLimits("recruiter"), updateRecruiterAccount
 )
 
 router.delete('/recruiter-account/:userId', protect, deleteRecruiterAccount)
