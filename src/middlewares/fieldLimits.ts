@@ -1,5 +1,6 @@
 import { RequestHandler } from 'express'
 import AppError from '../errors/AppError'
+import { candidateSocialUrlError, hasEducationContent } from '../utils/candidateProfilePolicy'
 
 type RecordData = Record<string, unknown>
 
@@ -28,7 +29,7 @@ function entries(value: unknown, label: string): RecordData[] {
   return parsed.map(item => object(item, label))
 }
 
-export function validateFieldLimits(kind: string, body: RecordData) {
+export function validateFieldLimits(kind: string, body: RecordData, options: { creating?: boolean } = {}) {
   const data = kind === 'resume' && body.resume !== undefined ? object(body.resume, 'Resume') : body
   for (const [key, max, label] of [
     ['firstName', 20, 'First Name'], ['lastName', 40, 'Last Name'],
@@ -44,10 +45,23 @@ export function validateFieldLimits(kind: string, body: RecordData) {
   if (['resume', 'recruiter', 'job'].includes(kind)) limit(data, 'title', 100, 'Job Title')
   if (kind === 'resume' && data.skills !== undefined) {
     if (!Array.isArray(data.skills) || data.skills.some(skill => typeof skill !== 'string' || !skill.trim())) throw new AppError(400, 'Please select valid skills from the list')
+    if (!data.skills.length) throw new AppError(400, 'At least one skill is required')
     if (data.skills.length > 30) throw new AppError(400, 'You can select at most 30 skills')
     for (const skill of data.skills) limit({ skill }, 'skill', 100, 'Each skill')
   }
   if (kind === 'resume') {
+    if (options.creating && data.skills === undefined) throw new AppError(400, 'At least one skill is required')
+    for (const link of entries(data.sLink ?? [], 'Social links')) {
+      if (link.type === 'delete') continue
+      const error = candidateSocialUrlError(link.url, typeof link.label === 'string' ? link.label : '')
+      if (error) throw new AppError(400, error)
+    }
+    for (const edu of entries(body.educationList ?? [], 'Education')) {
+      if (edu.type === 'delete') continue
+      if (!hasEducationContent(edu) && !edu._id) continue
+      if (typeof edu.instituteName !== 'string' || !edu.instituteName.trim()) throw new AppError(400, 'Institution name is required')
+      limit(edu, 'instituteName', 150, 'Institution name')
+    }
     for (const exp of entries(body.experiences ?? [], 'Experiences')) {
       if (exp.type === 'delete') continue
       limit(exp, 'company', 160, 'Company Name')
@@ -59,6 +73,6 @@ export function validateFieldLimits(kind: string, body: RecordData) {
 
 // Validate only incoming fields. No schema migration or validation of untouched
 // legacy documents is needed, and invalid requests never reach media/DB writes.
-export const fieldLimits = (kind: string): RequestHandler => (req, _res, next) => {
-  try { validateFieldLimits(kind, { ...(req.body ?? {}), ...(kind === "user" ? { role: req.user?.role } : {}) }); next() } catch (error) { next(error) }
+export const fieldLimits = (kind: string, options: { creating?: boolean } = {}): RequestHandler => (req, _res, next) => {
+  try { validateFieldLimits(kind, { ...(req.body ?? {}), ...(kind === "user" ? { role: req.user?.role } : {}) }, options); next() } catch (error) { next(error) }
 }

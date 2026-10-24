@@ -16,7 +16,7 @@ const router = express.Router()
 router.post('/create-resume', upload.fields([
     { name: "photo", maxCount: 1 },   // first file field
     { name: "banner", maxCount: 1 }, // second file field
-  ]), fieldLimits("resume"), createResume)
+  ]), fieldLimits("resume", { creating: true }), createResume)
 router.get('/get-resume', protect, resumeOfaUser)
 router.get('/get-resume/:slug', resumeOfaUser1)
 router.patch('/resume/update', protect, upload.fields([
