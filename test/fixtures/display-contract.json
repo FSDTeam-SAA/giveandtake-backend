@@ -1,0 +1,333 @@
+{
+  "headlines": [
+    {
+      "value": null,
+      "expected": null
+    },
+    {
+      "value": "",
+      "expected": null
+    },
+    {
+      "value": "Mr.",
+      "expected": null
+    },
+    {
+      "value": "mr",
+      "expected": null
+    },
+    {
+      "value": " MR. ",
+      "expected": null
+    },
+    {
+      "value": "Mrs.",
+      "expected": null
+    },
+    {
+      "value": "Ms.",
+      "expected": null
+    },
+    {
+      "value": "Miss",
+      "expected": null
+    },
+    {
+      "value": "Mx.",
+      "expected": null
+    },
+    {
+      "value": "Dr.",
+      "expected": null
+    },
+    {
+      "value": "Doctor",
+      "expected": null
+    },
+    {
+      "value": "Prof.",
+      "expected": null
+    },
+    {
+      "value": "Professor",
+      "expected": null
+    },
+    {
+      "value": "Sir",
+      "expected": null
+    },
+    {
+      "value": "Dame",
+      "expected": null
+    },
+    {
+      "value": "Rev.",
+      "expected": null
+    },
+    {
+      "value": "Reverend",
+      "expected": null
+    },
+    {
+      "value": "Madam",
+      "expected": null
+    },
+    {
+      "value": "Mister",
+      "expected": null
+    },
+    {
+      "value": "Software Engineer",
+      "expected": "Software Engineer"
+    },
+    {
+      "value": "Mr. Robot Specialist",
+      "expected": "Mr. Robot Specialist"
+    },
+    {
+      "value": "Director of Operations",
+      "expected": "Director of Operations"
+    },
+    {
+      "value": "Senior Doctor",
+      "expected": "Senior Doctor"
+    },
+    {
+      "value": "Dra. Research Lead",
+      "expected": "Dra. Research Lead"
+    },
+    {
+      "value": "\u30bd\u30d5\u30c8\u30a6\u30a7\u30a2\u30a8\u30f3\u30b8\u30cb\u30a2",
+      "expected": "\u30bd\u30d5\u30c8\u30a6\u30a7\u30a2\u30a8\u30f3\u30b8\u30cb\u30a2"
+    }
+  ],
+  "names": [
+    {
+      "firstName": "Mr. Fahim",
+      "lastName": "Ahmed",
+      "expected": "Mr. Fahim Ahmed"
+    },
+    {
+      "firstName": "  Jane ",
+      "lastName": " Doe  ",
+      "expected": "Jane Doe"
+    },
+    {
+      "firstName": "\u00c9lodie",
+      "lastName": "\u5f20",
+      "expected": "\u00c9lodie \u5f20"
+    },
+    {
+      "firstName": "",
+      "lastName": "Solo",
+      "expected": "Solo"
+    }
+  ],
+  "counts": [
+    {
+      "values": [
+        0
+      ],
+      "expected": 0
+    },
+    {
+      "values": [
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "values": [
+        2
+      ],
+      "expected": 2
+    },
+    {
+      "values": [
+        250000
+      ],
+      "expected": 250000
+    },
+    {
+      "values": [
+        "2"
+      ],
+      "expected": 2
+    },
+    {
+      "values": [
+        " 12 "
+      ],
+      "expected": 12
+    },
+    {
+      "values": [
+        null,
+        1
+      ],
+      "expected": 1
+    },
+    {
+      "values": [
+        "bad",
+        2
+      ],
+      "expected": 2
+    },
+    {
+      "values": [
+        -1,
+        3
+      ],
+      "expected": 3
+    },
+    {
+      "values": [
+        1.5,
+        4
+      ],
+      "expected": 4
+    },
+    {
+      "values": [
+        true
+      ],
+      "expected": null
+    },
+    {
+      "values": [
+        ""
+      ],
+      "expected": null
+    },
+    {
+      "values": [
+        "1.5"
+      ],
+      "expected": null
+    },
+    {
+      "values": [
+        "1e2"
+      ],
+      "expected": null
+    },
+    {
+      "values": [
+        null,
+        null
+      ],
+      "expected": null
+    },
+    {
+      "values": [
+        9007199254740992
+      ],
+      "expected": null
+    }
+  ],
+  "locations": [
+    {
+      "value": "onsite",
+      "expected": "Onsite"
+    },
+    {
+      "value": "REMOTE",
+      "expected": "Remote"
+    },
+    {
+      "value": " hybrid ",
+      "expected": "Hybrid"
+    },
+    {
+      "value": "",
+      "expected": "Not specified"
+    },
+    {
+      "value": null,
+      "expected": "Not specified"
+    },
+    {
+      "value": "unknown",
+      "expected": "Not specified"
+    }
+  ],
+  "employment": [
+    {
+      "value": "full-time",
+      "expected": "Full-Time"
+    },
+    {
+      "value": "part-time",
+      "expected": "Part-Time"
+    },
+    {
+      "value": "contract",
+      "expected": "Contract"
+    },
+    {
+      "value": "internship",
+      "expected": "Internship"
+    },
+    {
+      "value": "temporary",
+      "expected": "Temporary"
+    },
+    {
+      "value": "freelance",
+      "expected": "Freelance"
+    },
+    {
+      "value": "volunteer",
+      "expected": "Volunteer"
+    },
+    {
+      "value": "",
+      "expected": "Not specified"
+    }
+  ],
+  "dates": [
+    {
+      "values": [
+        "2026-10-25T23:30:00Z"
+      ],
+      "utc": "25 October 2026",
+      "dhaka": "26 October 2026"
+    },
+    {
+      "values": [
+        "invalid",
+        "2026-10-25T12:00:00Z"
+      ],
+      "utc": "25 October 2026",
+      "dhaka": "25 October 2026"
+    },
+    {
+      "values": [
+        null,
+        null,
+        "2024-02-29T12:00:00Z"
+      ],
+      "utc": "29 February 2024",
+      "dhaka": "29 February 2024"
+    },
+    {
+      "values": [
+        "2026-02-30",
+        null,
+        null
+      ],
+      "utc": "Date not provided",
+      "dhaka": "Date not provided"
+    },
+    {
+      "values": [
+        null,
+        "bad",
+        ""
+      ],
+      "utc": "Date not provided",
+      "dhaka": "Date not provided"
+    }
+  ]
+}

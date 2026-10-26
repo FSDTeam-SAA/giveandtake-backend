@@ -1,3 +1,4 @@
+import { CANDIDATE_SALUTATION_SOURCE } from "../utils/candidateDisplay";
 import { normalizeEmail, userEmailFilter } from '../utils/email';
 import { ACCESS_TOKEN_SECONDS, sessionDeadline, remainingSessionSeconds } from '../utils/sessionPolicy';
 import catchAsync from "../utils/catchAsync";
@@ -1467,7 +1468,11 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
             branches: [
               {
                 case: { $eq: ["$role", "candidate"] },
-                then: { $ifNull: ["$resume.title", null] },
+                then: { $cond: [
+                  { $regexMatch: { input: { $ifNull: ["$resume.title", ""] }, regex: CANDIDATE_SALUTATION_SOURCE, options: "i" } },
+                  null,
+                  { $ifNull: ["$resume.title", null] },
+                ] },
               },
               {
                 case: { $eq: ["$role", "recruiter"] },
