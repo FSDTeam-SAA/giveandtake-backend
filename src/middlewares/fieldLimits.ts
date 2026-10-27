@@ -1,6 +1,7 @@
 import { RequestHandler } from 'express'
 import AppError from '../errors/AppError'
 import { candidateSocialUrlError, hasEducationContent } from '../utils/candidateProfilePolicy'
+import { getJobDescriptionText } from '../utils/jobDescriptionPolicy'
 
 type RecordData = Record<string, unknown>
 
@@ -42,6 +43,23 @@ export function validateFieldLimits(kind: string, body: RecordData, options: { c
   }
   if (kind === 'skill') limit(data, 'name', 100, 'Skill Name')
   if (kind === 'company') limit(data, 'cname', 160, 'Company Name')
+  for (const key of ['email', 'emailAddress', 'cemail']) limit(data, key, 254, 'Email')
+  if (kind === 'contact') {
+    limit(data, 'address', 254, 'Email')
+    limit(data, 'subject', 50, 'Subject')
+    limit(data, 'message', 500, 'Message')
+  }
+  if (['resume', 'company', 'recruiter'].includes(kind)) {
+    for (const key of ['aboutUs', 'bio']) {
+      if (data[key] !== undefined && data[key] !== null) {
+        if (typeof data[key] !== 'string') throw new AppError(400, 'About section must be text')
+        limit({ text: getJobDescriptionText(data[key] as string) }, 'text', 1400, 'About section')
+      }
+    }
+  }
+  for (const [key, max] of Object.entries({ country: 100, city: 100, zip: 20, zipcode: 20, zipCode: 20, industry: 100, department: 100, role: 100, location: 200, phoneNumber: 50, phoneNum: 50, cPhoneNumber: 50, companyWebsite: 200, companyUrl: 200 })) {
+    limit(data, key, max, key)
+  }
   if (['resume', 'recruiter', 'job'].includes(kind)) limit(data, 'title', 100, 'Job Title')
   if (kind === 'resume' && data.skills !== undefined) {
     if (!Array.isArray(data.skills) || data.skills.some(skill => typeof skill !== 'string' || !skill.trim())) throw new AppError(400, 'Please select valid skills from the list')
@@ -61,14 +79,46 @@ export function validateFieldLimits(kind: string, body: RecordData, options: { c
       if (!hasEducationContent(edu) && !edu._id) continue
       if (typeof edu.instituteName !== 'string' || !edu.instituteName.trim()) throw new AppError(400, 'Institution name is required')
       limit(edu, 'instituteName', 150, 'Institution name')
+      for (const [key, max] of Object.entries({ degree: 100, fieldOfStudy: 100, country: 100, city: 100, startDate: 30, graduationDate: 30 })) limit(edu, key, max, key)
     }
     for (const exp of entries(body.experiences ?? [], 'Experiences')) {
       if (exp.type === 'delete') continue
       limit(exp, 'company', 160, 'Company Name')
       limit(exp, 'position', 100, 'Job Title')
       limit(exp, 'jobTitle', 100, 'Job Title')
+      limit(exp, 'jobDescription', 1400, 'Job description')
+      for (const [key, max] of Object.entries({ country: 100, city: 100, zip: 20, jobCategory: 100, duration: 50 })) limit(exp, key, max, key)
+    }
+    for (const award of entries(body.awardsAndHonors ?? [], 'Awards & Honours')) {
+      if (award.type === 'delete') continue
+      validateFieldLimits('award', award)
+    }
+    for (const [key, max] of [['certifications', 100], ['languages', 50]] as const) {
+      if (data[key] === undefined) continue
+      if (!Array.isArray(data[key])) throw new AppError(400, `${key} must be a list`)
+      for (const value of data[key] as unknown[]) limit({ value }, 'value', max, key)
     }
   }
+  if (kind === 'experience') {
+    limit(data, 'position', 100, 'Job Title')
+    limit(data, 'company', 160, 'Company Name')
+    limit(data, 'jobDescription', 1400, 'Job description')
+  }
+  if (kind === 'award') {
+    limit(data, 'title', 150, 'Award title')
+    limit(data, 'programeName', 150, 'Programme name')
+    limit(data, 'programName', 150, 'Programme name')
+    limit(data, 'description', 500, 'Award short description')
+  }
+}
+
+// Covers authentication, newsletter and account email forms too. Multipart
+// profile fields are checked by fieldLimits after their upload parser.
+export const emailFieldLimits: RequestHandler = (req, _res, next) => {
+  try {
+    for (const key of ['email', 'emailAddress', 'cemail', 'newEmail']) limit(req.body ?? {}, key, 254, 'Email')
+    next()
+  } catch (error) { next(error) }
 }
 
 // Validate only incoming fields. No schema migration or validation of untouched

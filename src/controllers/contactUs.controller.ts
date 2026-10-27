@@ -10,32 +10,17 @@ import sendResponse from '../utils/sendResponse'
 export const createContactUs = catchAsync(
   async (req: Request, res: Response) => {
     validateFieldLimits("contact", req.body)
-    const { firstName, lastName, address, phoneNumber, subject, message } =
+    const { firstName, lastName, address, subject, message } =
       req.body
 
     if (!firstName || !lastName || !subject || !message) {
       throw new AppError(httpStatus.BAD_REQUEST, 'Missing required fields')
     }
 
-    if (typeof subject !== 'string') {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Subject must be text')
-    }
-    if ((subject.match(/\S+/g) ?? []).length > 6) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Subject cannot exceed 6 words.')
-    }
-
-    if (typeof message !== 'string') {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Message must be text')
-    }
-    if ((message.match(/\S+/g) ?? []).length > 50) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Message cannot exceed 50 words.')
-    }
-
     const contactEntry = await ContactUs.create({
       firstName,
       lastName,
       address,
-      phoneNumber,
       subject,
       message,
     })

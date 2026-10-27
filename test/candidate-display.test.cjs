@@ -41,6 +41,7 @@ test('current omitted-title updates preserve saved career/salutation data; legac
       '../models/user.model': { User: { findById: async () => ({ save: async () => {} }) } },
       '../models/createResume.model': { CreateResume: { findOneAndUpdate: async (_filter, update) => Object.assign(saved, update) } },
       '../utils/profileHistory': history,
+      '../utils/awardInput': load('src/utils/awardInput.ts'),
       '../utils/candidateProfilePolicy': { hasEducationContent: () => false },
       'http-status': { OK: 200 },
       '../utils/sendResponse': () => finish(),

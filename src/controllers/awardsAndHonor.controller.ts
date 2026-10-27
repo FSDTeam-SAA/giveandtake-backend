@@ -1,4 +1,5 @@
 import { sortAwards } from "../utils/profileHistory";
+import { normalizeAwardInput } from '../utils/awardInput';
 import { Request, Response } from 'express'
 import catchAsync from '../utils/catchAsync'
 import httpStatus from 'http-status'
@@ -11,7 +12,7 @@ import sendResponse from '../utils/sendResponse'
  ******************************/
 export const createAwardAndHonor = catchAsync(
   async (req: Request, res: Response) => {
-    const data = req.body
+    const data = normalizeAwardInput(req.body)
     const result = await AwardsAndHonor.create(data)
 
     sendResponse(res, {
@@ -44,7 +45,7 @@ export const getByUserId = catchAsync(async (req: Request, res: Response) => {
 export const updateAwardsAndHonor = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params
-    const updates = req.body
+    const updates = normalizeAwardInput(req.body)
 
     const result = await AwardsAndHonor.findByIdAndUpdate(id, updates, {
       new: true,

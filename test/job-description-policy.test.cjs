@@ -31,10 +31,10 @@ for (const [name, file] of [
     assert.equal(policy.getJobDescriptionCounts('<script>' + words(30) + '</script>').words, 0);
     assert.match(policy.getJobDescriptionError('<p><br></p>'), /required/);
   });
-  test(`${name}: accepts 2000 visible characters and rejects 2001`, () => {
-    const exact = words(20) + 'x'.repeat(2000 - words(20).length);
+  test(`${name}: accepts 1400 visible characters and rejects 1401`, () => {
+    const exact = words(20) + 'x'.repeat(1400 - words(20).length);
     assert.equal(policy.getJobDescriptionError(`<p><strong>${exact}</strong></p>`), null);
-    assert.match(policy.getJobDescriptionError(exact + 'x'), /2000 characters/);
+    assert.match(policy.getJobDescriptionError(exact + 'x'), /1400 characters/);
   });
 }
 
@@ -64,7 +64,7 @@ const controller = load('../src/controllers/job.controller.ts', name => {
 });
 for (const endpoint of ['createJob', 'editJob', 'updateJob']) {
   test(`${endpoint}: rejects invalid descriptions before any data or notification changes`, async () => {
-    for (const description of [words(19), '<p><br></p>', null, 123, words(20) + 'x'.repeat(2000)]) {
+    for (const description of [words(19), '<p><br></p>', null, 123, words(20) + 'x'.repeat(1400)]) {
       await assert.rejects(controller[endpoint]({ params: { id: 'job' }, body: {
         userId: 'user', title: 'Job', description,
       } }, {}), error => error.statusCode === 400);

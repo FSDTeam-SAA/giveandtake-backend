@@ -1,3 +1,4 @@
+import { fieldLimits } from '../middlewares/fieldLimits'
 import express from 'express'
 import {
   createAwardAndHonor,
@@ -8,9 +9,9 @@ import {
 
 const router = express.Router()
 
-router.post('/award-honor', createAwardAndHonor)
+router.post('/award-honor', fieldLimits('award'), createAwardAndHonor)
 router.get('/award-honor/:userId', getByUserId)
-router.patch('/award-honor/:id', updateAwardsAndHonor)
+router.patch('/award-honor/:id', fieldLimits('award'), updateAwardsAndHonor)
 router.delete('/award-honor/:id', deleteAwardsAndHonor)
 
 export default router

@@ -5,23 +5,17 @@ const contactUsSchema: Schema<IContactUs> = new Schema<IContactUs>(
   {
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
-    address: { type: String },
+    address: { type: String, maxlength: 254 },
     phoneNumber: { type: String },
     subject: {
       type: String,
       required: true,
-      validate: {
-        validator: (value: string) => (value.match(/\S+/g) ?? []).length <= 6,
-        message: 'Subject cannot exceed 6 words.',
-      },
+      maxlength: [50, 'Subject cannot exceed 50 characters.'],
     },
     message: {
       type: String,
       required: true,
-      validate: {
-        validator: (value: string) => (value.match(/\S+/g) ?? []).length <= 50,
-        message: 'Message cannot exceed 50 words.',
-      },
+      maxlength: [500, 'Message cannot exceed 500 characters.'],
     },
   },
   { timestamps: true }

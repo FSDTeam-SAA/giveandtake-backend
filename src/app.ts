@@ -4,6 +4,7 @@ import "dotenv/config";
 import qualificationRoutes from "./routes/qualification.routes";
 
 import express from "express";
+import { emailFieldLimits } from "./middlewares/fieldLimits";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler";
 import { notFound } from "./middlewares/notFound";
 import cors from "cors";
@@ -71,6 +72,7 @@ app.post(
  */
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+app.use(emailFieldLimits);
 
 const uploadsDir = path.resolve(__dirname, "../uploads");
 app.use("/uploads", express.static(uploadsDir));

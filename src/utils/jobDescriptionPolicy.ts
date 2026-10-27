@@ -1,5 +1,5 @@
 export const JOB_DESCRIPTION_MIN_WORDS = 20;
-export const JOB_DESCRIPTION_MAX_CHARACTERS = 2000;
+export const JOB_DESCRIPTION_MAX_CHARACTERS = 1400;
 
 export function getJobDescriptionText(value: string): string {
   const entities: Record<string, string> = {

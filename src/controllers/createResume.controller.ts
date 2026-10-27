@@ -1,4 +1,5 @@
 import { sortExperiences, sortEducation, sortAwards } from "../utils/profileHistory";
+import { normalizeAwardInput } from '../utils/awardInput';
 import { hasEducationContent } from '../utils/candidateProfilePolicy';
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import httpStatus from 'http-status'
@@ -53,7 +54,7 @@ export const createResume = catchAsync(async (req: Request, res: Response) => {
   const resume = JSON.parse(req.body.resume || "{}");
   const experiences = JSON.parse(req.body.experiences || "[]");
   const educationList = JSON.parse(req.body.educationList || "[]").filter((edu: Record<string, unknown>) => edu._id || edu.type === 'delete' || hasEducationContent(edu));
-  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || "[]");
+  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || "[]").map(normalizeAwardInput);
 
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
 
@@ -228,7 +229,7 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   const resume = JSON.parse(req.body.resume || '{}')
   const experiences = JSON.parse(req.body.experiences || '[]')
   const educationList = JSON.parse(req.body.educationList || '[]').filter((edu: Record<string, unknown>) => edu._id || edu.type === 'delete' || hasEducationContent(edu))
-  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]')
+  const awardsAndHonors = JSON.parse(req.body.awardsAndHonors || '[]').map(normalizeAwardInput)
 
   if (!userId) throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required')
 
