@@ -1,3 +1,4 @@
+import { installAboutSearch } from "../utils/profileSearch";
 import mongoose, { Schema } from 'mongoose'
 import {
   IRecruiterAccount,
@@ -49,6 +50,8 @@ const recruiterAccountSchema: Schema<IRecruiterAccount> =
 
 // Drives people-search $lookup and the many findOne({ userId }) calls
 recruiterAccountSchema.index({ userId: 1 }, { name: 'recruiter_user_idx' })
+
+installAboutSearch(recruiterAccountSchema, "bio");
 
 export const RecruiterAccount = mongoose.model<
   IRecruiterAccount,

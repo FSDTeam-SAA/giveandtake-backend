@@ -62,7 +62,7 @@ export function validateFieldLimits(kind: string, body: RecordData, options: { c
   }
   if (['resume', 'recruiter', 'job'].includes(kind)) limit(data, 'title', 100, 'Job Title')
   if (kind === 'resume' && data.skills !== undefined) {
-    if (!Array.isArray(data.skills) || data.skills.some(skill => typeof skill !== 'string' || !skill.trim())) throw new AppError(400, 'Please select valid skills from the list')
+    if (!Array.isArray(data.skills) || data.skills.some(skill => typeof skill !== 'string' || !skill.trim())) throw new AppError(400, 'Please provide valid skills')
     if (!data.skills.length) throw new AppError(400, 'At least one skill is required')
     if (data.skills.length > 30) throw new AppError(400, 'You can select at most 30 skills')
     for (const skill of data.skills) limit({ skill }, 'skill', 100, 'Each skill')
