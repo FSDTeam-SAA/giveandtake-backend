@@ -1,3 +1,4 @@
+import { installAboutSearch } from "../utils/profileSearch";
 import mongoose, { Schema } from 'mongoose'
 import {
   ICreateResume,
@@ -47,6 +48,8 @@ const createResumeSchema: Schema<ICreateResume> = new Schema<ICreateResume>(
 
 // Drives people-search $lookup and the many findOne({ userId }) calls
 createResumeSchema.index({ userId: 1 }, { name: 'resume_user_idx' })
+
+installAboutSearch(createResumeSchema, "aboutUs");
 
 export const CreateResume = mongoose.model<ICreateResume, CreateResumeModel>(
   'CreateResume',

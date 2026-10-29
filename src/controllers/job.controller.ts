@@ -1120,7 +1120,7 @@ export const getJobSuggestions = catchAsync(
       // skill appears once per job/seed row ("Java" x5). Group
       // case-insensitively before limiting so each skill shows up once.
       SkillModel.aggregate([
-        { $match: { name: rx } },
+        { $match: { name: rx, active: { $ne: false } } },
         {
           $group: {
             _id: { $toLower: { $trim: { input: "$name" } } },

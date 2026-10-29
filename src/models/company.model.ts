@@ -1,3 +1,4 @@
+import { installAboutSearch } from "../utils/profileSearch";
 import mongoose, { Schema } from "mongoose";
 import { ICompany, CompanyModel } from "../interface/company.interface";
 
@@ -32,6 +33,8 @@ const companySchema: Schema<ICompany> = new Schema(
 
 // Drives people-search $lookup and the many findOne({ userId }) calls
 companySchema.index({ userId: 1 }, { name: "company_user_idx" });
+
+installAboutSearch(companySchema, "aboutUs");
 
 export const Company = mongoose.model<ICompany, CompanyModel>(
   "Company",

@@ -1360,6 +1360,7 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
               country: 1,
               title: 1,
               skills: 1,
+              searchAboutText: 1,
             },
           },
         ],
@@ -1373,7 +1374,7 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
         as: "recruiter",
         pipeline: [
           { $limit: 1 },
-          { $project: { photo: 1, location: 1, city: 1, country: 1, title: 1 } },
+          { $project: { photo: 1, location: 1, city: 1, country: 1, title: 1, searchAboutText: 1 } },
         ],
       },
     },
@@ -1393,6 +1394,7 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
               country: 1,
               industry: 1,
               service: 1,
+              searchAboutText: 1,
             },
           },
         ],
@@ -1548,6 +1550,12 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
 
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
+    // Keep the lookup bounded to candidates and project title-only data.
+    pipeline.push({ $lookup: {
+      from: "experiences", localField: "_id", foreignField: "userId", as: "employmentMatches",
+      let: { candidate: { $eq: ["$role", "candidate"] } },
+      pipeline: [{ $match: { $expr: "$$candidate", position: rx } }, { $project: { _id: 0, position: 1 } }, { $limit: 1 }],
+    } });
     const or: any[] = [
       { displayName: rx },
       { name: rx },
@@ -1556,6 +1564,10 @@ function buildPeopleSearchPipeline({ q, role, immediate }: PeopleSearchArgs) {
       { locationText: rx },
       { position: rx },
       { "resume.skills": rx },
+      { $and: [{ role: "candidate" }, { "resume.searchAboutText": rx }] },
+      { $and: [{ role: "recruiter" }, { "recruiter.searchAboutText": rx }] },
+      { $and: [{ role: "company" }, { "company.searchAboutText": rx }] },
+      { "employmentMatches.0": { $exists: true } },
       { "company.industry": rx },
       { "company.service": rx },
     ];

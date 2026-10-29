@@ -24,6 +24,8 @@ const experienceSchema: Schema<IExperience> = new Schema<IExperience>(
   { timestamps: true }
 )
 
+experienceSchema.index({ userId: 1 }, { name: 'experience_user_idx' });
+
 export const Experience = mongoose.model<IExperience, ExperienceModel>(
   'Experience',
   experienceSchema
