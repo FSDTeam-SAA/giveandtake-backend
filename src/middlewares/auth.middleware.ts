@@ -85,8 +85,8 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction): void =
 };
 
 export const isRicruiter = (req: Request, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== 'ricruiter') {
-    throw new AppError(403, 'Access denied. You are not an ricruiter.')
+  if (req.user?.role !== 'recruiter' && req.user?.role !== 'ricruiter') {
+    throw new AppError(403, 'Access denied. You are not a recruiter.')
   }
   next();
 };

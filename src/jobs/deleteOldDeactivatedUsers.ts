@@ -27,7 +27,7 @@ const PITCH_EXPIRED_EMAIL_SUBJECT = 'Your EVPitch has expired';
 const buildExpiredPitchEmail = (name?: string) =>
   buildEvpEmail({
     heading: 'EVPitch Expired',
-    greetingName: getFirstName(name) || 'User',
+    greetingName: getFirstName(name) || 'Candidate',
     signer: 'EVP Admin',
     titleTag: PITCH_EXPIRED_EMAIL_SUBJECT,
     bodyHtml: `
@@ -104,9 +104,9 @@ export const updateExpiredPlans = async () => {
 
 // Reuse these helpers across your mailers (or import from your mailer utils)
 function getFirstName(fullName?: string): string {
-  if (!fullName) return "Recruiter";
+  if (!fullName) return "Candidate";
   const trimmed = fullName.trim();
-  if (!trimmed) return "Recruiter";
+  if (!trimmed) return "Candidate";
   return trimmed.split(/\s+/)[0];
 }
 

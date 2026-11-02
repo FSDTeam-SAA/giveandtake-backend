@@ -208,7 +208,7 @@ export const unSubscribePlan = catchAsync(async(req,res)=>{
   sendResponse(res,{
     statusCode: 200,
     success:  true,
-    message: "You are Successfully unsubscribe this plan",
+    message: "You have successfully unsubscribed from this plan",
     data: ""
   })
 })

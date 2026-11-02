@@ -85,7 +85,7 @@ const withoutJobEmbedding = (job: any) => {
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const PAYG_DURATION_DAYS = 30;
 const PAYG_EDIT_ERROR =
-  "Your PAYG payment has expired, please subscribe or purchase a new PAYG voucher.";
+  "Your PAYG payment has expired. Please subscribe or purchase a new PAYG voucher.";
 const PAYG_WINDOW_ERROR =
   "Pay As You Go adverts cannot run beyond 30 days from the original publication date.";
 

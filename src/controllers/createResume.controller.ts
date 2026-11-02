@@ -368,7 +368,7 @@ export const updateResume = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Elevator Pitch updated successfully',
+    message: 'Resume updated successfully',
     data: {
       resume: updatedResume,
       experiences: sortExperiences(updatedExperiences),
