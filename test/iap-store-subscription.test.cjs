@@ -195,13 +195,25 @@ test('a yearly purchase lapses after 12 months and a refunded one is revoked', (
   assert.equal(refunded.isRevoked, true)
 })
 
-test('only candidate yearly non-renewing purchases for this app are accepted', () => {
+test('a monthly App Store purchase (non-renewing) gives 1 month of Premium from the purchase date', () => {
+  const snapshot = normalizeAppleNonRenewing(
+    yearlyTransaction({ productId: 'com.pooelcentral.giveandtake.candidate.premium' }),
+    'sandbox',
+    now
+  )
+  assert.equal(snapshot.isActive, true)
+  assert.equal(snapshot.term, 'monthly')
+  assert.equal(snapshot.autoRenew, false)
+  assert.equal(snapshot.expiresAt.toISOString(), '2026-10-10T12:00:00.000Z')
+})
+
+test('only candidate non-renewing purchases for this app are accepted', () => {
   assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ bundleId: 'com.other.app' }), 'production', now), null)
-  assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ productId: 'com.pooelcentral.giveandtake.candidate.premium' }), 'production', now), null)
+  assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ productId: 'com.other.product' }), 'production', now), null)
   assert.equal(normalizeAppleNonRenewing(yearlyTransaction({ type: 'Consumable' }), 'production', now), null)
 })
 
-test('yearly purchases use Get Transaction Info; monthly ones use subscription status', async () => {
+test('monthly and yearly purchases both use Get Transaction Info', async () => {
   useTestAppleKey()
   const original = axios.get
   const urls = []
@@ -216,9 +228,20 @@ test('yearly purchases use Get Transaction Info; monthly ones use subscription s
     assert.equal(yearly.term, 'yearly')
     assert.match(urls.at(-1), /\/inApps\/v1\/transactions\/3000$/)
 
+    axios.get = async (url) => {
+      urls.push(url)
+      return {
+        data: {
+          signedTransactionInfo: jws(
+            yearlyTransaction({ productId: 'com.pooelcentral.giveandtake.candidate.premium', purchaseDate: Date.now() })
+          ),
+        },
+      }
+    }
     const monthly = await getApplePurchase('com.pooelcentral.giveandtake.candidate.premium', '2000')
     assert.equal(monthly.term, 'monthly')
-    assert.match(urls.at(-1), /\/inApps\/v1\/subscriptions\/2000$/)
+    assert.equal(monthly.isActive, true)
+    assert.match(urls.at(-1), /\/inApps\/v1\/transactions\/2000$/)
   } finally {
     axios.get = original
   }

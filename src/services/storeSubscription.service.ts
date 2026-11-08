@@ -190,26 +190,42 @@ const addYears = (date: Date, years: number) => {
   return copy
 }
 
+const addMonths = (date: Date, months: number) => {
+  const copy = new Date(date)
+  copy.setMonth(copy.getMonth() + months)
+  return copy
+}
+
+/** Term of a candidate non-renewing App Store product, or null if it is not one. */
+const appleNonRenewingTerm = (productId: string): 'monthly' | 'yearly' | null => {
+  if (APPLE_IAP.candidateYearlyProductIds.includes(productId)) return 'yearly'
+  if (APPLE_IAP.candidateProductIds.includes(productId)) return 'monthly'
+  return null
+}
+
 /**
- * Converts a non-renewing (yearly) transaction from Apple's "Get Transaction
- * Info". Apple sends no expiry for these, so access runs 12 months from the
- * purchase date. Returns null when it is not a candidate yearly purchase.
+ * Converts a non-renewing (monthly or yearly) transaction from Apple's "Get
+ * Transaction Info". Apple sends no expiry for these, so access runs 1 or 12
+ * months from the purchase date. Returns null when it is not a candidate
+ * non-renewing purchase.
  */
 export const normalizeAppleNonRenewing = (
   transaction: AppleTransactionPayload,
   environment: StoreEnvironment,
   now = new Date()
 ): StoreSubscriptionSnapshot | null => {
+  const term = appleNonRenewingTerm(transaction.productId)
   if (
     transaction.bundleId !== APPLE_IAP.bundleId ||
-    !APPLE_IAP.candidateYearlyProductIds.includes(transaction.productId) ||
+    !term ||
     transaction.type !== APPLE_NON_RENEWING_TYPE ||
     !transaction.purchaseDate
   ) {
     return null
   }
 
-  const expiresAt = addYears(new Date(transaction.purchaseDate), 1)
+  const purchasedAt = new Date(transaction.purchaseDate)
+  const expiresAt = term === 'yearly' ? addYears(purchasedAt, 1) : addMonths(purchasedAt, 1)
   const isRevoked = Boolean(transaction.revocationDate)
 
   return {
@@ -219,7 +235,7 @@ export const normalizeAppleNonRenewing = (
     subscriptionId: transaction.originalTransactionId || transaction.transactionId,
     latestTransactionId: transaction.transactionId,
     productId: transaction.productId,
-    term: 'yearly',
+    term,
     environment,
     expiresAt,
     isActive: !isRevoked && expiresAt > now,
@@ -287,7 +303,7 @@ export const getAppleSubscription = (transactionId: string) =>
     (response, environment) => normalizeAppleStatus(response, environment)
   )
 
-/** Looks up a non-renewing (yearly) purchase by its transaction id. */
+/** Looks up a non-renewing (monthly or yearly) purchase by its transaction id. */
 export const getAppleNonRenewingPurchase = (transactionId: string) =>
   fetchFromApple<AppleTransactionInfoResponse>(
     `/inApps/v1/transactions/${encodeURIComponent(transactionId)}`,
@@ -300,9 +316,14 @@ export const getAppleNonRenewingPurchase = (transactionId: string) =>
         : null
   )
 
-/** Picks the right App Store lookup for a candidate product. */
+/**
+ * Picks the App Store lookup for a candidate product. Both candidate products
+ * are Non-Renewing Subscriptions in App Store Connect, so they are read with
+ * Get Transaction Info; the subscription-status lookup is only for products
+ * that are not known to be non-renewing.
+ */
 export const getApplePurchase = (productId: string | undefined, transactionId: string) =>
-  productId && APPLE_IAP.candidateYearlyProductIds.includes(productId)
+  productId && appleNonRenewingTerm(productId)
     ? getAppleNonRenewingPurchase(transactionId)
     : getAppleSubscription(transactionId)
 
