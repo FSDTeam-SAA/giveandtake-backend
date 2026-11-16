@@ -1,4 +1,5 @@
 import { Document, Model } from 'mongoose'
+import type { LocalPrices } from '../utils/currency'
 
 export type SubscriptionTarget = 'candidate' | 'recruiter' | 'company'
 
@@ -7,6 +8,7 @@ export interface ISubscriptionPlan extends Document {
   titleColor?: string
   description: string
   price: number
+  localPrices?: LocalPrices
   features: string[]
   for: SubscriptionTarget
   valid: string

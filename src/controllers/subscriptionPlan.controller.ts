@@ -6,6 +6,15 @@ import httpStatus from 'http-status'
 import AppError from '../errors/AppError'
 import { paymentInfo } from '../models/paymentInfo.model'
 import { ElevatorPitch } from '../models/elevatorPitch.model'
+import { sanitizeLocalPrices } from '../utils/currency'
+
+const parseLocalPrices = (input: unknown) => {
+  try {
+    return sanitizeLocalPrices(input)
+  } catch (error) {
+    throw new AppError(httpStatus.BAD_REQUEST, (error as Error).message)
+  }
+}
 
 const validateCredits = (body: any) => {
   if (body.valid !== 'credits') throw new AppError(400, 'Company and recruiter packages must use non-expiring credits')
@@ -59,11 +68,13 @@ export const createSubscriptionPlan = catchAsync(
         : undefined)
 
     if (isJobPostingPlan) validateCredits(req.body)
+    const localPrices = parseLocalPrices(req.body?.localPrices)
     const plan = await SubscriptionPlan.create({
       title,
       description,
       titleColor,
       price,
+      ...(localPrices !== undefined ? { localPrices } : {}),
       features,
       for: planFor,
       valid,
@@ -131,6 +142,10 @@ export const updateSubscriptionPlan = catchAsync(
 
     const partialUpdate: Record<string, any> = {
       ...req.body,
+    }
+
+    if ('localPrices' in (req.body ?? {})) {
+      partialUpdate.localPrices = parseLocalPrices(req.body.localPrices)
     }
 
     if (nextAnnualLimit !== undefined) {

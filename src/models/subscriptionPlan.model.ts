@@ -11,6 +11,13 @@ const subscriptionPlanSchema: Schema<ISubscriptionPlan> =
       titleColor: {type: String, required: false}, 
       description: { type: String, required: true },
       price: { type: Number, required: true },
+      // Optional website prices in local currencies; `price` stays the USD base.
+      localPrices: {
+        GBP: { type: Number, min: 0 },
+        EUR: { type: Number, min: 0 },
+        CAD: { type: Number, min: 0 },
+        AUD: { type: Number, min: 0 },
+      },
       features: [{ type: String }],
       for: {
         type: String,

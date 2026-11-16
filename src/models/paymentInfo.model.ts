@@ -12,6 +12,10 @@ const paymentInfoSchema: Schema<IPaymentInfo> = new Schema<IPaymentInfo>(
       required: true,
     },
     amount: { type: Number, required: true },
+    // Currency `amount` was charged in. Rows created before multi-currency are USD.
+    currency: { type: String, default: 'USD' },
+    // USD list-price equivalent, so revenue totals never add £ to $.
+    amountUsd: { type: Number },
     jobPostCredits: { type: Number, min: 0 },
     jobPostsUsed: { type: Number, min: 0 },
     refundProcessing: { type: Boolean, default: false },

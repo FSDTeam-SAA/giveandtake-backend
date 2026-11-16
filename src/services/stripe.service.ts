@@ -10,12 +10,15 @@ export const fromMinorUnits = (amount: number) => Number((amount / 100).toFixed(
 
 export const createPaymentIntent = async ({
   amount,
+  currency = 'USD',
   metadata,
   description,
   receiptEmail,
   idempotencyKey,
 }: {
   amount: number
+  /** One of the supported two-decimal currencies (USD, GBP, EUR, CAD, AUD). */
+  currency?: string
   metadata: Record<string, string>
   description?: string
   receiptEmail?: string
@@ -24,7 +27,7 @@ export const createPaymentIntent = async ({
   return stripe.paymentIntents.create(
     {
       amount: toMinorUnits(amount),
-      currency: 'usd',
+      currency: currency.toLowerCase(),
       // Lets Stripe surface every payment method enabled on the account
       // (card, Link, wallets) without hardcoding a list here.
       automatic_payment_methods: { enabled: true },

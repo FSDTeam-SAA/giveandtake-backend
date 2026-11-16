@@ -5,6 +5,8 @@ export type PaymentStatus = 'complete' | 'pending' | 'failed' | 'refunded'
 export interface IPaymentInfo extends Document {
   userId: Types.ObjectId
   amount: number
+  currency?: string
+  amountUsd?: number
   jobPostCredits?: number | null
   jobPostsUsed?: number
   refundProcessing?: boolean

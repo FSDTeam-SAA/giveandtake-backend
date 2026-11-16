@@ -5,6 +5,10 @@ import catchAsync from "../utils/catchAsync";
 import sendResponse from "../utils/sendResponse";
 import moment from "moment";
 
+// Website payments can be in GBP/EUR/CAD/AUD; totals use the USD equivalent.
+// Older rows have no amountUsd and were always charged in USD.
+const REVENUE_USD = { $ifNull: ["$amountUsd", "$amount"] };
+
 /****************************************************
  * API FOR TOTAL USER TOTAL RECRUITER, TOTAL AMOUNT *
  ****************************************************/
@@ -19,7 +23,7 @@ export const getAdminDashboardStats = catchAsync(
       {
         $group: {
           _id: null,
-          totalAmount: { $sum: "$amount" },
+          totalAmount: { $sum: REVENUE_USD },
         },
       },
     ]);
@@ -35,7 +39,7 @@ export const getAdminDashboardStats = catchAsync(
             year: { $year: "$createdAt" },
             month: { $month: "$createdAt" },
           },
-          totalAmount: { $sum: "$amount" },
+          totalAmount: { $sum: REVENUE_USD },
         },
       },
       { $sort: { "_id.year": 1, "_id.month": 1 } },
@@ -58,7 +62,7 @@ export const getAdminDashboardStats = catchAsync(
       {
         $group: {
           _id: { year: { $year: "$createdAt" } },
-          totalAmount: { $sum: "$amount" },
+          totalAmount: { $sum: REVENUE_USD },
         },
       },
       { $sort: { "_id.year": 1 } },

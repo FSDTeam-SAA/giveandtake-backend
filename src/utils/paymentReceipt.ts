@@ -2,6 +2,7 @@ import { paymentInfo } from '../models/paymentInfo.model'
 import { IPaymentInfo, PaymentStatus } from '../interface/paymentInfo.interface'
 import { computeExpiryFromStart } from './subscription'
 import { sendEmail } from './sendEmail'
+import { formatMoney } from './currency'
 
 const NO_REPLY_EMAIL = process.env.NO_REPLY_EMAIL || 'no-reply@evpitch.com'
 
@@ -23,6 +24,7 @@ export const buildReceiptEmailHtml = ({
   transactionId,
   createdAt,
   amount,
+  currency = 'USD',
   isYearlyPlan,
   isJobPackage = false,
 }: {
@@ -30,6 +32,7 @@ export const buildReceiptEmailHtml = ({
   transactionId: string
   createdAt: Date | string | undefined
   amount: number
+  currency?: string
   isYearlyPlan: boolean
   isJobPackage?: boolean
 }) => `<!doctype html>
@@ -116,9 +119,7 @@ export const buildReceiptEmailHtml = ({
                       </tr>
                       <tr>
                         <td style="font-size:13px;color:#6b7280;vertical-align:top;padding-bottom:8px;">Amount</td>
-                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${amount.toFixed(
-                          2
-                        )}</strong></td>
+                        <td style="font-size:14px;color:#111;vertical-align:top;padding-bottom:8px;text-align:right;"><strong>${formatMoney(amount, currency)}</strong></td>
                       </tr>
                     </table>
                   </td>
@@ -165,6 +166,8 @@ export const recordAndNotifyPayment = async ({
   user,
   plan,
   amount,
+  currency = 'USD',
+  amountUsd,
   paymentStatus,
   transactionId,
   paymentMethod,
@@ -173,6 +176,10 @@ export const recordAndNotifyPayment = async ({
   user: { _id: unknown; name: string; email: string; role?: string }
   plan: { _id: unknown; for?: string; valid?: string; jobPostCredits?: number | null }
   amount: number
+  /** ISO code the money was taken in; defaults to USD. */
+  currency?: string
+  /** USD equivalent for reporting; defaults to `amount` for USD payments. */
+  amountUsd?: number
   paymentStatus: PaymentStatus
   transactionId: string
   paymentMethod: string
@@ -202,6 +209,8 @@ export const recordAndNotifyPayment = async ({
     userId: user._id,
     planId: plan._id,
     amount,
+    currency: currency.toUpperCase(),
+    amountUsd: amountUsd ?? (currency.toUpperCase() === 'USD' ? amount : undefined),
     paymentStatus,
     transactionId,
     paymentMethod,
@@ -223,6 +232,7 @@ export const recordAndNotifyPayment = async ({
       transactionId: newPayment.transactionId,
       createdAt: newPayment.createdAt,
       amount,
+      currency,
       isYearlyPlan,
       isJobPackage: derivedDuration === 'credits',
     })

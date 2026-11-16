@@ -20,6 +20,7 @@ import { Job } from "../models/job.model";
 import { AppliedJob } from "../models/appliedJob.model";
 import { recordAndNotifyPayment } from "../utils/paymentReceipt";
 import type StripeTypes from "stripe";
+import { resolvePlanPrice } from "../utils/currency";
 import { createNotification } from "../sockets/notification.service";
 import { ElevatorPitch } from "../models/elevatorPitch.model";
 import { removeElevatorPitchArtifacts } from "../services/videoProcessing.queue";
@@ -50,8 +51,21 @@ const validateJsonBody = (
  ****************************/
 export const createPaypalOrder = async (req: Request, res: Response) => {
   try {
-    const { amount } = req.body;
-    const order = await createOrder(amount);
+    const { amount, planId, currency: requestedCurrency } = req.body;
+    // With a planId the server prices the order itself (in the buyer's local
+    // currency when the plan has one); the bare `amount` path is the legacy
+    // USD flow, still guarded by the amount check at capture time.
+    let orderAmount = amount;
+    let orderCurrency = "USD";
+    if (planId) {
+      const plan = await SubscriptionPlan.findById(planId);
+      if (!plan) throw new AppError(404, "Subscription plan not found");
+      if (plan.archived) throw new AppError(400, "This package is no longer available for purchase");
+      const resolved = resolvePlanPrice(plan, requestedCurrency);
+      orderAmount = resolved.amount.toFixed(2);
+      orderCurrency = resolved.currency;
+    }
+    const order = await createOrder(orderAmount, orderCurrency);
     res.status(200).json({
       success: true,
       message: "PayPal order created",
@@ -60,6 +74,8 @@ export const createPaypalOrder = async (req: Request, res: Response) => {
       data: {
         orderId: order.id,
         links: order.links,
+        amount: Number(orderAmount),
+        currency: orderCurrency,
       }
     });
   } catch (error) {
@@ -127,7 +143,9 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
     if (Number.isNaN(numericAmount)) {
       throw new AppError(400, "Unable to determine payment amount");
     }
-    if (captureDetails.amount.currency_code !== 'USD' || Math.round(numericAmount * 100) !== Math.round(plan.price * 100)) {
+    const capturedCurrency = String(captureDetails.amount.currency_code || '').toUpperCase();
+    const expected = resolvePlanPrice(plan, capturedCurrency);
+    if (capturedCurrency !== expected.currency || Math.round(numericAmount * 100) !== Math.round(expected.amount * 100)) {
       throw new AppError(400, 'Captured amount does not match the selected package. Contact support for payment reconciliation.');
     }
 
@@ -135,6 +153,8 @@ export const capturePaypalPayment = async (req: Request, res: Response) => {
       user,
       plan,
       amount: numericAmount,
+      currency: capturedCurrency,
+      amountUsd: Number(plan.price),
       paymentStatus: mapPaypalStatusToEnum(captureDetails.status),
       transactionId: captureDetails.id,
       paymentMethod: "PayPal",
@@ -368,7 +388,8 @@ export const refundPaypalPayment = catchAsync(async (req: Request, res: Response
   } else {
     const refundResponse = await refundOrder(
       payment.transactionId,
-      refundAmount
+      refundAmount,
+      payment.currency || "USD"
     );
     if (!refundResponse || refundResponse.status !== "COMPLETED") {
       throw new AppError(400, "Refund failed or was not completed");
@@ -511,6 +532,8 @@ const finalizeStripePayment = async (
     paymentIntent.amount_received || paymentIntent.amount
   );
 
+  const currency = (paymentIntent.currency || "usd").toUpperCase();
+
   return recordAndNotifyPayment({
     user,
     plan: paymentIntent.metadata.planValid === 'credits' ? {
@@ -518,6 +541,8 @@ const finalizeStripePayment = async (
       jobPostCredits: paymentIntent.metadata.jobPostCredits === 'unlimited' ? null : Number(paymentIntent.metadata.jobPostCredits),
     } : plan,
     amount,
+    currency,
+    amountUsd: currency === "USD" ? amount : Number(plan.price),
     paymentStatus: "complete",
     transactionId: paymentIntent.id,
     paymentMethod: "Stripe",
@@ -549,7 +574,7 @@ export const createStripePaymentIntent = catchAsync(
       throw new AppError(500, "Stripe is not configured on this server");
     }
 
-    const { planId, userId, seasonId } = req.body;
+    const { planId, userId, seasonId, currency: requestedCurrency } = req.body;
 
     if (!planId) {
       throw new AppError(400, "Plan ID is required");
@@ -569,8 +594,9 @@ export const createStripePaymentIntent = catchAsync(
     }
 
     // The charge amount always comes from the plan record, never from the
-    // client, so a tampered request can't buy a plan at the wrong price.
-    const amount = Number(plan.price);
+    // client, so a tampered request can't buy a plan at the wrong price. The
+    // client may only pick which of the plan's own currency prices to use.
+    const { amount, currency } = resolvePlanPrice(plan, requestedCurrency);
     if (plan.archived) throw new AppError(400, 'This package is no longer available for purchase');
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new AppError(400, "This plan does not require a payment");
@@ -578,6 +604,7 @@ export const createStripePaymentIntent = catchAsync(
 
     const paymentIntent = await createPaymentIntent({
       amount,
+      currency,
       description: `${plan.title}${
         plan.valid ? ` (${plan.valid})` : ""
       } — Elevator Video Pitch`,
@@ -599,7 +626,7 @@ export const createStripePaymentIntent = catchAsync(
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         amount,
-        currency: paymentIntent.currency,
+        currency,
         planTitle: plan.title,
         planValid: plan.valid,
       },

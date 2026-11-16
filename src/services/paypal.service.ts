@@ -2,7 +2,7 @@ import axios from 'axios'
 import { paypalClient } from '../config/paypal'
 import * as paypal from '@paypal/checkout-server-sdk'
 
-export const createOrder = async (amount: string) => {
+export const createOrder = async (amount: string, currency: string = 'USD') => {
   const request = new paypal.orders.OrdersCreateRequest()
   request.prefer('return=representation')
   request.requestBody({
@@ -10,7 +10,7 @@ export const createOrder = async (amount: string) => {
     purchase_units: [
       {
         amount: {
-          currency_code: 'USD',
+          currency_code: currency.toUpperCase(),
           value: amount,
         },
       },
@@ -30,7 +30,9 @@ export const captureOrder = async (orderId: string) => {
 
 export const refundOrder = async (
   captureId: string,
-  amount: number
+  amount: number,
+  // Must match the currency the capture was taken in.
+  currency: string = 'USD'
 ) => {
   const request = new paypal.payments.CapturesRefundRequest(captureId);
 
@@ -38,7 +40,7 @@ export const refundOrder = async (
   const body: Record<string, unknown> = {
     amount: {
       value: amount.toFixed(2),
-      currency_code: 'USD',
+      currency_code: currency.toUpperCase(),
     },
   };
 
